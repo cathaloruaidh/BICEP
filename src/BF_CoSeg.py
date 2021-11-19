@@ -180,7 +180,7 @@ def I_del(k1, k2, l1, l2):
 
 		if l2 > 0:
 			for j in range(l2):
-				tmp_l += float(sp.binom(l2-1, j))*pow(-1.0, l2-j-1)*( (1.0/float(l-j)) - (1.0/float(n-i-j+1)) )
+				tmp_l += float(sp.binom(l2-1, j))*pow(-1.0, l2-1-j)*( (1.0/float(l-j)) - (1.0/float(n-i-j+1)) )
 
 		else:
 			for j in range(k-i+1):
@@ -365,11 +365,13 @@ def calculateBF(pedInfo, allBF, inputGenotype):
 		denominator = denominator + I_neu(k1, k2, l1, l2)*genotypeProbabilities[index]
 	
 
-	if denominator == 0 :
+	if denominator == 0.0 :
 		BF = float("inf")
 	else:
 		BF = numerator/denominator
 
+
+	# save the data correct to 10 decimal places
 	myList = [ BF, numerator, denominator ]	
 	allBF[name] = [ '%.10f' % elem for elem in myList ]
 
@@ -390,12 +392,11 @@ def main(argv):
 	# command line arguments
 	inputFamFile = None
 	inputVcfFile = None
-	p1 = 0.01
-	p2 = 0.8
+	outputFile = None
 	nCores = 1
 
 	try:
-		opts, args = getopt.getopt(argv, "c:f:l:p:v:", ["cores=", "fam=", "log=", "proband=", "vcf=", "prob1=", "prob2="])
+		opts, args = getopt.getopt(argv, "c:f:l:o:v:", ["cores=", "fam=", "log=", "output=", "vcf="])
 	except getopt.GetoptError:
 		print("Getopt Error")
 		logging.error("getopt error")
@@ -415,6 +416,9 @@ def main(argv):
 			if not isinstance(numeric_level, int):
 				raise ValueError('Invalid log level: %s' % arg)
 
+		if opt in ("-o", "--output"):
+			outputFile = arg
+	
 		if opt in ("-v", "--vcf"):
 			inputVcfFile = arg
 	
@@ -590,9 +594,16 @@ def main(argv):
 	logging.info("Output")
 
 	
-	for i in range(len(varID)):
-		print(varID[i], "\t", results[i], "\t", varString[i], "\t", varString[i].count("."))
-		#print(results[i], "\t", varString[i], "\t", genotypes[i])
+	if outputFile is None:
+		for i in range(len(varID)):
+			print(varID[i], "\t", results[i], "\t", varString[i], "\t", varString[i].count("."))
+	else:
+		with open(outputFile, 'w') as f:
+			#sys.stdout = f
+			for i in range(len(varID)):
+				print(varID[i], "\t", results[i], "\t", varString[i], "\t", varString[i].count("."), file=f)
+		
+			#print(results[i], "\t", varString[i], "\t", genotypes[i])
 
 	#pprint.pprint(dict(allBF))
 
