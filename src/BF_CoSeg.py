@@ -166,27 +166,6 @@ def findGenotypes(vector, genotypeStates, pedInfo):
 
 
 
-# check if two vectors are the same, allowing for missing values
-def matchVectors(vectorQuery, vectorTarget):
-
-	# sanity check: the vectors have to have the same length
-	if len(vectorQuery) != len(vectorTarget):
-		logging.debug("In matchVectors, vectors have different lengths")
-		return False
-
-
-	# loop through and check identity, ignoring sites that are missing (negative values)
-	for i in range(len(vectorQuery)):
-		if vectorQuery[i] < 0:
-			continue
-		if vectorQuery[i] != vectorTarget[i]:
-			return False
-
-	return True
-
-
-
-
 def I_del(k1, k2, l1, l2):
 
 	k = k1+k2
@@ -219,7 +198,7 @@ def I_neu(k1, k2, l1, l2):
 
 	n = k1+k2+l1+l2
 
-	return 1.0 / float( sp.binom(n+1, k1+l1) * (k1+l1+1) )
+	return 1.0 / float( sp.binom(n, k1+l1) * (n+1) )
 
 
 
@@ -370,20 +349,20 @@ def calculateBF(pedInfo, allBF, inputGenotype):
 
 
 
+	# calculate the numerator and denominator of the Bayes Factor
+	for index in range(len(genotypeStates)):
 
-	# get indices of matching
-	genotypeMatchIndex = [ x for x in range(len(genotypeStates)) if matchVectors(inputGenotype, genotypeStates[x]) ]
+		nList = range(pedInfo.nPeople)
+		
+		k1 = len([ x for x in nList if pedInfo.phenotypeActual[x] == 1 and genotypeStates[index][x] == 1 ])
+		k2 = len([ x for x in nList if pedInfo.phenotypeActual[x] == 0 and genotypeStates[index][x] == 1 ])
+		l1 = len([ x for x in nList if pedInfo.phenotypeActual[x] == 1 and genotypeStates[index][x] == 0 ])
+		l2 = len([ x for x in nList if pedInfo.phenotypeActual[x] == 0 and genotypeStates[index][x] == 0 ])
 
-
-	for index in genotypeMatchIndex:
-
-		k1 = len([ x for x in range(pedInfo.nPeople) if pedInfo.phenotypeActual[x] == 1 and genotypeStates[index][x] == 1 ])
-		k2 = len([ x for x in range(pedInfo.nPeople) if pedInfo.phenotypeActual[x] == 0 and genotypeStates[index][x] == 1 ])
-		l1 = len([ x for x in range(pedInfo.nPeople) if pedInfo.phenotypeActual[x] == 1 and genotypeStates[index][x] == 0 ])
-		l2 = len([ x for x in range(pedInfo.nPeople) if pedInfo.phenotypeActual[x] == 0 and genotypeStates[index][x] == 0 ])
 		n  = k1+k2+l1+l2 
+		
 		numerator = numerator + I_del(k1, k2, l1, l2)*genotypeProbabilities[index]
-		denominator = denominator + I_neu(k1, k2, l1, l2)*genotypeProbabilities[index]/float(k1+l1)
+		denominator = denominator + I_neu(k1, k2, l1, l2)*genotypeProbabilities[index]
 	
 
 	if denominator == 0 :
