@@ -4,12 +4,14 @@
 
 
 
-import sys, csv, getopt, logging, cProfile, pprint, re, multiprocessing, threading
+import cProfile, csv, getopt, logging, math, multiprocessing, os, pprint, re, sys, threading
+import numpy as np
+import scipy.special as sp
+
+from cyvcf2 import VCF
+from functools import partial
 from multiprocessing import Pool, Manager
 from threading import Lock
-from functools import partial
-from cyvcf2 import VCF
-import numpy as np
 
 
 s_print_lock = Lock()
@@ -91,6 +93,7 @@ class Pedigree:
 		# populate descendant table
 		while np.count_nonzero(self.descendantTable == -1) > 0:
 			for i in range(self.nPeople):
+				self.descendantTable[i,i] = 1
 				if self.completed[i]:
 					childrenIndex = [ x for x in range(self.nPeople) if indID[i] == mamID[x] or indID[i] == dadID[x] ]
 					for child in childrenIndex:
@@ -112,62 +115,14 @@ class Pedigree:
 # return a string representation of the genotypes
 # missing is '.', absent is '0' and carrier is '1'
 def	genotypeString(vector):
-	return np.array2string(vector, separator="").replace(" ", "").replace("-9", ".").replace("[", "").replace("]", "")
-
-
-
-
-# for a given genotype, find the individuals who are likely to be the 
-# most recent common ancestor via whom the variant was transmitted
-def findGenotypeFounders(vector, pedInfo):
-	genotypeFounders = []
-
-
-	# find all individuals who are ancestors of all individuals within the family who have a genotype
-	for i in range(pedInfo.nPeople):
-		founder = True
-		for j in range(pedInfo.nPeople):
-			if i == j:
-				continue
-			elif vector[j] >= 0 and pedInfo.hasParents[j] and pedInfo.descendantTable[j, i] != 1:
-				founder = False
-
-		if founder:
-			genotypeFounders.append(i)
-
-
-	# remove any indeividuals who are ancestors of other founders
-	forDel = []
-
-	for i in genotypeFounders:	
-		desc = False
-		for j in genotypeFounders:
-			if i != j and pedInfo.descendantTable[j,i] == 1:
-				desc = True
-		if desc:
-			forDel.append(i)
-
-	for f in forDel:
-		genotypeFounders.remove(f)
-
-
-
-
-	return genotypeFounders
+	return np.array2string(vector, separator="").replace(" ", "").replace("-1", ".").replace("[", "").replace("]", "")
 
 
 
 
 # given a genotype vector, resolve into one or two putative child vectors
 # and recurse
-def findGenotypes(vector, genotypeStates, pedInfo, proIndex):
-
-	# zero out individuals whose parents are non-carriers
-	for i in range(len(vector)):
-		if (pedInfo.dadIndex[i] >= 0 and pedInfo.mamIndex[i] >= 0):
-			if vector[pedInfo.dadIndex[i]] == 0 and vector[pedInfo.mamIndex[i]] == 0:
-				vector[i] = 0
-
+def findGenotypes(vector, genotypeStates, pedInfo):
 
 	# get minimum of input vector greater than 1
 	minGen = max(vector)
@@ -180,13 +135,13 @@ def findGenotypes(vector, genotypeStates, pedInfo, proIndex):
 
 
 	# if all genotypes are set and the proband is a carrier, add the vector to the list and return
-	if ( minGen == 1 and vector[proIndex] == 1):
+	if minGen == 1 :
 		genotypeStates.append(vector.copy())
 		return
 
 
 	# if the vector is empty or the proband is not a carrier, return
-	if ( minGen == 0 or vector[proIndex] == 0):
+	if minGen == 0 :
 		return
 
 
@@ -194,7 +149,7 @@ def findGenotypes(vector, genotypeStates, pedInfo, proIndex):
 	# set the minimum potential genotype to zero and recurse
 	subVec1 = vector.copy()
 	subVec1[minIndex] = 0
-	findGenotypes(subVec1, genotypeStates, pedInfo, proIndex)
+	findGenotypes(subVec1, genotypeStates, pedInfo)
 
 
 
@@ -202,7 +157,7 @@ def findGenotypes(vector, genotypeStates, pedInfo, proIndex):
 	if pedInfo.dadIndex[minIndex] >= 0 and pedInfo.mamIndex[minIndex] >= 0 and ( vector[pedInfo.dadIndex[minIndex]] == 1 or vector[pedInfo.mamIndex[minIndex]] == 1):
 		subVec2 = vector.copy()
 		subVec2[minIndex] = 1
-		findGenotypes(subVec2, genotypeStates, pedInfo, proIndex)
+		findGenotypes(subVec2, genotypeStates, pedInfo)
 
 	return
 
@@ -232,20 +187,71 @@ def matchVectors(vectorQuery, vectorTarget):
 
 
 
-# calculate likelihood ratio for a given genotype vector
-def calculateLR(pedInfo, proIndex, phenotypeProbability, allLR, inputGenotype):
+def I_del(k1, k2, l1, l2):
 
-	epsilon = 0.001
-	
+	k = k1+k2
+	l = l1+l2
+	n = k+l
+
+	sum = 0.0
+	for i in range(k2+1):
+		tmp_k = float(sp.binom(k2, i))*pow(-1.0, k2-i)/float(k-i+1)
+
+		tmp_l = 0
+
+		if l2 > 0:
+			for j in range(l2):
+				tmp_l += float(sp.binom(l2-1, j))*pow(-1.0, l2-j-1)*( (1.0/float(l-j)) - (1.0/float(n-i-j+1)) )
+
+		else:
+			for j in range(k-i+1):
+				tmp_l += 1.0/float(l1+j+1)
+
+
+		sum += tmp_k*tmp_l
+
+	return sum
+
+
+
+
+def I_neu(k1, k2, l1, l2):
+
+	n = k1+k2+l1+l2
+
+	return 1.0 / float( sp.binom(n+1, k1+l1) * (k1+l1+1) )
+
+
+
+
+
+
+
+
+
+# calculate likelihood ratio for a given genotype vector
+def calculateBF(pedInfo, allBF, inputGenotype):
+
 	# get ID string
 	name=genotypeString(inputGenotype)
 
-
 	# if we've already calculated it, return the value
-	if name in allLR:
-		return allLR[name][0]
+	if name in allBF:
+		return allBF[name][0]
 
 
+	BF = 0.0
+
+	numerator = 0.0
+	denominator = 0.0
+
+
+	# get list of potential probands for the input variant
+	proIndex = [ x for x in range(pedInfo.nPeople) if pedInfo.phenotypeActual[x] == 1 and inputGenotype[x] == 1 ]
+
+	if len(proIndex) == 0:
+		allBF[name] = [ 0.0, 0.0, 0.0 ]
+		return 0.0
 
 
 	# initialise the founder vectors
@@ -253,75 +259,100 @@ def calculateLR(pedInfo, proIndex, phenotypeProbability, allLR, inputGenotype):
 	genotypeStates = []
 
 
-	# get founders proband is descended from
-	proFounderIndex = [ x for x in pedInfo.founderIndex if pedInfo.descendantTable[proIndex,x] == 1 ]
+
+	# get founders all probands are descended from
+	proFounderIndex = []
+
+	for x in range(pedInfo.nPeople):
+		
+		add = True
+		if inputGenotype[x] == 0:
+			add = False
+			continue
+
+		for pro in proIndex:
+			if pedInfo.descendantTable[pro,x] == 0:
+				add = False
+		if add:
+			proFounderIndex.append(x)
 
 
+
+	# for each founder, get the permissible unobserved genotypes
 	for founder in proFounderIndex:
-		vector = np.full(pedInfo.nPeople, -1)
+		vector = inputGenotype.copy()
 
 		# founder is a carrier
 		vector[founder] = 1
 
 
-		# proband is a carrier
-		vector[proIndex] = 1
-
-
-		# other founders are non-carriers
-		othFounderIndex = [ x for x in pedInfo.founderIndex.astype(int) if x != founder ]
+		# all other founders (not just proband common founders) are non-carriers
+		# note: other founders must have empty genotypes
+		othFounderIndex = [ x for x in pedInfo.founderIndex.astype(int) if x != founder and vector[x] < 0 ]
 		for oth in othFounderIndex:
 			vector[oth] = 0
 
 
+		count = 0
+		for founder in pedInfo.founderIndex:
+			if vector[founder] > 0:
+				count += 1
+
+		if(count > 1):
+			allBF[name] = [ 0.0, 0.0, 0.0 ]
+			return 0.0
+			
+
 		# if an individual is a descendant of the founder and an ancestor of a
 		# proband, make them a carrier. Ignore if genotype is non-missing
-		for i in range(pedInfo.nPeople):
-			if vector[i] >= 0:
-				continue
-			elif pedInfo.descendantTable[i, founder] and pedInfo.descendantTable[proIndex, i]:
-				vector[i] = 1
+		for pro in proIndex:
+			for i in range(pedInfo.nPeople):
+				if vector[i] >= 0:
+					continue
+				elif pedInfo.descendantTable[i, founder] and pedInfo.descendantTable[pro, i]:
+					vector[i] = 1
 
 
 		# zero out children of non-carriers
 		while True:
-			sumVec = np.sum(vector)
+			vecTmp = vector.copy()
 			for i in range(len(vector)):
-				if  pedInfo.hasParents[i] and vector[pedInfo.dadIndex[i]] == 0 and vector[pedInfo.mamIndex[i]] == 0:
+				if pedInfo.hasParents[i] and vector[pedInfo.dadIndex[i]] == 0 and vector[pedInfo.mamIndex[i]] == 0 and vector[i] < 0:
 					vector[i] = 0
-			if sumVec == np.sum(vector):
+			if (vector == vecTmp).all():
 				break
 
-		# children of non-carrier founders are non-carriers
+
 		# if one parent is a carrier, set the generation of the children
 		while np.count_nonzero(vector == -1) > 0: 
 			for i in pedInfo.nonFounderIndex:
 				if vector[i] == -1:
-					if vector[pedInfo.dadIndex[i]] == 1 and vector[pedInfo.mamIndex[i]] == 0:
-						vector[i] = 2
-					if vector[pedInfo.mamIndex[i]] == 1 and vector[pedInfo.dadIndex[i]] == 0:
-						vector[i] = 2
-					if (vector[pedInfo.dadIndex[i]] == 1 or vector[pedInfo.dadIndex[i]] == 0) and vector[pedInfo.mamIndex[i]] > 1:
+					if vector[pedInfo.dadIndex[i]] == 0 and vector[pedInfo.mamIndex[i]] > 0:
 						vector[i] = vector[pedInfo.mamIndex[i]] + 1
-					if (vector[pedInfo.mamIndex[i]] == 1 or vector[pedInfo.mamIndex[i]] == 0) and vector[pedInfo.dadIndex[i]] > 1:
+					if vector[pedInfo.mamIndex[i]] == 0 and vector[pedInfo.dadIndex[i]] > 0:
 						vector[i] = vector[pedInfo.dadIndex[i]] + 1
+
+
+
+		# finally, save this vector as the founderVector and find all potential genotype
+		# combinations from the permissible unobserved genotypes
 		founderVector[pedInfo.indID[founder]] = vector.copy()
-		findGenotypes(vector, genotypeStates, pedInfo, proIndex)
+
+		findGenotypes(vector, genotypeStates, pedInfo)
 
 	
+
+
+	# sanity check for number of genotypes
 	if len(genotypeStates) == 0:
-		logging.warning("Error: no genotypes found! ")
-		sys.exit("Exiting ... ")
+		logging.warning("Error: no genotypes found! ")		
+
+		allBF[name] = [ 0.0, 0.0, 0.0 ]
+		return 0.0
 
 
+	# get unique genotypes
 	genotypeStates = np.unique(np.asarray(genotypeStates), axis=0)
-
-
-	#print(name, ", ", len(genotypeStates))
-	#print(inputGenotype)
-	#pprint.pprint(genotypeStates)
-
-
 
 
 
@@ -331,7 +362,7 @@ def calculateLR(pedInfo, proIndex, phenotypeProbability, allLR, inputGenotype):
 	for i in range(len(genotypeStates)):
 		p = 1.0
 		for j in range(pedInfo.nPeople):
-			if pedInfo.dadIndex[j] >= 0 and pedInfo.mamIndex[j] >= 0:
+			if pedInfo.hasParents[j]:
 				if genotypeStates[i][pedInfo.dadIndex[j]] == 1 or genotypeStates[i][pedInfo.mamIndex[j]] == 1:
 					p = p / 2.0
 		genotypeProbabilities[i] = p if p != 1.0 else 0.0
@@ -342,213 +373,31 @@ def calculateLR(pedInfo, proIndex, phenotypeProbability, allLR, inputGenotype):
 
 	# get indices of matching
 	genotypeMatchIndex = [ x for x in range(len(genotypeStates)) if matchVectors(inputGenotype, genotypeStates[x]) ]
-#	queryVector =  np.zeros(pedInfo.nPeople)
-#	genotypeIndex = [ x for x in range(pedInfo.nPeople) if inputGenotype[x] >= 0  ]
-#
-#	for i in genotypeIndex:
-#		queryVector[i] = inputGenotype[i]
-
-#	filename = "test/output_" + name + "_" + str(threading.get_ident()) + ".txt"
-
-#	with open(filename, 'w') as f:
-#		print(name, file=f)
-#		for i in genotypeMatchIndex:
-#			print(genotypeStates[i], " - ", genotypeProbabilities[i], file=f)
-#		print("\n\n", file=f)
-
-	# count number of transmissions and non-transmissions to get observed probability
-	observedProbability = 0.0
-
-	# if the proband is a non-carrier, conditional probability is zero
-	if inputGenotype[proIndex] != 1:
-		observedProbability = 0.0
-	
-	else:
-		observedProbability = np.sum(genotypeProbabilities[genotypeMatchIndex])
-		
-
-#		# identify genotype founders
-#		founderGenotypes = findGenotypeFounders(inputGenotype, pedInfo)
-#		founderProbabilities = []
-#
-#
-#		# loop over independent founders and calculate probability
-#		for founder in founderGenotypes:
-#
-#			observedProbability = 1.0
-#
-#			# make a copy so as not to modify original
-#			vector = inputGenotype.copy()
-#			
-#			# make the founder a carrier if possible
-#			if vector[founder] < 0:
-#				vector[founder] = 1
-#
-#			# identify all carriers of the original variant
-#			carriersIndex = [ x for x in range(pedInfo.nPeople) if inputGenotype[x] > 0 ]
-#			
-#
-#			# if an individual is a descendant of the founder and an ancestor of a
-#			# carrier, make them a carrier. Ignore if genotype is non-missing
-#			for i in range(pedInfo.nPeople):
-#				if vector[i] >= 0:
-#					continue
-#				elif pedInfo.descendantTable[i, founder]:
-#					ances = False
-#					for j in carriersIndex:
-#						if pedInfo.descendantTable[j, i]:
-#							ances = True
-#					if ances:
-#						vector[i] = 1
-#
-#
-#			for i in range(pedInfo.nPeople):
-#				if pedInfo.phenotypeActual[i] >= 0 and pedInfo.hasParents[i] and (vector[pedInfo.dadIndex[i]] == 1 or vector[pedInfo.mamIndex[i]] == 1) and vector[i] >= 0:
-#					observedProbability = observedProbability / 2
-#	
-#			if observedProbability == 1.0:
-#				observedProbability = 0.0
-#
-#			founderProbabilities.append(observedProbability)
-#	
-#		#print(geno(inputGenotype), " : ", founderGenotypes, " - ", founderProbabilities)
-#
-#		if len(founderProbabilities) > 0:
-#			observedProbability = sum(founderProbabilities)/len(founderProbabilities)
-#		else:
-#			observedProbability = 0.0
-
-		#print(name, " - ", genotypeString(inputGenotype), " - ", founder)
-
-#	observedProbability = 0.0
-#	for founder in proFounderIndex:
-#		desc = True
-#		vector = queryVector.copy()
-#		for i in genotypeIndex:
-#			if pedInfo.descendantTable[i, founder] == 0 and i != founder and pedInfo.hasParents[i]:
-#				desc = False
-#		if desc:
-#			vector[founder] = 1.0
-#		else:
-#			continue
-#		
-#		for i in genotypeIndex:
-#			for j in [x for x in range(pedInfo.nPeople) if pedInfo.descendantTable[i,x] == 1 ]:
-#				if pedInfo.descendantTable[j,founder] == 1:
-#					vector[j] = 1.0
-#		genotypeMatchIndexTmp = [ x for x in range(len(genotypeStates)) if matchVectors(vector, genotypeStates[x]) ]
-#		print(founder, "\t", genotypeMatchIndexTmp)
-#
-#		for i in range(pedInfo.nPeople):
-#			print(i, "\t", pedInfo.indID[i], "\t", genotypeStates[genotypeMatchIndexTmp[0]][i])
-#
-#		observedProbability = observedProbability + genotypeProbabilities[genotypeMatchIndexTmp].sum()
-		
 
 
-	numerator = 0.0
 	for index in genotypeMatchIndex:
-		p = 1.0
 
-
-		# set the penetrance and phenocopy rate by counting the number of occurences of the
-		# variant (or reference allele) in the cases and controls 
-		penetranceCount = 0
-		notPenetranceCount = 0
-		phenocopyCount = 0
-		notPhenocopyCount = 0
-
-		for i in range(pedInfo.nPeople):
-			if pedInfo.phenotypeActual[i] == 1 and genotypeStates[index][i] == 1:
-				penetranceCount += 1
-			elif pedInfo.phenotypeActual[i] == 0 and genotypeStates[index][i] == 1:
-				notPenetranceCount += 1
-			elif pedInfo.phenotypeActual[i] == 1 and genotypeStates[index][i] == 0:
-				phenocopyCount += 1
-			else:
-				notPhenocopyCount += 1
-
-
-		phenotypeProbability[1,1] = float(penetranceCount) / float(penetranceCount + notPenetranceCount)
-		if phenotypeProbability[1,1] == 1.0:
-			phenotypeProbability[1,1] -= epsilon
-		elif phenotypeProbability[1,1] == 0.0:
-			phenotypeProbability[1,1] = epsilon
-		phenotypeProbability[0,1] = 1-phenotypeProbability[1,1]
-
-		phenotypeProbability[1,0] = float(phenocopyCount) / float(phenocopyCount + notPhenocopyCount)
-		if phenotypeProbability[1,0] == 1.0:
-			phenotypeProbability[1,0] -= epsilon
-		elif phenotypeProbability[1,0] == 0.0:
-			phenotypeProbability[1,0] = epsilon
-		phenotypeProbability[0,0] = 1-phenotypeProbability[1,0]
-
-
-		for i in range(pedInfo.nPeople):
-			p = p*phenotypeProbability[pedInfo.phenotypeActual[i],genotypeStates[index][i]]
-		numerator = numerator + p*genotypeProbabilities[index]
+		k1 = len([ x for x in range(pedInfo.nPeople) if pedInfo.phenotypeActual[x] == 1 and genotypeStates[index][x] == 1 ])
+		k2 = len([ x for x in range(pedInfo.nPeople) if pedInfo.phenotypeActual[x] == 0 and genotypeStates[index][x] == 1 ])
+		l1 = len([ x for x in range(pedInfo.nPeople) if pedInfo.phenotypeActual[x] == 1 and genotypeStates[index][x] == 0 ])
+		l2 = len([ x for x in range(pedInfo.nPeople) if pedInfo.phenotypeActual[x] == 0 and genotypeStates[index][x] == 0 ])
+		n  = k1+k2+l1+l2 
+		numerator = numerator + I_del(k1, k2, l1, l2)*genotypeProbabilities[index]
+		denominator = denominator + I_neu(k1, k2, l1, l2)*genotypeProbabilities[index]/float(k1+l1)
 	
 
-	denominator = 0.0
-	for index in range(len(genotypeStates)):
-		p = 1.0
-
-		# set the penetrance and phenocopy rate by counting the number of occurences of the
-		# variant (or reference allele) in the cases and controls 
-		penetranceCount = 0
-		notPenetranceCount = 0
-		phenocopyCount = 0
-		notPhenocopyCount = 0
-
-		for i in range(pedInfo.nPeople):
-			if pedInfo.phenotypeActual[i] == 1 and genotypeStates[index][i] == 1:
-				penetranceCount += 1
-			elif pedInfo.phenotypeActual[i] == 0 and genotypeStates[index][i] == 1:
-				notPenetranceCount += 1
-			elif pedInfo.phenotypeActual[i] == 1 and genotypeStates[index][i] == 0:
-				phenocopyCount += 1
-			else:
-				notPhenocopyCount += 1
-
-
-		phenotypeProbability[1,1] = float(penetranceCount) / float(penetranceCount + notPenetranceCount)
-		if phenotypeProbability[1,1] == 1.0:
-			phenotypeProbability[1,1] -= epsilon
-		elif phenotypeProbability[1,1] == 0.0:
-			phenotypeProbability[1,1] = epsilon
-		phenotypeProbability[0,1] = 1-phenotypeProbability[1,1]
-
-		phenotypeProbability[1,0] = float(phenocopyCount) / float(phenocopyCount + notPhenocopyCount)
-		if phenotypeProbability[1,0] == 1.0:
-			phenotypeProbability[1,0] -= epsilon
-		elif phenotypeProbability[1,0] == 0.0:
-			phenotypeProbability[1,0] = epsilon
-		phenotypeProbability[0,0] = 1-phenotypeProbability[1,0]
-
-		for i in range(pedInfo.nPeople):
-			p = p*phenotypeProbability[pedInfo.phenotypeActual[i],genotypeStates[index][i]]
-		denominator = denominator + p*genotypeProbabilities[index]
-
-
-	#print("numerator:   ", numerator)
-	#print("denominator: ", denominator)
-	#print("\n")
-
-	#print("P_d(P|G):    ", numerator/denominator)
-	#print("P_n(P|G):    ", observedProbability)
-	#print("\n")
-
-
-
-	if denominator == 0 or observedProbability == 0:
-		LR = float("inf")
+	if denominator == 0 :
+		BF = float("inf")
 	else:
-		LR = numerator/(observedProbability*denominator)
+		BF = numerator/denominator
 
-	
-	allLR[name] = [ LR, numerator/denominator, observedProbability ]
+	myList = [ BF, numerator, denominator ]	
+	allBF[name] = [ '%.10f' % elem for elem in myList ]
 
-	return LR
+	#print(multiprocessing.current_process(), " - ", name)
+
+
+	return BF
 
 
 
@@ -562,7 +411,6 @@ def main(argv):
 	# command line arguments
 	inputFamFile = None
 	inputVcfFile = None
-	proID = None
 	p1 = 0.01
 	p2 = 0.8
 	nCores = 1
@@ -588,18 +436,9 @@ def main(argv):
 			if not isinstance(numeric_level, int):
 				raise ValueError('Invalid log level: %s' % arg)
 
-		if opt in ("-p", "--proband"):
-			proID = arg
-
 		if opt in ("-v", "--vcf"):
 			inputVcfFile = arg
 	
-		if opt in ("--prob1"):
-			p1 = float(arg)
-
-		if opt in ("--prob2"):
-			p2 = float(arg)
-
 	FORMAT = '# %(asctime)s [%(levelname)s] - %(message)s'
 	
 	try:
@@ -657,12 +496,6 @@ def main(argv):
 
 
 	# define constants
-	phenotypeProbability = np.zeros((2,2))
-	phenotypeProbability[1,0] = p1
-	phenotypeProbability[1,1] = p2
-	phenotypeProbability[0,0] = 1-phenotypeProbability[1,0]
-	phenotypeProbability[0,1] = 1-phenotypeProbability[1,1]
-	
 
 
 
@@ -676,29 +509,13 @@ def main(argv):
 	logging.info("Setting pedigre variables")
 
 
-	# get proband information
-	if proID is None:
-		proID = indID[nonFounderIndex[0]]
-
-	try:
-		proIndex = np.where(indID == proID)[0][0]
-
-	except IndexError:
-		logging.error("Specified proband ID is not found in input PED file.")
-		sys.exit("Exiting ... ")
-
-
-
-
-
 
 
 	################################################################################
 	# set genotype information
 	################################################################################
 
-	logging.info("Finding genotype states")
-
+	logging.info("Reading VCF file")
 
 
 	# get VCF file and variant/sample information
@@ -722,9 +539,7 @@ def main(argv):
 
 	# set all genotypes to missing as input
 
-	#genotypeActual = pedigreeFile[:,6].astype(np.int)
-	#genotypes = np.transpose(pedigreeFile[:,6:].astype(np.int))
-	genotypes = np.full((pedInfo.nPeople, nVariants), -9)
+	genotypes = np.full((pedInfo.nPeople, nVariants), -1)
 
 
 	# create list to hold inuqie variant ID
@@ -738,7 +553,6 @@ def main(argv):
 		varID.append(variant.CHROM + "_" + str(variant.start+1) + "_" + variant.REF + "_" + variant.ALT[0])
 
 
-		#print(variant.gt_types, "\t", variant.genotypes)
 		# fill the known genotypes
 		for i in range(len(vcfSampleIndex)):
 
@@ -746,12 +560,12 @@ def main(argv):
 			gt = int(variant.gt_types[i])
 
 			# dominant inheritance: HET and HOM_ALT are the same. 
-			# missing genotypes are set to -9
+			# missing genotypes are set to -1
 			if gt == 2:
 				gt = 1
 
 			if gt == 3:
-				gt = -9
+				gt = -1
 
 			# set known genotype
 			genotypes[vcfSampleIndex[i]][j] = gt
@@ -763,32 +577,31 @@ def main(argv):
 	genotypes = np.transpose(genotypes.astype(np.int))
 
 
-	# create dictionary to store all LR
+	# create dictionary to store all BF
 	manager = Manager()
-	allLR = manager.dict()
+	allBF = manager.dict()
 
 
-	# partial function for parallelisation - all constant except the input genotypes
-	func = partial(calculateLR, pedInfo, proIndex, phenotypeProbability, allLR)
+	logging.info("Calculating Bayes Factors")
 
 
+	# calculate the Bayes Factor for all variants
+	if nCores > 1:
+		# partial function for parallelisation - all constant except the input genotypes
+		func = partial(calculateBF, pedInfo, allBF)
 
-#	for i in range(pedInfo.nPeople):
-#		print(i, "\t", pedInfo.hasParents[i])
+		# create multiprocessing pool 
+		pool = Pool(nCores)
+		BFs = pool.map(func, genotypes)
+		pool.close()
 
-#	for i in range(len(pedInfo.descendantTable)):
-#		print(pedInfo.indID[i], "\t", i, "\t", pedInfo.descendantTable[i])
-
-
-	pool = Pool(nCores)
-
-	results = pool.map(func, genotypes)
-
-	pool.close()
+	else:
+		BFs = []
+		for i in range(len(genotypes)):
+			BFs.append(calculateBF(pedInfo, allBF, genotypes[i]))
 
 
-#	for i in range(len(genotypes[:,0])):
-#		LR = calculateLR(genotypes[i,:], pedInfo, proIndex, phenotypeProbability, allLR)
+	results = [ '%.6f' % float(elem) for elem in BFs ]
 
 
 	################################################################################
@@ -798,16 +611,14 @@ def main(argv):
 	logging.info("Output")
 
 	
-	#for i in range(len(varID)):
-		#print(varID[i], "\t", results[i], "\t", varString[i], "\t", varString[i].count("."))
+	for i in range(len(varID)):
+		print(varID[i], "\t", results[i], "\t", varString[i], "\t", varString[i].count("."))
 		#print(results[i], "\t", varString[i], "\t", genotypes[i])
 
-	pprint.pprint(dict(allLR))
-
-	#print(genotypes)
+	#pprint.pprint(dict(allBF))
 
 
-	#print(findGenotypeFounders(genotypes[1], pedInfo))
+
 
 
 
