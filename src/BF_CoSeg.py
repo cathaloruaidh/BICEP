@@ -249,8 +249,10 @@ def calculateBF(pedInfo, allBF, inputGenotype):
 			add = False
 			continue
 
-		for pro in proIndex:
-			if pedInfo.descendantTable[pro,x] == 0:
+		carrierIndex = [ x for x in range(pedInfo.nPeople) if inputGenotype[x] == 1 ]
+
+		for carrier in carrierIndex:
+			if pedInfo.descendantTable[carrier,x] == 0:
 				add = False
 		if add:
 			proFounderIndex.append(x)
@@ -324,8 +326,6 @@ def calculateBF(pedInfo, allBF, inputGenotype):
 
 	# sanity check for number of genotypes
 	if len(genotypeStates) == 0:
-		logging.warning("Error: no genotypes found! ")		
-
 		allBF[name] = [ 0.0, 0.0, 0.0 ]
 		return 0.0
 
