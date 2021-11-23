@@ -240,7 +240,7 @@ def calculateBF(pedInfo, allBF, inputGenotype):
 
 
 	# get founders all probands are descended from
-	proFounderIndex = []
+	carrFounderIndex = []
 
 	for x in range(pedInfo.nPeople):
 		
@@ -255,12 +255,17 @@ def calculateBF(pedInfo, allBF, inputGenotype):
 			if pedInfo.descendantTable[carrier,x] == 0:
 				add = False
 		if add:
-			proFounderIndex.append(x)
+			carrFounderIndex.append(x)
+
+
+	if len(carrFounderIndex) == 0:
+		allBF[name] = [ 0.0, 0.0, 0.0 ]
+		return 0.0
 
 
 
 	# for each founder, get the permissible unobserved genotypes
-	for founder in proFounderIndex:
+	for founder in carrFounderIndex:
 		vector = inputGenotype.copy()
 
 		# founder is a carrier
@@ -335,7 +340,8 @@ def calculateBF(pedInfo, allBF, inputGenotype):
 
 
 
-	# calculate genotype configuration probabilities
+	# calculate genotype configuration probabilities, and
+	# calculate the numerator and denominator of the Bayes Factor
 	genotypeProbabilities = np.zeros(len(genotypeStates))
 
 	for i in range(len(genotypeStates)):
@@ -346,23 +352,17 @@ def calculateBF(pedInfo, allBF, inputGenotype):
 					p = p / 2.0
 		genotypeProbabilities[i] = p if p != 1.0 else 0.0
 
-
-
-
-	# calculate the numerator and denominator of the Bayes Factor
-	for index in range(len(genotypeStates)):
-
 		nList = range(pedInfo.nPeople)
 		
-		k1 = len([ x for x in nList if pedInfo.phenotypeActual[x] == 1 and genotypeStates[index][x] == 1 ])
-		k2 = len([ x for x in nList if pedInfo.phenotypeActual[x] == 0 and genotypeStates[index][x] == 1 ])
-		l1 = len([ x for x in nList if pedInfo.phenotypeActual[x] == 1 and genotypeStates[index][x] == 0 ])
-		l2 = len([ x for x in nList if pedInfo.phenotypeActual[x] == 0 and genotypeStates[index][x] == 0 ])
+		k1 = len([ x for x in nList if pedInfo.phenotypeActual[x] == 1 and genotypeStates[i][x] == 1 ])
+		k2 = len([ x for x in nList if pedInfo.phenotypeActual[x] == 0 and genotypeStates[i][x] == 1 ])
+		l1 = len([ x for x in nList if pedInfo.phenotypeActual[x] == 1 and genotypeStates[i][x] == 0 ])
+		l2 = len([ x for x in nList if pedInfo.phenotypeActual[x] == 0 and genotypeStates[i][x] == 0 ])
 
 		n  = k1+k2+l1+l2 
 		
-		numerator = numerator + I_del(k1, k2, l1, l2)*genotypeProbabilities[index]
-		denominator = denominator + I_neu(k1, k2, l1, l2)*genotypeProbabilities[index]
+		numerator = numerator + I_del(k1, k2, l1, l2)*genotypeProbabilities[i]
+		denominator = denominator + I_neu(k1, k2, l1, l2)*genotypeProbabilities[i]
 	
 
 	if denominator == 0.0 :
