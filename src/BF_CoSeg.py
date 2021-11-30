@@ -120,9 +120,9 @@ def	genotypeString(vector):
 
 
 
-# given a genotype vector, resolve into one or two putative child vectors
-# and recurse
-def findGenotypes(vector, genotypeStates, pedInfo):
+# given a genotype vector, set the generations and resolve 
+# into one or two putative child vectors, then recurse
+def setGenerations(vector, genotypeStates, pedInfo):
 
 	# get minimum of input vector greater than 1
 	minGen = max(vector)
@@ -149,17 +149,125 @@ def findGenotypes(vector, genotypeStates, pedInfo):
 	# set the minimum potential genotype to zero and recurse
 	subVec1 = vector.copy()
 	subVec1[minIndex] = 0
-	findGenotypes(subVec1, genotypeStates, pedInfo)
+	setGenerations(subVec1, genotypeStates, pedInfo)
 
 
 
 	# set the minimum potential genotype to one (if possible by inheritance) and recurse
-	if pedInfo.dadIndex[minIndex] >= 0 and pedInfo.mamIndex[minIndex] >= 0 and ( vector[pedInfo.dadIndex[minIndex]] == 1 or vector[pedInfo.mamIndex[minIndex]] == 1):
+	if pedInfo.hasParents[minIndex] and ( vector[pedInfo.dadIndex[minIndex]] == 1 or vector[pedInfo.mamIndex[minIndex]] == 1):
 		subVec2 = vector.copy()
 		subVec2[minIndex] = 1
-		findGenotypes(subVec2, genotypeStates, pedInfo)
+		setGenerations(subVec2, genotypeStates, pedInfo)
 
 	return
+
+
+
+
+
+
+# given a genotype vector, find potential generations following
+# the rare variant assumption
+def findGenerations(inputVector, genotypeStates, pedInfo):
+
+
+	# get list of potential probands for the input variant
+	proIndex = [ x for x in range(pedInfo.nPeople) if pedInfo.phenotypeActual[x] == 1 and inputVector[x] == 1 ]
+
+	if len(proIndex) == 0:
+		return 
+
+
+	# initialise the founder vectors
+	founderVector = {}
+
+
+	# get founders all probands are descended from
+	carrierIndex = [ x for x in range(pedInfo.nPeople) if inputVector[x] == 1 ]
+	carrFounderIndex = []
+
+	for x in range(pedInfo.nPeople):
+		
+		add = True
+		if inputVector[x] == 0:
+			add = False
+			continue
+
+		for carrier in carrierIndex:
+			if pedInfo.descendantTable[carrier,x] == 0:
+				add = False
+		if add:
+			carrFounderIndex.append(x)
+
+
+	if len(carrFounderIndex) == 0:
+		return 
+
+
+
+	# for each founder, get the permissible unobserved genotypes
+	for founder in carrFounderIndex:
+		vector = inputVector.copy()
+
+		# founder is a carrier
+		vector[founder] = 1
+
+
+		# all other founders (not just proband common founders) are non-carriers
+		# note: other founders must have empty genotypes
+		othFounderIndex = [ x for x in pedInfo.founderIndex.astype(int) if x != founder and vector[x] < 0 ]
+		for oth in othFounderIndex:
+			vector[oth] = 0
+
+
+		count = 0
+		for founder in pedInfo.founderIndex:
+			if vector[founder] > 0:
+				count += 1
+
+		if(count > 1):
+			return 
+			
+
+		# if an individual is a descendant of the founder and an ancestor of a
+		# proband, make them a carrier. Ignore if genotype is non-missing
+		for carrier in carrierIndex:
+			for i in range(pedInfo.nPeople):
+				if vector[i] >= 0:
+					continue
+				elif pedInfo.descendantTable[i, founder] and pedInfo.descendantTable[carrier, i]:
+					vector[i] = 1
+
+
+		# zero out children of non-carriers
+		while True:
+			vecTmp = vector.copy()
+			for i in range(len(vector)):
+				if pedInfo.hasParents[i] and vector[pedInfo.dadIndex[i]] == 0 and vector[pedInfo.mamIndex[i]] == 0 and vector[i] < 0:
+					vector[i] = 0
+			if (vector == vecTmp).all():
+				break
+
+
+		# if one parent is a carrier, set the generation of the children
+		while np.count_nonzero(vector == -1) > 0: 
+			for i in pedInfo.nonFounderIndex:
+				if vector[i] == -1:
+					if vector[pedInfo.dadIndex[i]] == 0 and vector[pedInfo.mamIndex[i]] > 0:
+						vector[i] = vector[pedInfo.mamIndex[i]] + 1
+					if vector[pedInfo.mamIndex[i]] == 0 and vector[pedInfo.dadIndex[i]] > 0:
+						vector[i] = vector[pedInfo.dadIndex[i]] + 1
+
+
+
+		# finally, save this vector as the founderVector and find all potential genotype
+		# combinations from the permissible unobserved genotypes
+		founderVector[pedInfo.indID[founder]] = vector.copy()
+
+		setGenerations(vector, genotypeStates, pedInfo)
+
+	
+	return 
 
 
 
@@ -225,108 +333,8 @@ def calculateBF(pedInfo, allBF, inputGenotype):
 	denominator = 0.0
 
 
-	# get list of potential probands for the input variant
-	proIndex = [ x for x in range(pedInfo.nPeople) if pedInfo.phenotypeActual[x] == 1 and inputGenotype[x] == 1 ]
-
-	if len(proIndex) == 0:
-		allBF[name] = [ 0.0, 0.0, 0.0 ]
-		return 0.0
-
-
-	# initialise the founder vectors
-	founderVector = {}
 	genotypeStates = []
-
-
-
-	# get founders all probands are descended from
-	carrFounderIndex = []
-
-	for x in range(pedInfo.nPeople):
-		
-		add = True
-		if inputGenotype[x] == 0:
-			add = False
-			continue
-
-		carrierIndex = [ x for x in range(pedInfo.nPeople) if inputGenotype[x] == 1 ]
-
-		for carrier in carrierIndex:
-			if pedInfo.descendantTable[carrier,x] == 0:
-				add = False
-		if add:
-			carrFounderIndex.append(x)
-
-
-	if len(carrFounderIndex) == 0:
-		allBF[name] = [ 0.0, 0.0, 0.0 ]
-		return 0.0
-
-
-
-	# for each founder, get the permissible unobserved genotypes
-	for founder in carrFounderIndex:
-		vector = inputGenotype.copy()
-
-		# founder is a carrier
-		vector[founder] = 1
-
-
-		# all other founders (not just proband common founders) are non-carriers
-		# note: other founders must have empty genotypes
-		othFounderIndex = [ x for x in pedInfo.founderIndex.astype(int) if x != founder and vector[x] < 0 ]
-		for oth in othFounderIndex:
-			vector[oth] = 0
-
-
-		count = 0
-		for founder in pedInfo.founderIndex:
-			if vector[founder] > 0:
-				count += 1
-
-		if(count > 1):
-			allBF[name] = [ 0.0, 0.0, 0.0 ]
-			return 0.0
-			
-
-		# if an individual is a descendant of the founder and an ancestor of a
-		# proband, make them a carrier. Ignore if genotype is non-missing
-		for pro in proIndex:
-			for i in range(pedInfo.nPeople):
-				if vector[i] >= 0:
-					continue
-				elif pedInfo.descendantTable[i, founder] and pedInfo.descendantTable[pro, i]:
-					vector[i] = 1
-
-
-		# zero out children of non-carriers
-		while True:
-			vecTmp = vector.copy()
-			for i in range(len(vector)):
-				if pedInfo.hasParents[i] and vector[pedInfo.dadIndex[i]] == 0 and vector[pedInfo.mamIndex[i]] == 0 and vector[i] < 0:
-					vector[i] = 0
-			if (vector == vecTmp).all():
-				break
-
-
-		# if one parent is a carrier, set the generation of the children
-		while np.count_nonzero(vector == -1) > 0: 
-			for i in pedInfo.nonFounderIndex:
-				if vector[i] == -1:
-					if vector[pedInfo.dadIndex[i]] == 0 and vector[pedInfo.mamIndex[i]] > 0:
-						vector[i] = vector[pedInfo.mamIndex[i]] + 1
-					if vector[pedInfo.mamIndex[i]] == 0 and vector[pedInfo.dadIndex[i]] > 0:
-						vector[i] = vector[pedInfo.dadIndex[i]] + 1
-
-
-
-		# finally, save this vector as the founderVector and find all potential genotype
-		# combinations from the permissible unobserved genotypes
-		founderVector[pedInfo.indID[founder]] = vector.copy()
-
-		findGenotypes(vector, genotypeStates, pedInfo)
-
-	
+	findGenerations(inputGenotype, genotypeStates, pedInfo)
 
 
 	# sanity check for number of genotypes
