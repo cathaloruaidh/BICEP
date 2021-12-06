@@ -343,6 +343,16 @@ def I_neu(k1, k2, l1, l2):
 
 
 
+def I_neu_beta(k1, k2, l1, l2, xa, ya):
+
+	n = k1+k2+l1+l2
+
+	return 1.0 / float( sp.binom(n + xa + ya - 2, k1 + l1 xa - 1) * (n + xa + ya - 1) )
+
+
+
+
+
 
 
 
