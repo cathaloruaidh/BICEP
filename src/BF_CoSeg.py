@@ -294,21 +294,8 @@ def I_del(k1, k2, l1, l2):
 	n = k+l
 
 	sum = 0.0
-	for i in range(k2+1):
-		tmp_k = float(sp.binom(k2, i))*pow(-1.0, k2-i)/float(k-i+1)
-
-		tmp_l = 0
-
-		if l2 > 0:
-			for j in range(l2):
-				tmp_l += float(sp.binom(l2-1, j))*pow(-1.0, l2-1-j)*( (1.0/float(l-j)) - (1.0/float(n-i-j+1)) )
-
-		else:
-			for j in range(k-i+1):
-				tmp_l += 1.0/float(l1+j+1)
-
-
-		sum += tmp_k*tmp_l
+	for i in range(l2+1):
+		sum += float( sp.binom(l2, i) )*pow( -1.0, l2-i)/float( (l-i+1) * (n-i+1) * sp.binom(n-i, k2) )
 
 	return sum
 
