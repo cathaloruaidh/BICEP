@@ -347,7 +347,7 @@ def I_neu_beta(k1, k2, l1, l2, xa, ya):
 
 	n = k1+k2+l1+l2
 
-	return 1.0 / float( sp.binom(n + xa + ya - 2, k1 + l1 xa - 1) * (n + xa + ya - 1) )
+	return 1.0 / float( sp.binom(n + xa + ya - 2, k1 + l1 + xa - 1) * (n + xa + ya - 1) )
 
 
 
@@ -412,7 +412,7 @@ def calculateBF(pedInfo, allBF, inputGenotype):
 
 		n  = k1+k2+l1+l2 
 		
-		numerator = numerator + I_del(k1, k2, l1, l2)*genotypeProbabilities[i]
+		numerator = numerator + I_del_linear(k1, k2, l1, l2)*genotypeProbabilities[i]
 		denominator = denominator + I_neu(k1, k2, l1, l2)*genotypeProbabilities[i]
 	
 
