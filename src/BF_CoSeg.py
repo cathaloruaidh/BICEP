@@ -301,6 +301,37 @@ def I_del(k1, k2, l1, l2):
 
 
 
+def I_del_linear(k1, k2, l1, l2):
+	k = k1+k2
+	l = l1+l2
+	n = k+l
+
+	sum = 0.0
+	
+	for i in range(l2+1 + 1):
+	
+		tmp_q = 0.0
+		for q in range(k1+l+2-i + 1):
+			
+			tmp_r = 0.0
+			for r in range(k2 + 1):
+				tmp_coeff = float(sp.binom(k2, r))*pow(-1.0, k2-r)
+
+				if q == k1+l+2-i and r == 0:
+					tmp_r += tmp_coeff*math.log(2)
+					
+				else:
+					tmp_r += tmp_coeff*(pow(2.0, k1+l+2-i-q+r) - 1.0)/float(k1+l+2-i-q+r)
+
+			tmp_q += float(sp.binom(k1+l+2-i, q))*pow(2.0, q)*pow(-1.0, k1+l+2-i-q) * tmp_r
+
+		sum += float(sp.binom(l2+1, i))*pow(-1.0, l2+1-i)/float( l+2-i ) * tmp_q
+			
+
+	return sum * 4.0
+
+
+
 
 def I_neu(k1, k2, l1, l2):
 
@@ -619,7 +650,6 @@ def main(argv):
 			#print(results[i], "\t", varString[i], "\t", genotypes[i])
 
 	#pprint.pprint(dict(allBF))
-
 
 
 
