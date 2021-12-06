@@ -23,6 +23,15 @@ def s_print(*a, **b):
 		print(*a, **b)
 
 
+
+# lock initialiser
+def lock_init(l):
+	global lock
+	lock = l
+
+
+
+
 # define Pedigree class to hold all pedigree info 
 class Pedigree:
 	def __init__(self, famID, indID, dadID, mamID, sexID, pheID):
@@ -204,9 +213,11 @@ def findGenerations(inputVector, genotypeStates, pedInfo):
 		return 
 
 
+	#print(carrFounderIndex)
 
 	# for each founder, get the permissible unobserved genotypes
 	for founder in carrFounderIndex:
+
 		vector = inputVector.copy()
 
 		# founder is a carrier
@@ -221,10 +232,11 @@ def findGenerations(inputVector, genotypeStates, pedInfo):
 
 
 		count = 0
-		for founder in pedInfo.founderIndex:
-			if vector[founder] > 0:
+		for i in pedInfo.founderIndex:
+			if vector[i] > 0:
 				count += 1
 
+		#print("count: ", count)
 		if(count > 1):
 			return 
 			
@@ -266,6 +278,7 @@ def findGenerations(inputVector, genotypeStates, pedInfo):
 
 		setGenerations(vector, genotypeStates, pedInfo)
 
+	#print("\n")
 	
 	return 
 
@@ -321,6 +334,7 @@ def calculateBF(pedInfo, allBF, inputGenotype):
 
 	# get ID string
 	name=genotypeString(inputGenotype)
+	#print(name)
 
 	# if we've already calculated it, return the value
 	if name in allBF:
@@ -336,10 +350,11 @@ def calculateBF(pedInfo, allBF, inputGenotype):
 	genotypeStates = []
 	findGenerations(inputGenotype, genotypeStates, pedInfo)
 
-
 	# sanity check for number of genotypes
 	if len(genotypeStates) == 0:
-		allBF[name] = [ 0.0, 0.0, 0.0 ]
+		with lock:
+			allBF[name] = [ 0.0, 0.0, 0.0 ]
+		
 		return 0.0
 
 
@@ -379,11 +394,11 @@ def calculateBF(pedInfo, allBF, inputGenotype):
 		BF = numerator/denominator
 
 
-	# save the data correct to 10 decimal places
-	myList = [ BF, numerator, denominator ]	
-	allBF[name] = [ '%.10f' % elem for elem in myList ]
+	# aquire the lock and save the data correct to 10 decimal places
+	with lock:
+		myList = [ BF, numerator, denominator ]	
+		allBF[name] = [ '%.10f' % elem for elem in myList ]
 
-	#print(multiprocessing.current_process(), " - ", name)
 
 
 	return BF
@@ -581,12 +596,16 @@ def main(argv):
 		# partial function for parallelisation - all constant except the input genotypes
 		func = partial(calculateBF, pedInfo, allBF)
 
-		# create multiprocessing pool 
-		pool = Pool(nCores)
+		# create multiprocessing pool with lock
+		l = multiprocessing.Lock()
+		pool = Pool(nCores, initializer=lock_init, initargs=(l,))
 		BFs = pool.map(func, genotypes)
 		pool.close()
 
 	else:
+		l = multiprocessing.Lock()
+		lock_init(l)
+
 		BFs = []
 		for i in range(len(genotypes)):
 			BFs.append(calculateBF(pedInfo, allBF, genotypes[i]))
@@ -607,7 +626,6 @@ def main(argv):
 			print(varID[i], "\t", results[i], "\t", varString[i], "\t", varString[i].count("."))
 	else:
 		with open(outputFile, 'w') as f:
-			#sys.stdout = f
 			for i in range(len(varID)):
 				print(varID[i], "\t", results[i], "\t", varString[i], "\t", varString[i].count("."), file=f)
 		
