@@ -294,10 +294,10 @@ def I_del(k1, k2, l1, l2):
 	n = k+l
 
 	sum = 0.0
-	for i in range(l2+1):
-		sum += float( sp.binom(l2, i) )*pow( -1.0, l2-i)/float( (l-i+1) * (n-i+1) * sp.binom(n-i, k2) )
+	for i in range(l2 + 1):
+		sum += float( sp.binom(l2, i) )*pow( -1.0, l2-i)/float( (l-i+1) * (n-i+2) * sp.binom(n-i+1, k2) )
 
-	return sum
+	return 2*sum
 
 
 
@@ -440,7 +440,7 @@ def calculateBF(pedInfo, allBF, inputGenotype):
 
 		n  = k1+k2+l1+l2 
 		
-		numerator = numerator + I_del_linear(k1, k2, l1, l2)*genotypeProbabilities[i]
+		numerator = numerator + I_del(k1, k2, l1, l2)*genotypeProbabilities[i]
 		denominator = denominator + I_neu(k1, k2, l1, l2)*genotypeProbabilities[i]
 	
 
@@ -690,7 +690,7 @@ def main(argv):
 	#pprint.pprint(dict(allBF))
 
 
-
+	print(I_del(4, 1, 0, 3))
 
 
 
