@@ -62,7 +62,6 @@ class Pedigree:
 		self.hasParents = np.full(self.nPeople, True)
 
 
-
 		for i in range(self.nPeople):
 			# get indices of parents
 			try:
@@ -76,12 +75,9 @@ class Pedigree:
 				self.mamIndex[i] = -1
 
 
-
 			# create a boolean for parental info
 			if self.dadIndex[i] == -1 and self.mamIndex[i] == -1:
 				self.hasParents[i] = False
-		
-
 
 
 			# identify and count the founders
@@ -90,7 +86,6 @@ class Pedigree:
 				self.nFounder += 1
 
 			self.nonFounderIndex = np.array([ int(x) for x in range(self.nPeople) if x not in self.founderIndex ])
-
 	
 
 		# set founders in desentant table
@@ -123,7 +118,7 @@ class Pedigree:
 
 # return a string representation of the genotypes
 # missing is '.', absent is '0' and carrier is '1'
-def	genotypeString(vector):
+def genotypeString(vector):
 	return np.array2string(vector, separator="").replace(" ", "").replace("-1", ".").replace("[", "").replace("]", "")
 
 
@@ -154,7 +149,6 @@ def setGenerations(vector, genotypeStates, pedInfo):
 		return
 
 
-
 	# set the minimum potential genotype to zero and recurse
 	subVec1 = vector.copy()
 	subVec1[minIndex] = 0
@@ -169,7 +163,6 @@ def setGenerations(vector, genotypeStates, pedInfo):
 		setGenerations(subVec2, genotypeStates, pedInfo)
 
 	return
-
 
 
 
@@ -213,7 +206,6 @@ def findGenerations(inputVector, genotypeStates, pedInfo):
 		return 
 
 
-	#print(carrFounderIndex)
 
 	# for each founder, get the permissible unobserved genotypes
 	for founder in carrFounderIndex:
@@ -236,7 +228,6 @@ def findGenerations(inputVector, genotypeStates, pedInfo):
 			if vector[i] > 0:
 				count += 1
 
-		#print("count: ", count)
 		if(count > 1):
 			return 
 			
@@ -260,7 +251,6 @@ def findGenerations(inputVector, genotypeStates, pedInfo):
 			if (vector == vecTmp).all():
 				break
 
-
 		# if one parent is a carrier, set the generation of the children
 		while np.count_nonzero(vector == -1) > 0: 
 			for i in pedInfo.nonFounderIndex:
@@ -271,17 +261,14 @@ def findGenerations(inputVector, genotypeStates, pedInfo):
 						vector[i] = vector[pedInfo.dadIndex[i]] + 1
 
 
-
 		# finally, save this vector as the founderVector and find all potential genotype
 		# combinations from the permissible unobserved genotypes
 		founderVector[pedInfo.indID[founder]] = vector.copy()
 
 		setGenerations(vector, genotypeStates, pedInfo)
 
-	#print("\n")
 	
 	return 
-
 
 
 
@@ -381,16 +368,11 @@ def I_neu_beta(k1, k2, l1, l2, xa, ya):
 
 
 
-
-
-
-
 # calculate likelihood ratio for a given genotype vector
 def calculateBF(pedInfo, allBF, inputGenotype):
 
 	# get ID string
 	name=genotypeString(inputGenotype)
-	#print(name)
 
 	# if we've already calculated it, return the value
 	if name in allBF:
@@ -418,7 +400,6 @@ def calculateBF(pedInfo, allBF, inputGenotype):
 	genotypeStates = np.unique(np.asarray(genotypeStates), axis=0)
 
 
-
 	# calculate genotype configuration probabilities, and
 	# calculate the numerator and denominator of the Bayes Factor
 	genotypeProbabilities = np.zeros(len(genotypeStates))
@@ -441,7 +422,9 @@ def calculateBF(pedInfo, allBF, inputGenotype):
 		n  = k1+k2+l1+l2 
 		
 		numerator = numerator + I_del(k1, k2, l1, l2)*genotypeProbabilities[i]
+		#numerator = numerator + I_del_linear(k1, k2, l1, l2)*genotypeProbabilities[i]
 		denominator = denominator + I_neu(k1, k2, l1, l2)*genotypeProbabilities[i]
+		#denominator = denominator + I_neu_beta(k1, k2, l1, l2, 1, 13)*genotypeProbabilities[i]
 	
 
 	if denominator == 0.0 :
@@ -458,7 +441,6 @@ def calculateBF(pedInfo, allBF, inputGenotype):
 
 
 	return BF
-
 
 
 
@@ -556,23 +538,6 @@ def main(argv):
 
 
 
-
-	# define constants
-
-
-
-
-
-
-	################################################################################
-	# set pedigree variables
-	################################################################################
-
-	logging.info("Setting pedigre variables")
-
-
-
-
 	################################################################################
 	# set genotype information
 	################################################################################
@@ -582,9 +547,7 @@ def main(argv):
 
 	# get VCF file and variant/sample information
 	vcf = VCF(inputVcfFile, gts012=True)
-
 	nVariants = sum(1 for line in open(inputVcfFile) if not bool(re.match("^#", line)))
-
 	vcfSampleIndex = []
 
 	for i in range(len(vcf.samples)):
@@ -600,7 +563,6 @@ def main(argv):
 
 
 	# set all genotypes to missing as input
-
 	genotypes = np.full((pedInfo.nPeople, nVariants), -1)
 
 
@@ -646,6 +608,7 @@ def main(argv):
 
 	logging.info("Calculating Bayes Factors")
 
+	
 
 	# calculate the Bayes Factor for all variants
 	if nCores > 1:
@@ -685,14 +648,11 @@ def main(argv):
 			for i in range(len(varID)):
 				print(varID[i], "\t", results[i], "\t", varString[i], "\t", varString[i].count("."), file=f)
 		
-			#print(results[i], "\t", varString[i], "\t", genotypes[i])
 
-	#pprint.pprint(dict(allBF))
-
-
-	print(I_del(4, 1, 0, 3))
 
 
 
 if __name__ == "__main__":
 	main(sys.argv[1:])
+
+
