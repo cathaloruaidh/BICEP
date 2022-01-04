@@ -14,7 +14,23 @@ from multiprocessing import Pool, Manager
 from threading import Lock
 
 
+
+
+
+## global variables
+
+# binomial coefficients
+
+binomCoeff = [[]]
+
+
+
+
+# printing lock
 s_print_lock = Lock()
+
+
+
 
 
 # thread-friendly printing
@@ -119,7 +135,7 @@ class Pedigree:
 # return a string representation of the genotypes
 # missing is '.', absent is '0' and carrier is '1'
 def genotypeString(vector):
-	return np.array2string(vector, separator="").replace(" ", "").replace("-1", ".").replace("[", "").replace("]", "")
+	return re.sub(']', '', re.sub('\[', '', re.sub('-1', '.', re.sub(' ', '', "".join(map(str, vector))))))
 
 
 
@@ -282,7 +298,7 @@ def I_del(k1, k2, l1, l2):
 
 	sum = 0.0
 	for i in range(l2 + 1):
-		sum += float( sp.binom(l2, i) )*pow( -1.0, l2-i)/float( (l-i+1) * (n-i+2) * sp.binom(n-i+1, k2) )
+		sum += float( binomCoeff[l2][i] )*pow( -1.0, l2-i)/float( (l-i+1) * (n-i+2) * binomCoeff[n-i+1][k2] )
 
 	return 2*sum
 
@@ -302,7 +318,7 @@ def I_del_linear(k1, k2, l1, l2):
 			
 			tmp_r = 0.0
 			for r in range(k2 + 1):
-				tmp_coeff = float(sp.binom(k2, r))*pow(-1.0, k2-r)
+				tmp_coeff = float(binomCoeff[k2, r])*pow(-1.0, k2-r)
 
 				if q == k1+l+2-i and r == 0:
 					tmp_r += tmp_coeff*math.log(2)
@@ -310,9 +326,9 @@ def I_del_linear(k1, k2, l1, l2):
 				else:
 					tmp_r += tmp_coeff*(pow(2.0, k1+l+2-i-q+r) - 1.0)/float(k1+l+2-i-q+r)
 
-			tmp_q += float(sp.binom(k1+l+2-i, q))*pow(2.0, q)*pow(-1.0, k1+l+2-i-q) * tmp_r
+			tmp_q += float(binomCoeff[k1+l+2-i][q])*pow(2.0, q)*pow(-1.0, k1+l+2-i-q) * tmp_r
 
-		sum += float(sp.binom(l2+1, i))*pow(-1.0, l2+1-i)/float( l+2-i ) * tmp_q
+		sum += float(binomCoeff[l2+1][i])*pow(-1.0, l2+1-i)/float( l+2-i ) * tmp_q
 			
 
 	return sum * 4.0
@@ -328,13 +344,13 @@ def I_del_old(k1, k2, l1, l2):
 	sum = 0.0
 
 	for i in range(k2+1):
-		tmp_k = float(sp.binom(k2, i))*pow(-1.0, k2-i)/float(k-i+1)
+		tmp_k = float(binomCoeff[k2][i])*pow(-1.0, k2-i)/float(k-i+1)
 
 		tmp_l = 0
 
 		if l2 > 0:
 			for j in range(l2):
-				tmp_l += float(sp.binom(l2-1, j))*pow(-1.0, l2-1-j)*( (1.0/float(l-j)) - (1.0/float(n-i-j+1)) )
+				tmp_l += float(binomCoeff[l2-1][j])*pow(-1.0, l2-1-j)*( (1.0/float(l-j)) - (1.0/float(n-i-j+1)) )
 
 		else:
 			for j in range(k-i+1):
@@ -352,7 +368,7 @@ def I_neu(k1, k2, l1, l2):
 
 	n = k1+k2+l1+l2
 
-	return 1.0 / float( sp.binom(n, k1+l1) * (n+1) )
+	return 1.0 / float( binomCoeff[n][k1+l1] * (n+1) )
 
 
 
@@ -362,17 +378,17 @@ def I_neu_beta(k1, k2, l1, l2, xa, ya):
 
 	n = k1+k2+l1+l2
 
-	return 1.0 / float( sp.binom(n + xa + ya - 2, k1 + l1 + xa - 1) * (n + xa + ya - 1) )
+	return 1.0 / float( binomCoeff[n + xa + ya - 2][k1 + l1 + xa - 1] * (n + xa + ya - 1) )
 
 
 
 
 
 # calculate likelihood ratio for a given genotype vector
-def calculateBF(pedInfo, allBF, inputGenotype):
+def calculateBF(pedInfo, allBF, inputData):
 
 	# get ID string
-	name=genotypeString(inputGenotype)
+	inputGenotype, name = inputData
 
 	# if we've already calculated it, return the value
 	if name in allBF:
@@ -414,10 +430,23 @@ def calculateBF(pedInfo, allBF, inputGenotype):
 
 		nList = range(pedInfo.nPeople)
 		
-		k1 = len([ x for x in nList if pedInfo.phenotypeActual[x] == 1 and genotypeStates[i][x] == 1 ])
-		k2 = len([ x for x in nList if pedInfo.phenotypeActual[x] == 0 and genotypeStates[i][x] == 1 ])
-		l1 = len([ x for x in nList if pedInfo.phenotypeActual[x] == 1 and genotypeStates[i][x] == 0 ])
-		l2 = len([ x for x in nList if pedInfo.phenotypeActual[x] == 0 and genotypeStates[i][x] == 0 ])
+		#k1 = len([ x for x in nList if pedInfo.phenotypeActual[x] == 1 and genotypeStates[i][x] == 1 ])
+		#k2 = len([ x for x in nList if pedInfo.phenotypeActual[x] == 0 and genotypeStates[i][x] == 1 ])
+		#l1 = len([ x for x in nList if pedInfo.phenotypeActual[x] == 1 and genotypeStates[i][x] == 0 ])
+		#l2 = len([ x for x in nList if pedInfo.phenotypeActual[x] == 0 and genotypeStates[i][x] == 0 ])
+
+		k1 = k2 = l1 = l2 = 0
+		for x in range(pedInfo.nPeople):
+			if pedInfo.phenotypeActual[x] == 1:
+				if genotypeStates[i][x] == 1:
+					k1 += 1
+				else:
+					k2 += 1
+			else:
+				if genotypeStates[i][x] == 1:
+					l1 += 1
+				else:
+					l2 += 1
 
 		n  = k1+k2+l1+l2 
 		
@@ -536,6 +565,7 @@ def main(argv):
 	# save pedigree info and initialise
 	pedInfo = Pedigree(np.unique(famID), indID, dadID, mamID, sexID, pheID)
 
+	
 
 
 	################################################################################
@@ -561,6 +591,7 @@ def main(argv):
 			vcfSampleIndex.append(ind)
 
 
+	logging.info("Store as np array")
 
 	# set all genotypes to missing as input
 	genotypes = np.full((pedInfo.nPeople, nVariants), -1)
@@ -601,6 +632,31 @@ def main(argv):
 	genotypes = np.transpose(genotypes.astype(np.int))
 
 
+	# combine variant name with genotypes
+
+	data = [ (genotypes[i],varString[i]) for i in range(len(genotypes)) ]
+
+
+	################################################################################
+	# set global variables
+	################################################################################
+
+	global binomCoeff
+	binomCoeff = [ [0]*(pedInfo.nPeople + 2) for _ in range(pedInfo.nPeople + 2) ]
+
+	for i in range(pedInfo.nPeople + 2):
+		for j in range(i+1):
+			binomCoeff[i][j] = sp.binom(i,j)
+
+
+
+
+	################################################################################
+	# calculate Bayes factors
+	################################################################################
+
+
+
 	# create dictionary to store all BF
 	manager = Manager()
 	allBF = manager.dict()
@@ -618,7 +674,7 @@ def main(argv):
 		# create multiprocessing pool with lock
 		l = multiprocessing.Lock()
 		pool = Pool(nCores, initializer=lock_init, initargs=(l,))
-		BFs = pool.map(func, genotypes)
+		BFs = pool.map(func, data)
 		pool.close()
 
 	else:
@@ -627,7 +683,7 @@ def main(argv):
 
 		BFs = []
 		for i in range(len(genotypes)):
-			BFs.append(calculateBF(pedInfo, allBF, genotypes[i]))
+			BFs.append(calculateBF(pedInfo, allBF, data[i]))
 
 
 	results = [ '%.6f' % float(elem) for elem in BFs ]
@@ -648,6 +704,8 @@ def main(argv):
 			for i in range(len(varID)):
 				print(varID[i], "\t", results[i], "\t", varString[i], "\t", varString[i].count("."), file=f)
 		
+
+
 
 
 
