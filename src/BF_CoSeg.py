@@ -389,6 +389,7 @@ def calculateBF(pedInfo, allBF, inputData):
 
 	# get ID string
 	inputGenotype, name = inputData
+	logging.info(name)
 
 	# if we've already calculated it, return the value
 	if name in allBF:
@@ -480,13 +481,15 @@ def main(argv):
 
 
 	# command line arguments
+	nCores = 1
 	inputFamFile = None
 	inputVcfFile = None
 	outputFile = None
-	nCores = 1
+	outputLog = None
+	minAffecteds = 0
 
 	try:
-		opts, args = getopt.getopt(argv, "c:f:l:o:v:", ["cores=", "fam=", "log=", "output=", "vcf="])
+		opts, args = getopt.getopt(argv, "c:f:l:o:v:", ["cores=", "fam=", "log=", "minAff=","output=", "vcf="])
 	except getopt.GetoptError:
 		print("Getopt Error")
 		logging.error("getopt error")
@@ -506,6 +509,9 @@ def main(argv):
 			if not isinstance(numeric_level, int):
 				raise ValueError('Invalid log level: %s' % arg)
 
+		if opt in ("--minAff"):
+			minAffecteds = int(arg)
+	
 		if opt in ("-o", "--output"):
 			outputFile = arg
 	
@@ -537,8 +543,8 @@ def main(argv):
 	try:
 		f = open(inputFamFile, newline='')
 	except FileNotFoundError:
-		mesg = "Could not file input FAM file: " + inputFamFile
-		logging.error(mesg)
+		msg = "Could not file input FAM file: " + inputFamFile
+		logging.error(msg)
 		sys.exit("Exiting ... ")
 	else:
 		reader = csv.reader(f, delimiter='\t')
@@ -584,8 +590,8 @@ def main(argv):
 		try:
 			ind = np.where(pedInfo.indID == vcf.samples[i])[0][0]
 		except:
-			mesg = "Sample " + vcf.samples[i] + " is in VCF but not FAM."
-			logging.warning(mesg)
+			msg = "Sample " + vcf.samples[i] + " is in VCF but not FAM."
+			logging.warning(msg)
 			sys.exit("Exiting ... ")
 		else:
 			vcfSampleIndex.append(ind)
@@ -633,7 +639,6 @@ def main(argv):
 
 
 	# combine variant name with genotypes
-
 	data = [ (genotypes[i],varString[i]) for i in range(len(genotypes)) ]
 
 
@@ -662,9 +667,30 @@ def main(argv):
 	allBF = manager.dict()
 
 
-	logging.info("Calculating Bayes Factors")
 
-	
+
+	if minAffecteds > 0:
+		msg = "Removing variants with minAff < " + str(minAffecteds)
+		logging.info(msg)
+
+		for i in range(len(genotypes)):
+
+			count = 0
+			affs = [ x for x in range(pedInfo.nPeople) if pedInfo.phenotypeActual[x] == 1 ]
+
+			for aff in affs:
+				if genotypes[i][aff] == 1:
+					count += 1
+
+			if count < minAffecteds:
+				allBF[varString[i]] = [ 0.0, 0.0, 0.0 ]
+
+				msg = "Removed variant: " + varString[i]
+				logging.debug(msg)
+
+
+
+	logging.info("Calculating Bayes Factors")
 
 	# calculate the Bayes Factor for all variants
 	if nCores > 1:
