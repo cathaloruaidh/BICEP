@@ -281,7 +281,7 @@ def findGenerations(inputVector, genotypeStates, pedInfo):
 		# combinations from the permissible unobserved genotypes
 		founderVector[pedInfo.indID[founder]] = vector.copy()
 
-		logging.debug(vector)
+		#logging.debug(vector)
 		
 		setGenerations(vector, genotypeStates, pedInfo)
 
@@ -392,7 +392,7 @@ def calculateBF(pedInfo, allBF, inputData):
 	# get ID string
 	inputGenotype, name = inputData
 
-	logging.debug(name)
+	#logging.debug(name)
 
 	# if we've already calculated it, return the value
 	if name in allBF:
