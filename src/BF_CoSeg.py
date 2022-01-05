@@ -445,10 +445,10 @@ def calculateBF(pedInfo, allBF, inputData):
 				if genotypeStates[i][x] == 1:
 					k1 += 1
 				else:
-					k2 += 1
+					l1 += 1
 			else:
 				if genotypeStates[i][x] == 1:
-					l1 += 1
+					k2 += 1
 				else:
 					l2 += 1
 
