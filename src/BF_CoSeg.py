@@ -280,7 +280,7 @@ def findGenerations(inputVector, genotypeStates, pedInfo):
 		# finally, save this vector as the founderVector and find all potential genotype
 		# combinations from the permissible unobserved genotypes
 		founderVector[pedInfo.indID[founder]] = vector.copy()
-
+		
 		setGenerations(vector, genotypeStates, pedInfo)
 
 	
@@ -389,7 +389,6 @@ def calculateBF(pedInfo, allBF, inputData):
 
 	# get ID string
 	inputGenotype, name = inputData
-	logging.info(name)
 
 	# if we've already calculated it, return the value
 	if name in allBF:
@@ -408,7 +407,7 @@ def calculateBF(pedInfo, allBF, inputData):
 	# sanity check for number of genotypes
 	if len(genotypeStates) == 0:
 		with lock:
-			allBF[name] = [ 0.0, 0.0, 0.0 ]
+			allBF[name] = [ 0.0, 0.0, 0.0, 0 ]
 		
 		return 0.0
 
@@ -465,7 +464,7 @@ def calculateBF(pedInfo, allBF, inputData):
 
 	# aquire the lock and save the data correct to 10 decimal places
 	with lock:
-		myList = [ BF, numerator, denominator ]	
+		myList = [ BF, numerator, denominator, len(genotypeStates) ]
 		allBF[name] = [ '%.10f' % elem for elem in myList ]
 
 
@@ -683,7 +682,7 @@ def main(argv):
 					count += 1
 
 			if count < minAffecteds:
-				allBF[varString[i]] = [ 0.0, 0.0, 0.0 ]
+				allBF[varString[i]] = [ 0.0, 0.0, 0.0, 0 ]
 
 				msg = "Removed variant: " + varString[i]
 				logging.debug(msg)
@@ -724,11 +723,11 @@ def main(argv):
 	
 	if outputFile is None:
 		for i in range(len(varID)):
-			print(varID[i], "\t", results[i], "\t", varString[i], "\t", varString[i].count("."))
+			print(varID[i], "\t", results[i], "\t", varString[i], "\t", varString[i].count("."), "\t", allBF[varString[i]][3])
 	else:
 		with open(outputFile, 'w') as f:
 			for i in range(len(varID)):
-				print(varID[i], "\t", results[i], "\t", varString[i], "\t", varString[i].count("."), file=f)
+				print(varID[i], "\t", results[i], "\t", varString[i], "\t", varString[i].count("."), "\t", allBF[varString[i]][3], file=f)
 		
 
 
