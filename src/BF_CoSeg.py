@@ -76,7 +76,9 @@ class Pedigree:
 		self.descendantTable = np.full((self.nPeople, self.nPeople), -1)
 		self.completed = np.zeros(self.nPeople, dtype=int)
 		self.hasParents = np.full(self.nPeople, True)
+		self.children = np.empty((self.nPeople,),object)
 
+		#self.children = [ [] for _ in range(self.nPeople) ]
 
 		for i in range(self.nPeople):
 			# get indices of parents
@@ -102,6 +104,9 @@ class Pedigree:
 				self.nFounder += 1
 
 			self.nonFounderIndex = np.array([ int(x) for x in range(self.nPeople) if x not in self.founderIndex ])
+
+			# get children if any
+			self.children[i] = [ x for x in range(self.nPeople) if indID[i] == mamID[x] or indID[i] == dadID[x] ]
 	
 
 		# set founders in desentant table
@@ -115,8 +120,7 @@ class Pedigree:
 			for i in range(self.nPeople):
 				self.descendantTable[i,i] = 1
 				if self.completed[i]:
-					childrenIndex = [ x for x in range(self.nPeople) if indID[i] == mamID[x] or indID[i] == dadID[x] ]
-					for child in childrenIndex:
+					for child in self.children[i]:
 						self.descendantTable[child, i] = 1
 						for j in range(self.nPeople):
 							if self.descendantTable[i,j] == 1:
@@ -142,6 +146,7 @@ def genotypeString(vector):
 
 # given a genotype vector, set the generations and resolve 
 # into one or two putative child vectors, then recurse
+#@profile
 def setGenerations(vector, genotypeStates, pedInfo):
 
 	# get minimum of input vector greater than 1
@@ -183,10 +188,56 @@ def setGenerations(vector, genotypeStates, pedInfo):
 
 
 
+# given the founder vector, calculate the number of genotype states
+# that will be generated
+def numGenotypeStates(founderVector, pedInfo, currParent):
+
+	numPotential = 0
+	for i in range(len(founderVector)):
+		
+		if founderVector[i] < 0:
+			logging.error("Input vector had a missing genotype")
+			return 0
+
+		elif founderVector[i] > 1:
+			numPotential += 1
+
+	if numPotential == 0:
+		return 1
+
+	if founderVector[currParent] == 0:
+		return 1
+
+	if founderVector[currParent] == 1 and len(pedInfo.children[currParent]) == 0:
+		return 1
+
+
+	count = 1
+
+	for child in pedInfo.children[currParent]:
+		if len(pedInfo.children[child]) == 0:
+			if founderVector[child] > 1:
+				count *= 2
+
+		else:
+			count *= numGenotypeStates(founderVector, pedInfo, child)
+
+
+	if founderVector[currParent] == 1:
+		return count 
+
+	else:
+		return count + 1
+
+
+
+
+
 
 # given a genotype vector, find potential generations following
 # the rare variant assumption
-def findGenerations(inputVector, genotypeStates, pedInfo):
+#def findGenerations(inputVector, genotypeStates, pedInfo):
+def findGenerations(inputVector, founderVector, pedInfo):
 
 
 	# get list of potential probands for the input variant
@@ -197,7 +248,7 @@ def findGenerations(inputVector, genotypeStates, pedInfo):
 
 
 	# initialise the founder vectors
-	founderVector = {}
+	#founderVector = {}
 
 
 	# get founders all probands are descended from
@@ -221,6 +272,9 @@ def findGenerations(inputVector, genotypeStates, pedInfo):
 	if len(carrFounderIndex) == 0:
 		return 
 
+
+	# total number of permissible genotype states
+	totalGenoStates = 0
 
 
 	# for each founder, get the permissible unobserved genotypes
@@ -281,10 +335,12 @@ def findGenerations(inputVector, genotypeStates, pedInfo):
 		# combinations from the permissible unobserved genotypes
 		founderVector[pedInfo.indID[founder]] = vector.copy()
 
-		#logging.debug(vector)
 		
-		setGenerations(vector, genotypeStates, pedInfo)
+		
 
+	#for vector in founderVector.values():
+	#	setGenerations(vector, genotypeStates, pedInfo)
+	
 	
 	return 
 
@@ -393,6 +449,7 @@ def calculateBF(pedInfo, allBF, inputData):
 	inputGenotype, name = inputData
 
 	#logging.debug(name)
+	#print(name)
 
 	# if we've already calculated it, return the value
 	if name in allBF:
@@ -405,8 +462,40 @@ def calculateBF(pedInfo, allBF, inputData):
 	denominator = 0.0
 
 
+	founderVector = {}
+	#findGenerations(inputGenotype, genotypeStates, pedInfo)
+	findGenerations(inputGenotype, founderVector, pedInfo)
+
+	
+	totalGenoStates = 0
+	for founder, vector in founderVector.items():
+		foundIdx = np.where(pedInfo.indID == founder)[0][0]
+		totalGenoStates += numGenotypeStates(vector, pedInfo, foundIdx)
+		
+
+	# check if the genotype states array is likely to be greater than half the total space in RAM
+	mem_bytes = os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES')
+
+	sizeGenoStates = totalGenoStates * sys.getsizeof(inputGenotype)
+	sizeGenoStatesMB = round(sizeGenoStates / (1024**2), 3)
+	sizeGenoStatesGB = round(sizeGenoStates / (1024**3), 3)
+
+	if sizeGenoStates > mem_bytes / 4:
+		msg = "the genotype states array is " + str(sizeGenoStatesGB) + "GB, ignoring" 
+		logging.warning(msg)
+		with lock:
+			allBF[name] = [ 0.0, 0.0, 0.0, 0 ]
+		return 0.0
+
+
+	# get genotype states from the founder vectors
+	msg = "number of genotype states for " + genotypeString(inputGenotype) + " is " + str(totalGenoStates) + " (" + str(sizeGenoStatesMB) + "MB)"
+	logging.debug(msg)
+
+
 	genotypeStates = []
-	findGenerations(inputGenotype, genotypeStates, pedInfo)
+	for vector in founderVector.values():
+		setGenerations(vector, genotypeStates, pedInfo)
 
 	# sanity check for number of genotypes
 	if len(genotypeStates) == 0:
@@ -416,13 +505,23 @@ def calculateBF(pedInfo, allBF, inputData):
 		return 0.0
 
 
-	# get unique genotypes
-	genotypeStates = np.unique(np.asarray(genotypeStates), axis=0)
+	# get convert to np array
+	genotypeStates = np.asarray(genotypeStates, dtype=np.uint8)
+
+	msg = "estim. size - " + str( round(len(genotypeStates) * sys.getsizeof(genotypeStates[0]) / (1024**2), 3) ) + "MB"
+	logging.debug(msg)
+	msg = "actual size - " + str( round(genotypeStates.nbytes / (1024**2), 3)) + "MB"
+	logging.debug(msg)
 
 
 	# calculate genotype configuration probabilities, and
 	# calculate the numerator and denominator of the Bayes Factor
 	genotypeProbabilities = np.zeros(len(genotypeStates))
+
+	local_vars = list(locals().items())
+	for var, obj in local_vars:
+		print(var, sys.getsizeof(obj))
+	print("\n")
 
 	for i in range(len(genotypeStates)):
 		p = 1.0
@@ -461,7 +560,8 @@ def calculateBF(pedInfo, allBF, inputData):
 	
 
 	if denominator == 0.0 :
-		BF = float("inf")
+		#BF = float("inf")
+		BF = 0.0
 	else:
 		BF = numerator/denominator
 
@@ -713,7 +813,7 @@ def main(argv):
 		BFs = []
 		for i in range(len(genotypes)):
 			BFs.append(calculateBF(pedInfo, allBF, data[i]))
-
+	
 
 	results = [ '%.6f' % float(elem) for elem in BFs ]
 
