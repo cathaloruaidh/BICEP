@@ -144,49 +144,6 @@ def genotypeString(vector):
 
 
 
-# given a genotype vector, set the generations and resolve 
-# into one or two putative child vectors, then recurse
-#@profile
-def setGenerations(vector, genotypeStates, pedInfo):
-
-	# get minimum of input vector greater than 1
-	minGen = max(vector)
-	minIndex = np.where(vector == minGen)[0][0] 
-
-	for i in range(len(vector)):
-		if vector[i] > 1 and vector[i] < minGen:
-			minGen = vector[i]
-			minIndex = i
-
-
-	# if all genotypes are set and the proband is a carrier, add the vector to the list and return
-	if minGen == 1 :
-		genotypeStates.append(vector.copy())
-		return
-
-
-	# if the vector is empty or the proband is not a carrier, return
-	if minGen == 0 :
-		return
-
-
-	# set the minimum potential genotype to zero and recurse
-	subVec1 = vector.copy()
-	subVec1[minIndex] = 0
-	setGenerations(subVec1, genotypeStates, pedInfo)
-
-
-
-	# set the minimum potential genotype to one (if possible by inheritance) and recurse
-	if pedInfo.hasParents[minIndex] and ( vector[pedInfo.dadIndex[minIndex]] == 1 or vector[pedInfo.mamIndex[minIndex]] == 1):
-		subVec2 = vector.copy()
-		subVec2[minIndex] = 1
-		setGenerations(subVec2, genotypeStates, pedInfo)
-
-	return
-
-
-
 
 # given the founder vector, calculate the number of genotype states
 # that will be generated
@@ -443,7 +400,59 @@ def I_neu_beta(k1, k2, l1, l2, xa, ya):
 
 
 # calculate likelihood ratio for a given genotype vector
+#@profile
 def calculateBF(pedInfo, allBF, inputData):
+
+	# inner functions
+	
+	# given a genotype vector, set the generations and resolve 
+	# into one or two putative child vectors, then recurse
+	#@profile
+	def setGenerations(vector):
+		# define nonlocal variables
+		nonlocal genotypeStates
+		nonlocal pedInfo
+
+
+		# get minimum of input vector greater than 1
+		minGen = max(vector)
+		minIndex = np.where(vector == minGen)[0][0] 
+
+		for i in range(len(vector)):
+			if vector[i] > 1 and vector[i] < minGen:
+				minGen = vector[i]
+				minIndex = i
+
+
+		# if all genotypes are set and the proband is a carrier, add the vector to the list and return
+		if minGen == 1 :
+			genotypeStates.append(vector.copy())
+			return
+
+
+		# if the vector is empty or the proband is not a carrier, return
+		if minGen == 0 :
+			return
+
+
+		# set the minimum potential genotype to zero and recurse
+		subVec1 = vector.copy()
+		subVec1[minIndex] = 0
+		setGenerations(subVec1)
+
+
+
+		# set the minimum potential genotype to one (if possible by inheritance) and recurse
+		if pedInfo.hasParents[minIndex] and ( vector[pedInfo.dadIndex[minIndex]] == 1 or vector[pedInfo.mamIndex[minIndex]] == 1):
+			subVec2 = vector.copy()
+			subVec2[minIndex] = 1
+			setGenerations(subVec2)
+
+		return
+
+
+
+
 
 	# get ID string
 	inputGenotype, name = inputData
@@ -480,7 +489,7 @@ def calculateBF(pedInfo, allBF, inputData):
 	sizeGenoStatesMB = round(sizeGenoStates / (1024**2), 3)
 	sizeGenoStatesGB = round(sizeGenoStates / (1024**3), 3)
 
-	if sizeGenoStates > mem_bytes / 4:
+	if sizeGenoStates > mem_bytes / 2:
 		msg = "the genotype states array is " + str(sizeGenoStatesGB) + "GB, ignoring" 
 		logging.warning(msg)
 		with lock:
@@ -495,7 +504,7 @@ def calculateBF(pedInfo, allBF, inputData):
 
 	genotypeStates = []
 	for vector in founderVector.values():
-		setGenerations(vector, genotypeStates, pedInfo)
+		setGenerations(vector)
 
 	# sanity check for number of genotypes
 	if len(genotypeStates) == 0:
@@ -518,10 +527,10 @@ def calculateBF(pedInfo, allBF, inputData):
 	# calculate the numerator and denominator of the Bayes Factor
 	genotypeProbabilities = np.zeros(len(genotypeStates))
 
-	local_vars = list(locals().items())
-	for var, obj in local_vars:
-		print(var, sys.getsizeof(obj))
-	print("\n")
+	#local_vars = list(locals().items())
+	#for var, obj in local_vars:
+	#	print(var, sys.getsizeof(obj))
+	#print("\n")
 
 	for i in range(len(genotypeStates)):
 		p = 1.0
