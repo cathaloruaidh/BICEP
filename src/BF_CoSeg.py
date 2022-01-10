@@ -617,8 +617,8 @@ def main(argv):
 	
 		if opt in ("-l", "--log"):
 			logLevel = arg.upper()
-			numeric_level = getattr(logging, arg.upper(), None)
-			if not isinstance(numeric_level, int):
+			numericLevel = getattr(logging, arg.upper(), None)
+			if not isinstance(numericLevel, int):
 				raise ValueError('Invalid log level: %s' % arg)
 
 		if opt in ("--minAff"):
@@ -637,11 +637,19 @@ def main(argv):
 	except:
 		logging.basicConfig(format=FORMAT)
 	else:
-		numeric_level = getattr(logging, logLevel, None)
-		if not isinstance(numeric_level, int):
+		numericLevel = getattr(logging, logLevel, None)
+		if not isinstance(numericLevel, int):
 			raise ValueError('Invalid log level: %s' % logLevel)
 		logging.basicConfig(format=FORMAT, level=logLevel)
+	
 
+	# add colours to the log name
+	logging.addLevelName(logging.NOTSET, "NOT  ")
+	logging.addLevelName(logging.DEBUG, "\u001b[36mDEBUG\u001b[0m")
+	logging.addLevelName(logging.INFO, "INFO ")
+	logging.addLevelName(logging.WARNING, "\u001b[33mWARN \u001b[0m")
+	logging.addLevelName(logging.ERROR, "\u001b[31mERROR\u001b[0m")
+	logging.addLevelName(logging.CRITICAL, "\u001b[35mCRIT\u001b[0m")
 
 
 	# up recursion limit
@@ -715,7 +723,7 @@ def main(argv):
 	genotypes = np.full((pedInfo.nPeople, nVariants), -1)
 
 
-	# create list to hold inuqie variant ID
+	# create list to hold unique variant ID
 	varID = []
 
 
