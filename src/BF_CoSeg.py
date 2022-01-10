@@ -333,7 +333,7 @@ def I_del_linear(k1, k2, l1, l2):
 			
 			tmp_r = 0.0
 			for r in range(k2 + 1):
-				tmp_coeff = float(binomCoeff[k2, r])*pow(-1.0, k2-r)
+				tmp_coeff = float(binomCoeff[k2][r])*pow(-1.0, k2-r)
 
 				if q == k1+l+2-i and r == 0:
 					tmp_r += tmp_coeff*math.log(2)
@@ -767,9 +767,9 @@ def main(argv):
 	################################################################################
 
 	global binomCoeff
-	binomCoeff = [ [0]*(pedInfo.nPeople + 2) for _ in range(pedInfo.nPeople + 2) ]
+	binomCoeff = [ [0]*(pedInfo.nPeople + 20) for _ in range(pedInfo.nPeople + 20) ]
 
-	for i in range(pedInfo.nPeople + 2):
+	for i in range(pedInfo.nPeople + 20):
 		for j in range(i+1):
 			binomCoeff[i][j] = sp.binom(i,j)
 
