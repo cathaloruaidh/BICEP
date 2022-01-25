@@ -260,14 +260,22 @@ def findGenerations(inputVector, founderVector, pedInfo):
 			
 
 		# if an individual is a descendant of the founder and an ancestor of a
-		# proband, make them a carrier. Ignore if genotype is non-missing
+		# proband, they must be a carrier. Return zero if an individual is
+		# known not to be a carrier
+
+		fail = False
 		for carrier in carrierIndex:
 			for i in range(pedInfo.nPeople):
-				if vector[i] >= 0:
+				if vector[i] > 0:
 					continue
-				elif pedInfo.descendantTable[i, founder] and pedInfo.descendantTable[carrier, i]:
-					vector[i] = 1
-
+				
+				if pedInfo.descendantTable[i, founder] and pedInfo.descendantTable[carrier, i]:
+					if vector[i] == 0:
+						fail = True
+					else:
+						vector[i] = 1
+		if fail:
+			continue
 
 		# zero out children of non-carriers
 		while True:
@@ -316,6 +324,19 @@ def I_del(k1, k2, l1, l2):
 		sum += float( binomCoeff[l2][i] )*pow( -1.0, l2-i)/float( (l-i+1) * (n-i+2) * binomCoeff[n-i+1][k2] )
 
 	return 2*sum
+
+
+
+
+def I_del_alt(k1, k2, l1, l2):
+
+	k = k1+k2
+	l = l1+l2
+	n = k+l
+
+	return 1.0 / float( binomCoeff[k][k1]*(k+1) * binomCoeff[l][l1]*(l+1))
+
+
 
 
 
@@ -564,6 +585,7 @@ def calculateBF(pedInfo, allBF, inputData):
 		
 		numerator = numerator + I_del(k1, k2, l1, l2)*genotypeProbabilities[i]
 		#numerator = numerator + I_del_linear(k1, k2, l1, l2)*genotypeProbabilities[i]
+		#numerator = numerator + I_del_alt(k1, k2, l1, l2)*genotypeProbabilities[i]
 		denominator = denominator + I_neu(k1, k2, l1, l2)*genotypeProbabilities[i]
 		#denominator = denominator + I_neu_beta(k1, k2, l1, l2, 1, 13)*genotypeProbabilities[i]
 	
