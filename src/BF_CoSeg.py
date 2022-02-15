@@ -1,6 +1,5 @@
 #!/usr/bin/python
 
-# Conversion of CoSeg R package to Python
 
 
 
