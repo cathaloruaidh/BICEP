@@ -421,7 +421,7 @@ def I_neu_beta(k1, k2, l1, l2, xa, ya):
 
 # calculate likelihood ratio for a given genotype vector
 #@profile
-def calculateBF(pedInfo, allBF, inputData):
+def calculateBF(pedInfo, allBF, priorParams, inputData):
 
 	# inner functions
 	
@@ -476,6 +476,9 @@ def calculateBF(pedInfo, allBF, inputData):
 
 	# get ID string
 	inputGenotype, name = inputData
+
+	# get prior parameters
+	priorCaus, priorNeut = priorParams
 
 	#logging.debug(name)
 	#print(name)
@@ -582,12 +585,31 @@ def calculateBF(pedInfo, allBF, inputData):
 
 		n  = k1+k2+l1+l2 
 		
-		numerator = numerator + I_del(k1, k2, l1, l2)*genotypeProbabilities[i]
-		#numerator = numerator + I_del_linear(k1, k2, l1, l2)*genotypeProbabilities[i]
-		#numerator = numerator + I_del_alt(k1, k2, l1, l2)*genotypeProbabilities[i]
-		denominator = denominator + I_neu(k1, k2, l1, l2)*genotypeProbabilities[i]
-		#denominator = denominator + I_neu_beta(k1, k2, l1, l2, 1, 13)*genotypeProbabilities[i]
+		# Causal model, prior distribution for parameters
+		if priorCaus == "uniform":
+			numerator = numerator + I_del(k1, k2, l1, l2)*genotypeProbabilities[i]
+			#numerator = numerator + I_del_alt(k1, k2, l1, l2)*genotypeProbabilities[i]
+		elif priorCaus == "linear":
+			numerator = numerator + I_del_linear(k1, k2, l1, l2)*genotypeProbabilities[i]
+		else:
+			logging.error("Prior distribution for parameters under causal model not known. ")
+
+
+		# Neutral model, prior distribution for parameters
+		if priorNeut == "uniform":
+			denominator = denominator + I_neu(k1, k2, l1, l2)*genotypeProbabilities[i]
+		elif "," in priorNeut:
+			if len(priorNeut.split(",")) != 2:
+			msg = "Incorrect number of parameters for Beta distribution: " + priorNeut
+			logging.error(msg)
+
+			a,b = [ int(x) for x in priorNeut.split(",") ]
+			denominator = denominator + I_neu_beta(k1, k2, l1, l2, a, b)*genotypeProbabilities[i]
+		else:
+			logging.error("Prior distribution for parameters under neutral model not known. ")
+
 	
+
 
 	if denominator == 0.0 :
 		#BF = float("inf")
@@ -620,9 +642,11 @@ def main(argv):
 	outputFile = None
 	outputLog = None
 	minAffecteds = 0
+	priorCaus = "uniform"
+	priorNeut = "uniform"
 
 	try:
-		opts, args = getopt.getopt(argv, "c:f:l:o:v:", ["cores=", "fam=", "log=", "minAff=","output=", "vcf="])
+		opts, args = getopt.getopt(argv, "c:f:l:o:v:", ["cores=", "fam=", "log=", "minAff=","output=", "vcf=", "priorCaus", "priorNeut"])
 	except getopt.GetoptError:
 		print("Getopt Error")
 		logging.error("getopt error")
@@ -650,6 +674,12 @@ def main(argv):
 	
 		if opt in ("-v", "--vcf"):
 			inputVcfFile = arg
+	
+		if opt in ("--priorCaus"):
+			priorCaus = arg
+	
+		if opt in ("--priorNeut"):
+			priorNeut = arg
 	
 	FORMAT = '# %(asctime)s [%(levelname)s] - %(message)s'
 	
@@ -836,7 +866,7 @@ def main(argv):
 	# calculate the Bayes Factor for all variants
 	if nCores > 1:
 		# partial function for parallelisation - all constant except the input genotypes
-		func = partial(calculateBF, pedInfo, allBF)
+		func = partial(calculateBF, pedInfo, allBF, [priorCaus, priorNeut])
 
 		# create multiprocessing pool with lock
 		l = multiprocessing.Lock()
@@ -850,7 +880,7 @@ def main(argv):
 
 		BFs = []
 		for i in range(len(genotypes)):
-			BFs.append(calculateBF(pedInfo, allBF, data[i]))
+			BFs.append(calculateBF(pedInfo, allBF, [priorCaus, priorNeut] data[i]))
 	
 
 	results = [ '%.6f' % float(elem) for elem in BFs ]
