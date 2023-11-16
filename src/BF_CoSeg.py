@@ -1,6 +1,5 @@
 #!/usr/bin/python
 
-# Conversion of CoSeg R package to Python
 
 
 
@@ -8,7 +7,9 @@ import cProfile, csv, getopt, logging, math, multiprocessing, os, pprint, re, sy
 import numpy as np
 import scipy.special as sp
 
+
 from cyvcf2 import VCF
+from scipy.integrate import quad,dblquad
 from functools import partial
 from multiprocessing import Pool, Manager
 from threading import Lock
@@ -76,7 +77,9 @@ class Pedigree:
 		self.descendantTable = np.full((self.nPeople, self.nPeople), -1)
 		self.completed = np.zeros(self.nPeople, dtype=int)
 		self.hasParents = np.full(self.nPeople, True)
+		self.children = np.empty((self.nPeople,),object)
 
+		#self.children = [ [] for _ in range(self.nPeople) ]
 
 		for i in range(self.nPeople):
 			# get indices of parents
@@ -102,6 +105,9 @@ class Pedigree:
 				self.nFounder += 1
 
 			self.nonFounderIndex = np.array([ int(x) for x in range(self.nPeople) if x not in self.founderIndex ])
+
+			# get children if any
+			self.children[i] = [ x for x in range(self.nPeople) if indID[i] == mamID[x] or indID[i] == dadID[x] ]
 	
 
 		# set founders in desentant table
@@ -115,8 +121,7 @@ class Pedigree:
 			for i in range(self.nPeople):
 				self.descendantTable[i,i] = 1
 				if self.completed[i]:
-					childrenIndex = [ x for x in range(self.nPeople) if indID[i] == mamID[x] or indID[i] == dadID[x] ]
-					for child in childrenIndex:
+					for child in self.children[i]:
 						self.descendantTable[child, i] = 1
 						for j in range(self.nPeople):
 							if self.descendantTable[i,j] == 1:
@@ -140,45 +145,48 @@ def genotypeString(vector):
 
 
 
-# given a genotype vector, set the generations and resolve 
-# into one or two putative child vectors, then recurse
-def setGenerations(vector, genotypeStates, pedInfo):
 
-	# get minimum of input vector greater than 1
-	minGen = max(vector)
-	minIndex = np.where(vector == minGen)[0][0] 
+# given the founder vector, calculate the number of genotype states
+# that will be generated
+def numGenotypeStates(founderVector, pedInfo, currParent):
 
-	for i in range(len(vector)):
-		if vector[i] > 1 and vector[i] < minGen:
-			minGen = vector[i]
-			minIndex = i
+	numPotential = 0
+	for i in range(len(founderVector)):
+		
+		if founderVector[i] < 0:
+			logging.error("Input vector had a missing genotype")
+			return 0
 
+		elif founderVector[i] > 1:
+			numPotential += 1
 
-	# if all genotypes are set and the proband is a carrier, add the vector to the list and return
-	if minGen == 1 :
-		genotypeStates.append(vector.copy())
-		return
+	if numPotential == 0:
+		return 1
 
+	if founderVector[currParent] == 0:
+		return 1
 
-	# if the vector is empty or the proband is not a carrier, return
-	if minGen == 0 :
-		return
-
-
-	# set the minimum potential genotype to zero and recurse
-	subVec1 = vector.copy()
-	subVec1[minIndex] = 0
-	setGenerations(subVec1, genotypeStates, pedInfo)
+	if founderVector[currParent] == 1 and len(pedInfo.children[currParent]) == 0:
+		return 1
 
 
+	count = 1
 
-	# set the minimum potential genotype to one (if possible by inheritance) and recurse
-	if pedInfo.hasParents[minIndex] and ( vector[pedInfo.dadIndex[minIndex]] == 1 or vector[pedInfo.mamIndex[minIndex]] == 1):
-		subVec2 = vector.copy()
-		subVec2[minIndex] = 1
-		setGenerations(subVec2, genotypeStates, pedInfo)
+	for child in pedInfo.children[currParent]:
+		if len(pedInfo.children[child]) == 0:
+			if founderVector[child] > 1:
+				count *= 2
 
-	return
+		else:
+			count *= numGenotypeStates(founderVector, pedInfo, child)
+
+
+	if founderVector[currParent] == 1:
+		return count 
+
+	else:
+		return count + 1
+
 
 
 
@@ -186,7 +194,8 @@ def setGenerations(vector, genotypeStates, pedInfo):
 
 # given a genotype vector, find potential generations following
 # the rare variant assumption
-def findGenerations(inputVector, genotypeStates, pedInfo):
+#def findGenerations(inputVector, genotypeStates, pedInfo):
+def findGenerations(inputVector, founderVector, pedInfo):
 
 
 	# get list of potential probands for the input variant
@@ -197,7 +206,7 @@ def findGenerations(inputVector, genotypeStates, pedInfo):
 
 
 	# initialise the founder vectors
-	founderVector = {}
+	#founderVector = {}
 
 
 	# get founders all probands are descended from
@@ -221,6 +230,9 @@ def findGenerations(inputVector, genotypeStates, pedInfo):
 	if len(carrFounderIndex) == 0:
 		return 
 
+
+	# total number of permissible genotype states
+	totalGenoStates = 0
 
 
 	# for each founder, get the permissible unobserved genotypes
@@ -249,14 +261,22 @@ def findGenerations(inputVector, genotypeStates, pedInfo):
 			
 
 		# if an individual is a descendant of the founder and an ancestor of a
-		# proband, make them a carrier. Ignore if genotype is non-missing
+		# proband, they must be a carrier. Return zero if an individual is
+		# known not to be a carrier
+
+		fail = False
 		for carrier in carrierIndex:
 			for i in range(pedInfo.nPeople):
-				if vector[i] >= 0:
+				if vector[i] > 0:
 					continue
-				elif pedInfo.descendantTable[i, founder] and pedInfo.descendantTable[carrier, i]:
-					vector[i] = 1
-
+				
+				if pedInfo.descendantTable[i, founder] and pedInfo.descendantTable[carrier, i]:
+					if vector[i] == 0:
+						fail = True
+					else:
+						vector[i] = 1
+		if fail:
+			continue
 
 		# zero out children of non-carriers
 		while True:
@@ -281,10 +301,12 @@ def findGenerations(inputVector, genotypeStates, pedInfo):
 		# combinations from the permissible unobserved genotypes
 		founderVector[pedInfo.indID[founder]] = vector.copy()
 
-		#logging.debug(vector)
 		
-		setGenerations(vector, genotypeStates, pedInfo)
+		
 
+	#for vector in founderVector.values():
+	#	setGenerations(vector, genotypeStates, pedInfo)
+	
 	
 	return 
 
@@ -300,9 +322,22 @@ def I_del(k1, k2, l1, l2):
 
 	sum = 0.0
 	for i in range(l2 + 1):
-		sum += float( binomCoeff[l2][i] )*pow( -1.0, l2-i)/float( (l-i+1) * (n-i+2) * binomCoeff[n-i+1][k2] )
+		sum += binomCoeff[l2][i]*pow( -1.0, l2-i)/float( (l-i+1) * (n-i+2) * binomCoeff[n-i+1][k2] )
 
 	return 2*sum
+
+
+
+
+def I_del_alt(k1, k2, l1, l2):
+
+	k = k1+k2
+	l = l1+l2
+	n = k+l
+
+	return 1.0 / float( binomCoeff[k][k1]*(k+1) * binomCoeff[l][l1]*(l+1))
+
+
 
 
 
@@ -320,20 +355,36 @@ def I_del_linear(k1, k2, l1, l2):
 			
 			tmp_r = 0.0
 			for r in range(k2 + 1):
-				tmp_coeff = float(binomCoeff[k2, r])*pow(-1.0, k2-r)
 
 				if q == k1+l+2-i and r == 0:
-					tmp_r += tmp_coeff*math.log(2)
+					tmp_r += pow(-1.0, k2)*math.log(2.0)
 					
 				else:
-					tmp_r += tmp_coeff*(pow(2.0, k1+l+2-i-q+r) - 1.0)/float(k1+l+2-i-q+r)
+					tmp_r += binomCoeff[k2][r]*pow(-1.0, k2-r)*(pow(2.0, k1+l+2-i-q+r) - 1.0)/float(k1+l+2-i-q+r)
 
-			tmp_q += float(binomCoeff[k1+l+2-i][q])*pow(2.0, q)*pow(-1.0, k1+l+2-i-q) * tmp_r
-
-		sum += float(binomCoeff[l2+1][i])*pow(-1.0, l2+1-i)/float( l+2-i ) * tmp_q
+			tmp_q += binomCoeff[k1+l+2-i][q]*pow(2.0, q)*pow(-1.0, k1+l+2-i-q) * tmp_r
+			print(tmp_q)
+		sum += binomCoeff[l2+1][i]*pow(-1.0, l2+1-i)/float( l+2-i ) * tmp_q
 			
 
 	return sum * 4.0
+
+
+
+
+def I_del_linear_numeric(k1, k2, l1, l2):
+	I = dblquad(lambda p, b: 4*(b**k1)*((1-b)**k2)*(p**l1)*((1-p)**(l2+1))/(2-b), 0, 1, lambda b: 0, lambda b: b)
+
+	return I[0]
+
+
+
+
+def I_del_beta_numeric(k1, k2, l1, l2, x):
+	I = dblquad(lambda p, b: x*x*(b**(k1+x-1))*((1-b)**k2)*(p**l1)*((1-p)**(l2+x-1))/(1 - (1-b)**(x)), 0, 1, lambda b: 0, lambda b: b)
+
+	return I[0]
+
 
 
 
@@ -346,13 +397,13 @@ def I_del_old(k1, k2, l1, l2):
 	sum = 0.0
 
 	for i in range(k2+1):
-		tmp_k = float(binomCoeff[k2][i])*pow(-1.0, k2-i)/float(k-i+1)
+		tmp_k = binomCoeff[k2][i]*pow(-1.0, k2-i)/float(k-i+1)
 
 		tmp_l = 0
 
 		if l2 > 0:
 			for j in range(l2):
-				tmp_l += float(binomCoeff[l2-1][j])*pow(-1.0, l2-1-j)*( (1.0/float(l-j)) - (1.0/float(n-i-j+1)) )
+				tmp_l += binomCoeff[l2-1][j]*pow(-1.0, l2-1-j)*( (1.0/float(l-j)) - (1.0/float(n-i-j+1)) )
 
 		else:
 			for j in range(k-i+1):
@@ -384,15 +435,77 @@ def I_neu_beta(k1, k2, l1, l2, xa, ya):
 
 
 
+def I_neu_numeric(k1, k2, l1, l2):
+	I = quad(lambda a: (a**(k1+l1))*((1-a)**(k2+l2)), 0, 1)
+	return I[0]
+
+
+
 
 
 # calculate likelihood ratio for a given genotype vector
-def calculateBF(pedInfo, allBF, inputData):
+#@profile
+def calculateBF(pedInfo, allBF, priorParams, inputData):
+
+	# inner functions
+	
+	# given a genotype vector, set the generations and resolve 
+	# into one or two putative child vectors, then recurse
+	#@profile
+	def setGenerations(vector):
+		# define nonlocal variables
+		nonlocal genotypeStates
+		nonlocal pedInfo
+
+
+		# get minimum of input vector greater than 1
+		minGen = max(vector)
+		minIndex = np.where(vector == minGen)[0][0] 
+
+		for i in range(len(vector)):
+			if vector[i] > 1 and vector[i] < minGen:
+				minGen = vector[i]
+				minIndex = i
+
+
+		# if all genotypes are set and the proband is a carrier, add the vector to the list and return
+		if minGen == 1 :
+			genotypeStates.append(vector.copy())
+			return
+
+
+		# if the vector is empty or the proband is not a carrier, return
+		if minGen == 0 :
+			return
+
+
+		# set the minimum potential genotype to zero and recurse
+		subVec1 = vector.copy()
+		subVec1[minIndex] = 0
+		setGenerations(subVec1)
+
+
+
+		# set the minimum potential genotype to one (if possible by inheritance) and recurse
+		if pedInfo.hasParents[minIndex] and ( vector[pedInfo.dadIndex[minIndex]] == 1 or vector[pedInfo.mamIndex[minIndex]] == 1):
+			subVec2 = vector.copy()
+			subVec2[minIndex] = 1
+			setGenerations(subVec2)
+
+		return
+
+
+
+
 
 	# get ID string
 	inputGenotype, name = inputData
 
+	# get prior parameters
+	priorCaus, priorNeut = priorParams
+
 	#logging.debug(name)
+	#print(name)
 
 	# if we've already calculated it, return the value
 	if name in allBF:
@@ -405,8 +518,40 @@ def calculateBF(pedInfo, allBF, inputData):
 	denominator = 0.0
 
 
+	founderVector = {}
+	#findGenerations(inputGenotype, genotypeStates, pedInfo)
+	findGenerations(inputGenotype, founderVector, pedInfo)
+
+	
+	totalGenoStates = 0
+	for founder, vector in founderVector.items():
+		foundIdx = np.where(pedInfo.indID == founder)[0][0]
+		totalGenoStates += numGenotypeStates(vector, pedInfo, foundIdx)
+		
+
+	# check if the genotype states array is likely to be greater than half the total space in RAM
+	mem_bytes = os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES')
+
+	sizeGenoStates = totalGenoStates * sys.getsizeof(inputGenotype)
+	sizeGenoStatesMB = round(sizeGenoStates / (1024**2), 3)
+	sizeGenoStatesGB = round(sizeGenoStates / (1024**3), 3)
+
+	if sizeGenoStates > mem_bytes / 2:
+		msg = "the genotype states array is " + str(sizeGenoStatesGB) + "GB, ignoring" 
+		logging.warning(msg)
+		with lock:
+			allBF[name] = [ 0.0, 0.0, 0.0, 0 ]
+		return 0.0
+
+
+	# get genotype states from the founder vectors
+	msg = "number of genotype states for " + genotypeString(inputGenotype) + " is " + str(totalGenoStates) + " (" + str(sizeGenoStatesMB) + "MB)"
+	logging.debug(msg)
+
+
 	genotypeStates = []
-	findGenerations(inputGenotype, genotypeStates, pedInfo)
+	for vector in founderVector.values():
+		setGenerations(vector)
 
 	# sanity check for number of genotypes
 	if len(genotypeStates) == 0:
@@ -416,13 +561,23 @@ def calculateBF(pedInfo, allBF, inputData):
 		return 0.0
 
 
-	# get unique genotypes
-	genotypeStates = np.unique(np.asarray(genotypeStates), axis=0)
+	# get convert to np array
+	genotypeStates = np.asarray(genotypeStates, dtype=np.uint8)
+
+	msg = "estim. size - " + str( round(len(genotypeStates) * sys.getsizeof(genotypeStates[0]) / (1024**2), 3) ) + "MB"
+	logging.debug(msg)
+	msg = "actual size - " + str( round(genotypeStates.nbytes / (1024**2), 3)) + "MB"
+	logging.debug(msg)
 
 
 	# calculate genotype configuration probabilities, and
 	# calculate the numerator and denominator of the Bayes Factor
 	genotypeProbabilities = np.zeros(len(genotypeStates))
+
+	#local_vars = list(locals().items())
+	#for var, obj in local_vars:
+	#	print(var, sys.getsizeof(obj))
+	#print("\n")
 
 	for i in range(len(genotypeStates)):
 		p = 1.0
@@ -454,14 +609,47 @@ def calculateBF(pedInfo, allBF, inputData):
 
 		n  = k1+k2+l1+l2 
 		
-		numerator = numerator + I_del(k1, k2, l1, l2)*genotypeProbabilities[i]
-		#numerator = numerator + I_del_linear(k1, k2, l1, l2)*genotypeProbabilities[i]
-		denominator = denominator + I_neu(k1, k2, l1, l2)*genotypeProbabilities[i]
-		#denominator = denominator + I_neu_beta(k1, k2, l1, l2, 1, 13)*genotypeProbabilities[i]
-	
+		# Causal model, prior distribution for parameters
+		if priorCaus == "uniform":
+			#print(genotypeString(genotypeStates[i]), "I_unif = ", I_del(k1, k2, l1, l2), "\t - \tP(G_F) = ", genotypeProbabilities[i])
+			numerator = numerator + I_del(k1, k2, l1, l2)*genotypeProbabilities[i]
+			#numerator = numerator + I_del_alt(k1, k2, l1, l2)*genotypeProbabilities[i]
+
+		elif priorCaus == "linear":
+			#print(genotypeString(genotypeStates[i]), "I_bet = ", I_del_beta_numeric(k1, k2, l1, l2, 7), "\t - \tP(G_F) = ", genotypeProbabilities[i])
+			#numerator = numerator + I_del_beta_numeric(k1, k2, l1, l2, 11)*genotypeProbabilities[i]
+
+			#print(genotypeString(genotypeStates[i]), "I_lin = ", I_del_linear_numeric(k1, k2, l1, l2), "\t - \tP(G_F) = ", genotypeProbabilities[i])
+			numerator = numerator + I_del_linear_numeric(k1, k2, l1, l2)*genotypeProbabilities[i]
+		
+		else:
+			logging.error("Prior distribution for parameters under causal model not known. ")
+
+
+		# Neutral model, prior distribution for parameters
+		if priorNeut == "uniform":
+			#print(genotypeString(genotypeStates[i]), "I_neu = ", I_neu(k1, k2, l1, l2), "\t - \tP(G_F) = ", genotypeProbabilities[i])
+			denominator = denominator + I_neu(k1, k2, l1, l2)*genotypeProbabilities[i]
+		
+		elif "," in priorNeut:
+			if len(priorNeut.split(",")) != 2:
+				msg = "Incorrect number of parameters for Beta distribution: " + priorNeut
+				logging.error(msg)
+
+			a,b = [ int(x) for x in priorNeut.split(",") ]
+			denominator = denominator + I_neu_beta(k1, k2, l1, l2, a, b)*genotypeProbabilities[i]
+		
+		else:
+			logging.error("Prior distribution for parameters under neutral model not known. ")
+
+	#print("\n")	
+	#print("num = ", numerator, "\t-\tdenom = ", denominator)
+	#print("\n\n\n")	
+
 
 	if denominator == 0.0 :
-		BF = float("inf")
+		#BF = float("inf")
+		BF = 0.0
 	else:
 		BF = numerator/denominator
 
@@ -490,9 +678,11 @@ def main(argv):
 	outputFile = None
 	outputLog = None
 	minAffecteds = 0
+	priorCaus = "uniform"
+	priorNeut = "uniform"
 
 	try:
-		opts, args = getopt.getopt(argv, "c:f:l:o:v:", ["cores=", "fam=", "log=", "minAff=","output=", "vcf="])
+		opts, args = getopt.getopt(argv, "c:f:l:o:v:", ["cores=", "fam=", "log=", "minAff=","output=", "vcf=", "priorCaus=", "priorNeut="])
 	except getopt.GetoptError:
 		print("Getopt Error")
 		logging.error("getopt error")
@@ -508,8 +698,8 @@ def main(argv):
 	
 		if opt in ("-l", "--log"):
 			logLevel = arg.upper()
-			numeric_level = getattr(logging, arg.upper(), None)
-			if not isinstance(numeric_level, int):
+			numericLevel = getattr(logging, arg.upper(), None)
+			if not isinstance(numericLevel, int):
 				raise ValueError('Invalid log level: %s' % arg)
 
 		if opt in ("--minAff"):
@@ -521,6 +711,12 @@ def main(argv):
 		if opt in ("-v", "--vcf"):
 			inputVcfFile = arg
 	
+		if opt in ("--priorCaus"):
+			priorCaus = arg
+	
+		if opt in ("--priorNeut"):
+			priorNeut = arg
+	
 	FORMAT = '# %(asctime)s [%(levelname)s] - %(message)s'
 	
 	try:
@@ -528,11 +724,19 @@ def main(argv):
 	except:
 		logging.basicConfig(format=FORMAT)
 	else:
-		numeric_level = getattr(logging, logLevel, None)
-		if not isinstance(numeric_level, int):
+		numericLevel = getattr(logging, logLevel, None)
+		if not isinstance(numericLevel, int):
 			raise ValueError('Invalid log level: %s' % logLevel)
 		logging.basicConfig(format=FORMAT, level=logLevel)
+	
 
+	# add colours to the log name
+	logging.addLevelName(logging.NOTSET, "NOT  ")
+	logging.addLevelName(logging.DEBUG, "\u001b[36mDEBUG\u001b[0m")
+	logging.addLevelName(logging.INFO, "INFO ")
+	logging.addLevelName(logging.WARNING, "\u001b[33mWARN \u001b[0m")
+	logging.addLevelName(logging.ERROR, "\u001b[31mERROR\u001b[0m")
+	logging.addLevelName(logging.CRITICAL, "\u001b[35mCRIT\u001b[0m")
 
 
 	# up recursion limit
@@ -606,7 +810,7 @@ def main(argv):
 	genotypes = np.full((pedInfo.nPeople, nVariants), -1)
 
 
-	# create list to hold inuqie variant ID
+	# create list to hold unique variant ID
 	varID = []
 
 
@@ -650,11 +854,11 @@ def main(argv):
 	################################################################################
 
 	global binomCoeff
-	binomCoeff = [ [0]*(pedInfo.nPeople + 2) for _ in range(pedInfo.nPeople + 2) ]
+	binomCoeff = [ [0]*(pedInfo.nPeople + 20) for _ in range(pedInfo.nPeople + 20) ]
 
-	for i in range(pedInfo.nPeople + 2):
+	for i in range(pedInfo.nPeople + 20):
 		for j in range(i+1):
-			binomCoeff[i][j] = sp.binom(i,j)
+			binomCoeff[i][j] = float(sp.binom(i,j))
 
 
 
@@ -698,7 +902,7 @@ def main(argv):
 	# calculate the Bayes Factor for all variants
 	if nCores > 1:
 		# partial function for parallelisation - all constant except the input genotypes
-		func = partial(calculateBF, pedInfo, allBF)
+		func = partial(calculateBF, pedInfo, allBF, [priorCaus, priorNeut])
 
 		# create multiprocessing pool with lock
 		l = multiprocessing.Lock()
@@ -712,8 +916,8 @@ def main(argv):
 
 		BFs = []
 		for i in range(len(genotypes)):
-			BFs.append(calculateBF(pedInfo, allBF, data[i]))
-
+			BFs.append(calculateBF(pedInfo, allBF, [priorCaus, priorNeut], data[i]))
+	
 
 	results = [ '%.6f' % float(elem) for elem in BFs ]
 
