@@ -103,7 +103,7 @@ def main(argv):
 	
 
 	# set missing allele frequencies to zero
-	#df["gnomAD_v2_exome_AF_popmax"] = df["gnomAD_v2_exome_AF_popmax"].fillna(0.0)
+	df["gnomAD_v2_exome_AF_popmax"] = df["gnomAD_v2_exome_AF_popmax"].fillna(0.0)
 
 
 
@@ -111,7 +111,6 @@ def main(argv):
 	logging.info("Model 1")
 	logging.info("All variants: CADD + AF + CSQ + TYPE")
 
-	x = df.filter(['CADD_PHRED', 'GERP', 'gnomAD_v2_exome_AF_popmax', 'csqCV', 'typeCV'])
 	x = df.filter(['CADD_PHRED', 'gnomAD_v2_exome_AF_popmax', 'csqCV', 'typeCV'])
 	x = pd.get_dummies(x, drop_first = True, columns = ['csqCV', 'typeCV'])
 
@@ -158,6 +157,7 @@ def main(argv):
 	vif_data["VIF"] = [variance_inflation_factor(x_train_imp_scal, i) for i in range(len(x_train.columns))]
 	vif_data["Coefficient"] = logReg.coef_.flatten()
 	print(vif_data)
+	print("Intercept: ", logReg.intercept_)
 	
 
 	# boostrap the metrics
@@ -245,7 +245,6 @@ def main(argv):
 	logging.info("Model 2")
 	logging.info("Indel and SNV: CADD + AF + CSQ")
 
-	x = df.filter(['CADD_PHRED', 'GERP', 'gnomAD_v2_exome_AF_popmax', 'csqCV', 'typeCV'])
 	x = df.filter(['CADD_PHRED', 'gnomAD_v2_exome_AF_popmax', 'csqCV', 'typeCV'])
 
 
@@ -321,6 +320,7 @@ def main(argv):
 	vif_data["VIF"] = [variance_inflation_factor(x_indel_train_imp_scal, i) for i in range(len(x_indel_train.columns))]
 	vif_data["Coefficient"] = logReg_indel.coef_.flatten()
 	print(vif_data)
+	print("Intercept: ", logReg_indel.intercept_)
 
 
 	logReg_SNV = LogisticRegression(penalty = 'none')
@@ -332,6 +332,7 @@ def main(argv):
 	vif_data["VIF"] = [variance_inflation_factor(x_SNV_train_imp_scal, i) for i in range(len(x_SNV_train.columns))]
 	vif_data["Coefficient"] = logReg_SNV.coef_.flatten()
 	print(vif_data)
+	print("Intercept: ", logReg_SNV.intercept_)
 	
 
 
@@ -551,57 +552,32 @@ def main(argv):
 	logging.info("Model 3")
 	logging.info("Missense (AF + 5_PRED) and non-missense (CADD + AF + CSQ + TYPE)")
 
-	x = df.filter(['CADD_PHRED', 'GERP', 'MPC_score', 'Polyphen2_HDIV_score', 'REVEL_score', 'SIFT_score', 'FATHMM_score', 'gnomAD_v2_exome_AF_popmax', 'csqCV', 'typeCV'])
 	x = df.filter(['CADD_PHRED', 'MPC_score', 'Polyphen2_HDIV_score', 'REVEL_score', 'SIFT_score', 'FATHMM_score', 'gnomAD_v2_exome_AF_popmax', 'csqCV', 'typeCV'])
+
+	x_missense = x[ x['csqCV'] == 'missense_variant' ]
+	x_missense = x_missense.drop(['CADD_PHRED', 'typeCV', 'csqCV'], axis=1)
+
+	x_nonMissense = x[ x['csqCV'] != 'missense_variant' ]
+	x_nonMissense = x_nonMissense.drop(['MPC_score', 'Polyphen2_HDIV_score', 'REVEL_score', 'SIFT_score', 'FATHMM_score'], axis=1)
+	x_nonMissense = pd.get_dummies(x_nonMissense, drop_first = True, columns = ['csqCV', 'typeCV'])
 
 
 	y = df.filter(['setCV', 'csqCV'])
 
+	y_missense = y[ y['csqCV'] == 'missense_variant' ]
+	y_missense = y_missense.drop(['csqCV'], axis=1)
+	y_missense = y_missense.values.reshape(-1,1)
+
+	y_nonMissense = y[ y['csqCV'] != 'missense_variant' ]
+	y_nonMissense = y_nonMissense.drop(['csqCV'], axis=1)
+	y_nonMissense = y_nonMissense.values.reshape(-1,1)
+
+
+
 	# split into training and testing set
-	x_train, x_test, y_train, y_test = train_test_split(x, y, test_size = 0.2, random_state = 123)
+	x_missense_train, x_missense_test, y_missense_train, y_missense_test = train_test_split(x_missense, y_missense, test_size = 0.2, random_state = 123)
 
-
-	
-	# split into missense and non-missense
-	x_train_missense = x_train[ x_train['csqCV'] == 'missense_variant' ]
-	x_train_missense = x_train_missense.drop(['CADD_PHRED', 'typeCV', 'csqCV'], axis=1)
-
-	x_test_missense = x_test[ x_test['csqCV'] == 'missense_variant' ]
-	x_test_missense = x_test_missense.drop(['CADD_PHRED', 'typeCV', 'csqCV'], axis=1)
-
-
-	x_train_nonMissense = x_train[ x_train['csqCV'] != 'missense_variant' ]
-	x_train_nonMissense = x_train_nonMissense.drop(['MPC_score', 'Polyphen2_HDIV_score', 'REVEL_score', 'SIFT_score', 'FATHMM_score'], axis=1)
-
-	x_test_nonMissense = x_test[ x_test['csqCV'] != 'missense_variant' ]
-	x_test_nonMissense['csqCV'] = pd.Categorical(x_test_nonMissense['csqCV'], categories = sorted(x_train_nonMissense['csqCV'].unique()))
-	x_test_nonMissense['typeCV'] = pd.Categorical(x_test_nonMissense['typeCV'], categories = sorted(x_train_nonMissense['typeCV'].unique()))
-	x_test_nonMissense = x_test_nonMissense.drop(['MPC_score', 'Polyphen2_HDIV_score', 'REVEL_score', 'SIFT_score', 'FATHMM_score'], axis=1)
-
-	x_train_nonMissense = pd.get_dummies(x_train_nonMissense, drop_first = True, columns = ['csqCV', 'typeCV'])
-	x_test_nonMissense = pd.get_dummies(x_test_nonMissense, drop_first = True, columns = ['csqCV', 'typeCV'])
-
-
-
-	y_train_missense = y_train[ y_train['csqCV'] == 'missense_variant' ]
-	y_train_missense = y_train_missense.drop(['csqCV'], axis=1)
-	y_train_missense = y_train_missense.values.reshape(-1,1)
-
-	y_test_missense = y_test[ y_test['csqCV'] == 'missense_variant' ]
-	y_test_missense = y_test_missense.drop(['csqCV'], axis=1)
-	y_test_missense = y_test_missense.values.reshape(-1,1)
-
-
-	y_train_nonMissense = y_train[ y_train['csqCV'] != 'missense_variant' ]
-	y_train_nonMissense = y_train_nonMissense.drop(['csqCV'], axis=1)
-	y_train_nonMissense = y_train_nonMissense.values.reshape(-1,1)
-
-	y_test_nonMissense = y_test[ y_test['csqCV'] != 'missense_variant' ]
-	y_test_nonMissense = y_test_nonMissense.drop(['csqCV'], axis=1)
-	y_test_nonMissense = y_test_nonMissense.values.reshape(-1,1)
-
-
-
+	x_nonMissense_train, x_nonMissense_test, y_nonMissense_train, y_nonMissense_test = train_test_split(x_nonMissense, y_nonMissense, test_size = 0.2, random_state = 123)
 
 
 
@@ -609,30 +585,31 @@ def main(argv):
 	logging.info("Impute the data")
 
 	imp_missense = SimpleImputer(strategy = 'median')
-	imp_missense.fit(x_train_missense)
-	x_train_missense_imp = imp_missense.transform(x_train_missense)
-	x_test_missense_imp = imp_missense.transform(x_test_missense)
+	imp_missense.fit(x_missense_train)
+	x_missense_train_imp = imp_missense.transform(x_missense_train)
+	x_missense_test_imp = imp_missense.transform(x_missense_test)
 
 
 	imp_nonMissense = SimpleImputer(strategy = 'median')
-	imp_nonMissense.fit(x_train_nonMissense)
-	x_train_nonMissense_imp = imp_nonMissense.transform(x_train_nonMissense)
-	x_test_nonMissense_imp = imp_nonMissense.transform(x_test_nonMissense)
+	imp_nonMissense.fit(x_nonMissense_train)
+	x_nonMissense_train_imp = imp_nonMissense.transform(x_nonMissense_train)
+	x_nonMissense_test_imp = imp_nonMissense.transform(x_nonMissense_test)
 
 
 
 	# scale the data
 	logging.info("Scaling to [0,1]")
 	scal_missense = MinMaxScaler(clip = 'true')
-	scal_missense.fit(x_train_missense_imp)
-	x_train_missense_imp_scal = scal_missense.transform(x_train_missense_imp)
-	x_test_missense_imp_scal = scal_missense.transform(x_test_missense_imp)
+	scal_missense.fit(x_missense_train_imp)
+	x_missense_train_imp_scal = scal_missense.transform(x_missense_train_imp)
+	x_missense_test_imp_scal = scal_missense.transform(x_missense_test_imp)
 
 
 	scal_nonMissense = MinMaxScaler(clip = 'true')
-	scal_nonMissense.fit(x_train_nonMissense_imp)
-	x_train_nonMissense_imp_scal = scal_nonMissense.transform(x_train_nonMissense_imp)
-	x_test_nonMissense_imp_scal = scal_nonMissense.transform(x_test_nonMissense_imp)
+	scal_nonMissense.fit(x_nonMissense_train_imp)
+	x_nonMissense_train_imp_scal = scal_nonMissense.transform(x_nonMissense_train_imp)
+	x_nonMissense_test_imp_scal = scal_nonMissense.transform(x_nonMissense_test_imp)
+
 
 
 
@@ -641,27 +618,27 @@ def main(argv):
 	logging.info("Run logistic regression")
 
 	logReg_missense = LogisticRegression(penalty = 'none')
-	logReg_missense.fit(x_train_missense_imp_scal, y_train_missense)
+	logReg_missense.fit(x_missense_train_imp_scal, y_missense_train)
 
 	print("Missense")
 	vif_data = pd.DataFrame()
-	vif_data["feature"] = x_train_missense.columns
-	vif_data["VIF"] = [variance_inflation_factor(x_train_missense_imp_scal, i) for i in range(len(x_train_missense.columns))]
+	vif_data["feature"] = x_missense_train.columns
+	vif_data["VIF"] = [variance_inflation_factor(x_missense_train_imp_scal, i) for i in range(len(x_missense_train.columns))]
 	vif_data["Coefficient"] = logReg_missense.coef_.flatten()
 	print(vif_data)
-
+	print("Intercept: ", logReg_missense.intercept_)
 
 
 	logReg_nonMissense = LogisticRegression(penalty = 'none')
-	logReg_nonMissense.fit(x_train_nonMissense_imp_scal, y_train_nonMissense)
+	logReg_nonMissense.fit(x_nonMissense_train_imp_scal, y_nonMissense_train)
 
-	print("\n\nNon-Missense")
+	print("\n\nNon-missense")
 	vif_data = pd.DataFrame()
-	vif_data["feature"] = x_train_nonMissense.columns
-	vif_data["VIF"] = [variance_inflation_factor(x_train_nonMissense_imp_scal, i) for i in range(len(x_train_nonMissense.columns))]
+	vif_data["feature"] = x_nonMissense_train.columns
+	vif_data["VIF"] = [variance_inflation_factor(x_nonMissense_train_imp_scal, i) for i in range(len(x_nonMissense_train.columns))]
 	vif_data["Coefficient"] = logReg_nonMissense.coef_.flatten()
 	print(vif_data)
-
+	print("Intercept: ", logReg_nonMissense.intercept_)
 
 
 	SENS_train_missense_boot = []
@@ -701,9 +678,9 @@ def main(argv):
 	logging.info("Bootstrap the performance metrics")
 	for i in range(nBoot):
 		# missense
-		ind_missense = np.random.randint(x_train_missense_imp_scal.shape[0], size=x_train_missense_imp_scal.shape[0])
-		x_missense_boot = x_train_missense_imp_scal[ind_missense]
-		y_missense_boot = y_train_missense[ind_missense]
+		ind_missense = np.random.randint(x_missense_train_imp_scal.shape[0], size=x_missense_train_imp_scal.shape[0])
+		x_missense_boot = x_missense_train_imp_scal[ind_missense]
+		y_missense_boot = y_missense_train[ind_missense]
 
 		y_missense_pred = logReg_missense.predict(x_missense_boot)
 		tn, fp, fn, tp = confusion_matrix(y_missense_boot, y_missense_pred).ravel()
@@ -714,9 +691,9 @@ def main(argv):
 
 	
 		# nonMissense
-		ind_nonMissense = np.random.randint(x_train_nonMissense_imp_scal.shape[0], size=x_train_nonMissense_imp_scal.shape[0])
-		x_nonMissense_boot = x_train_nonMissense_imp_scal[ind_nonMissense]
-		y_nonMissense_boot = y_train_nonMissense[ind_nonMissense]
+		ind_nonMissense = np.random.randint(x_nonMissense_train_imp_scal.shape[0], size=x_nonMissense_train_imp_scal.shape[0])
+		x_nonMissense_boot = x_nonMissense_train_imp_scal[ind_nonMissense]
+		y_nonMissense_boot = y_nonMissense_train[ind_nonMissense]
 
 		y_nonMissense_pred = logReg_nonMissense.predict(x_nonMissense_boot)
 		tn, fp, fn, tp = confusion_matrix(y_nonMissense_boot, y_nonMissense_pred).ravel()
@@ -737,11 +714,10 @@ def main(argv):
 		MCC_train_COMBINED_boot.append(matthews_corrcoef(y_COMBINED_boot, y_COMBINED_pred))
 
 
-
 		# missense
-		ind_missense = np.random.randint(x_test_missense_imp_scal.shape[0], size=x_test_missense_imp_scal.shape[0])
-		x_missense_boot = x_test_missense_imp_scal[ind_missense]
-		y_missense_boot = y_test_missense[ind_missense]
+		ind_missense = np.random.randint(x_missense_test_imp_scal.shape[0], size=x_missense_test_imp_scal.shape[0])
+		x_missense_boot = x_missense_test_imp_scal[ind_missense]
+		y_missense_boot = y_missense_test[ind_missense]
 
 		y_missense_pred = logReg_missense.predict(x_missense_boot)
 		tn, fp, fn, tp = confusion_matrix(y_missense_boot, y_missense_pred).ravel()
@@ -752,9 +728,9 @@ def main(argv):
 
 	
 		# nonMissense
-		ind_nonMissense = np.random.randint(x_test_nonMissense_imp_scal.shape[0], size=x_test_nonMissense_imp_scal.shape[0])
-		x_nonMissense_boot = x_test_nonMissense_imp_scal[ind_nonMissense]
-		y_nonMissense_boot = y_test_nonMissense[ind_nonMissense]
+		ind_nonMissense = np.random.randint(x_nonMissense_test_imp_scal.shape[0], size=x_nonMissense_test_imp_scal.shape[0])
+		x_nonMissense_boot = x_nonMissense_test_imp_scal[ind_nonMissense]
+		y_nonMissense_boot = y_nonMissense_test[ind_nonMissense]
 
 		y_nonMissense_pred = logReg_nonMissense.predict(x_nonMissense_boot)
 		tn, fp, fn, tp = confusion_matrix(y_nonMissense_boot, y_nonMissense_pred).ravel()
@@ -778,39 +754,40 @@ def main(argv):
 
 
 
+
 	# apply to test and get statistics
 	logging.info("TRAIN")
-
+	
 	# missense
 	logging.info("Results: missense")
-	y_train_missense_pred = logReg_missense.predict(x_train_missense_imp_scal)
-	tn, fp, fn, tp = confusion_matrix(y_train_missense, y_train_missense_pred).ravel()
+	y_missense_train_pred = logReg_missense.predict(x_missense_train_imp_scal)
+	tn, fp, fn, tp = confusion_matrix(y_missense_train, y_missense_train_pred).ravel()
 	
 	print("\tSensitivity - ", tp / (tp + fn), " (", np.quantile(SENS_train_missense_boot, 0.025), ", ", np.quantile(SENS_train_missense_boot, 0.975), ")")
 	print("\tSpecificity - ", tn / (tn + fp), " (", np.quantile(SPEC_train_missense_boot, 0.025), ", ", np.quantile(SPEC_train_missense_boot, 0.975), ")")
 	print("\tPPV - ", tp / (tp + fp), " (", np.quantile(PPV_train_missense_boot, 0.025), ", ", np.quantile(PPV_train_missense_boot, 0.975), ")")
-	print("\tMCC - ", matthews_corrcoef(y_train_missense, y_train_missense_pred), " (", np.quantile(MCC_train_missense_boot, 0.025), ", ", np.quantile(MCC_train_missense_boot, 0.975), ")")
+	print("\tMCC - ", matthews_corrcoef(y_missense_train, y_missense_train_pred), " (", np.quantile(MCC_train_missense_boot, 0.025), ", ", np.quantile(MCC_train_missense_boot, 0.975), ")")
 	logging.info(" ")
 
 
 
 	# nonMissense
 	logging.info("Results: nonMissense")
-	y_train_nonMissense_pred = logReg_nonMissense.predict(x_train_nonMissense_imp_scal)
-	tn, fp, fn, tp = confusion_matrix(y_train_nonMissense, y_train_nonMissense_pred).ravel()
+	y_nonMissense_train_pred = logReg_nonMissense.predict(x_nonMissense_train_imp_scal)
+	tn, fp, fn, tp = confusion_matrix(y_nonMissense_train, y_nonMissense_train_pred).ravel()
 	
 	print("\tSensitivity - ", tp / (tp + fn), " (", np.quantile(SENS_train_nonMissense_boot, 0.025), ", ", np.quantile(SENS_train_nonMissense_boot, 0.975), ")")
 	print("\tSpecificity - ", tn / (tn + fp), " (", np.quantile(SPEC_train_nonMissense_boot, 0.025), ", ", np.quantile(SPEC_train_nonMissense_boot, 0.975), ")")
 	print("\tPPV - ", tp / (tp + fp), " (", np.quantile(PPV_train_nonMissense_boot, 0.025), ", ", np.quantile(PPV_train_nonMissense_boot, 0.975), ")")
-	print("\tMCC - ", matthews_corrcoef(y_train_nonMissense, y_train_nonMissense_pred), " (", np.quantile(MCC_train_nonMissense_boot, 0.025), ", ", np.quantile(MCC_train_nonMissense_boot, 0.975), ")")
+	print("\tMCC - ", matthews_corrcoef(y_nonMissense_train, y_nonMissense_train_pred), " (", np.quantile(MCC_train_nonMissense_boot, 0.025), ", ", np.quantile(MCC_train_nonMissense_boot, 0.975), ")")
 	logging.info(" ")
 
 
 
 	# COMBINED = missense + nonMissense
 	logging.info("Results: COMBINED")
-	y_COMBINED = np.append(y_train_missense, y_train_nonMissense)
-	y_COMBINED_pred = np.append(y_train_missense_pred, y_train_nonMissense_pred)
+	y_COMBINED = np.append(y_missense_train, y_nonMissense_train)
+	y_COMBINED_pred = np.append(y_missense_train_pred, y_nonMissense_train_pred)
 	tn, fp, fn, tp = confusion_matrix(y_COMBINED, y_COMBINED_pred).ravel()
 	
 	print("\tSensitivity - ", tp / (tp + fn), " (", np.quantile(SENS_train_COMBINED_boot, 0.025), ", ", np.quantile(SENS_train_COMBINED_boot, 0.975), ")")
@@ -822,37 +799,37 @@ def main(argv):
 	logging.info(" ")
 	logging.info(" ")
 	logging.info("TEST")
-
+	
 	# missense
 	logging.info("Results: missense")
-	y_test_missense_pred = logReg_missense.predict(x_test_missense_imp_scal)
-	tn, fp, fn, tp = confusion_matrix(y_test_missense, y_test_missense_pred).ravel()
+	y_missense_test_pred = logReg_missense.predict(x_missense_test_imp_scal)
+	tn, fp, fn, tp = confusion_matrix(y_missense_test, y_missense_test_pred).ravel()
 	
 	print("\tSensitivity - ", tp / (tp + fn), " (", np.quantile(SENS_test_missense_boot, 0.025), ", ", np.quantile(SENS_test_missense_boot, 0.975), ")")
 	print("\tSpecificity - ", tn / (tn + fp), " (", np.quantile(SPEC_test_missense_boot, 0.025), ", ", np.quantile(SPEC_test_missense_boot, 0.975), ")")
 	print("\tPPV - ", tp / (tp + fp), " (", np.quantile(PPV_test_missense_boot, 0.025), ", ", np.quantile(PPV_test_missense_boot, 0.975), ")")
-	print("\tMCC - ", matthews_corrcoef(y_test_missense, y_test_missense_pred), " (", np.quantile(MCC_test_missense_boot, 0.025), ", ", np.quantile(MCC_test_missense_boot, 0.975), ")")
+	print("\tMCC - ", matthews_corrcoef(y_missense_test, y_missense_test_pred), " (", np.quantile(MCC_test_missense_boot, 0.025), ", ", np.quantile(MCC_test_missense_boot, 0.975), ")")
 	logging.info(" ")
 
 
 
 	# nonMissense
 	logging.info("Results: nonMissense")
-	y_test_nonMissense_pred = logReg_nonMissense.predict(x_test_nonMissense_imp_scal)
-	tn, fp, fn, tp = confusion_matrix(y_test_nonMissense, y_test_nonMissense_pred).ravel()
+	y_nonMissense_test_pred = logReg_nonMissense.predict(x_nonMissense_test_imp_scal)
+	tn, fp, fn, tp = confusion_matrix(y_nonMissense_test, y_nonMissense_test_pred).ravel()
 	
 	print("\tSensitivity - ", tp / (tp + fn), " (", np.quantile(SENS_test_nonMissense_boot, 0.025), ", ", np.quantile(SENS_test_nonMissense_boot, 0.975), ")")
 	print("\tSpecificity - ", tn / (tn + fp), " (", np.quantile(SPEC_test_nonMissense_boot, 0.025), ", ", np.quantile(SPEC_test_nonMissense_boot, 0.975), ")")
 	print("\tPPV - ", tp / (tp + fp), " (", np.quantile(PPV_test_nonMissense_boot, 0.025), ", ", np.quantile(PPV_test_nonMissense_boot, 0.975), ")")
-	print("\tMCC - ", matthews_corrcoef(y_test_nonMissense, y_test_nonMissense_pred), " (", np.quantile(MCC_test_nonMissense_boot, 0.025), ", ", np.quantile(MCC_test_nonMissense_boot, 0.975), ")")
+	print("\tMCC - ", matthews_corrcoef(y_nonMissense_test, y_nonMissense_test_pred), " (", np.quantile(MCC_test_nonMissense_boot, 0.025), ", ", np.quantile(MCC_test_nonMissense_boot, 0.975), ")")
 	logging.info(" ")
 
 
 
 	# COMBINED = missense + nonMissense
 	logging.info("Results: COMBINED")
-	y_COMBINED = np.append(y_test_missense, y_test_nonMissense)
-	y_COMBINED_pred = np.append(y_test_missense_pred, y_test_nonMissense_pred)
+	y_COMBINED = np.append(y_missense_test, y_nonMissense_test)
+	y_COMBINED_pred = np.append(y_missense_test_pred, y_nonMissense_test_pred)
 	tn, fp, fn, tp = confusion_matrix(y_COMBINED, y_COMBINED_pred).ravel()
 	
 	print("\tSensitivity - ", tp / (tp + fn), " (", np.quantile(SENS_test_COMBINED_boot, 0.025), ", ", np.quantile(SENS_test_COMBINED_boot, 0.975), ")")
@@ -879,11 +856,11 @@ def main(argv):
 
 
 
+
 	### Model 4
 	logging.info("Model 4")
 	logging.info("Missense (CADD + AF) and non-missense (CADD + AF + CSQ + TYPE)")
 
-	x = df.filter(['CADD_PHRED', 'GERP', 'gnomAD_v2_exome_AF_popmax', 'csqCV', 'typeCV'])
 	x = df.filter(['CADD_PHRED', 'gnomAD_v2_exome_AF_popmax', 'csqCV', 'typeCV'])
 
 
@@ -957,6 +934,7 @@ def main(argv):
 	vif_data["VIF"] = [variance_inflation_factor(x_missense_train_imp_scal, i) for i in range(len(x_missense_train.columns))]
 	vif_data["Coefficient"] = logReg_missense.coef_.flatten()
 	print(vif_data)
+	print("Intercept: ", logReg_missense.intercept_)
 
 
 	logReg_nonMissense = LogisticRegression(penalty = 'none')
@@ -964,10 +942,11 @@ def main(argv):
 
 	print("\n\nNon-missense")
 	vif_data = pd.DataFrame()
-	vif_data["feature"] = x_train_nonMissense.columns
-	vif_data["VIF"] = [variance_inflation_factor(x_train_nonMissense_imp_scal, i) for i in range(len(x_train_nonMissense.columns))]
+	vif_data["feature"] = x_nonMissense_train.columns
+	vif_data["VIF"] = [variance_inflation_factor(x_nonMissense_train_imp_scal, i) for i in range(len(x_nonMissense_train.columns))]
 	vif_data["Coefficient"] = logReg_nonMissense.coef_.flatten()
 	print(vif_data)
+	print("Intercept: ", logReg_nonMissense.intercept_)
 
 
 	SENS_train_missense_boot = []
@@ -1188,7 +1167,6 @@ def main(argv):
 	logging.info("Model 5")
 	logging.info("Missense (CADD + AF + 5_PRED), non-missense SNV (CADD + AF + CSQ) and indel (CADD + AF + CSQ)")
 
-	x = df.filter(['CADD_PHRED', 'GERP', 'MPC_score', 'Polyphen2_HDIV_score', 'REVEL_score', 'SIFT_score', 'FATHMM_score', 'gnomAD_v2_exome_AF_popmax', 'csqCV', 'typeCV'])
 	x = df.filter(['CADD_PHRED', 'MPC_score', 'Polyphen2_HDIV_score', 'REVEL_score', 'SIFT_score', 'FATHMM_score', 'gnomAD_v2_exome_AF_popmax', 'csqCV', 'typeCV'])
 
 
@@ -1286,6 +1264,7 @@ def main(argv):
 	vif_data["VIF"] = [variance_inflation_factor(x_indel_train_imp_scal, i) for i in range(len(x_indel_train.columns))]
 	vif_data["Coefficient"] = logReg_indel.coef_.flatten()
 	print(vif_data)
+	print("Intercept: ", logReg_indel.intercept_)
 
 
 	logReg_missense = LogisticRegression(penalty = 'none')
@@ -1297,6 +1276,7 @@ def main(argv):
 	vif_data["VIF"] = [variance_inflation_factor(x_missense_train_imp_scal, i) for i in range(len(x_missense_train.columns))]
 	vif_data["Coefficient"] = logReg_missense.coef_.flatten()
 	print(vif_data)
+	print("Intercept: ", logReg_missense.intercept_)
 
 
 	logReg_nonMissenseSNV = LogisticRegression(penalty = 'none')
@@ -1308,6 +1288,7 @@ def main(argv):
 	vif_data["VIF"] = [variance_inflation_factor(x_nonMissenseSNV_train_imp_scal, i) for i in range(len(x_nonMissenseSNV_train.columns))]
 	vif_data["Coefficient"] = logReg_nonMissenseSNV.coef_.flatten()
 	print(vif_data)
+	print("Intercept: ", logReg_nonMissenseSNV.intercept_)
 
 
 	SENS_train_indel_boot = []

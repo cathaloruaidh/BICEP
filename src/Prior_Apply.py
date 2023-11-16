@@ -3,7 +3,7 @@
 
 
 
-import cProfile, getopt, glob, logging, math, os, pickle, pprint, re, sys
+import cProfile, getopt, glob, logging, math, os, os.path, pickle, pprint, re, sys
 import numpy as np
 import pandas as pd
 
@@ -31,6 +31,7 @@ def main(argv):
 
 	# ignore warnings
 	warnings.filterwarnings("ignore")
+	pd.set_option('display.max_columns', None)
 
 
 
@@ -41,9 +42,10 @@ def main(argv):
 	logLevel = None
 	modelPrefix = None
 	outputPrefix = None
+	predictorsFile = None
 
 	try:
-		opts, args = getopt.getopt(argv, "c:l:m:o:v:", ["cores=", "log=", "model=", "output=", "vcf="])
+		opts, args = getopt.getopt(argv, "c:l:m:o:v:", ["cores=", "log=", "model=", "output=", "predictors=", "vcf="])
 	except getopt.GetoptError:
 		print("Getopt Error")
 		logging.error("getopt error")
@@ -71,6 +73,9 @@ def main(argv):
 	
 		if opt in ("-v", "--vcf"):
 			inputVcfFile = arg
+	
+		if opt in ("--predictors"):
+			predictorsFile = arg
 	
 
 
@@ -115,18 +120,52 @@ def main(argv):
 
 
 	# define VEP hierarchy for ClinVar consequences examined
-	vepCSQRank = {'splice_acceptor_variant' : 1, 
-	'splice_donor_variant' : 2, 
-	'stop_gained' : 3, 
-	'frameshift_variant' : 4, 
-	'stop_lost' : 5, 
-	'inframe_insertion' : 6, 
-	'inframe_deletion' : 7, 
-	'missense_variant' : 8, 
-	'synonymous_variant' : 9, 
-	'5_prime_UTR_variant' : 10, 
-	'3_prime_UTR_variant' : 11, 
-	'intron_variant' : 12 }
+	vepCSQRank = {'transcript_ablation' : 1,
+	'splice_acceptor_variant' : 2,
+	'splice_donor_variant' : 3,
+	'stop_gained' : 4,
+	'frameshift_variant' : 5,
+	'stop_lost' : 6,
+	'start_lost' : 7,
+	'transcript_amplification' : 8,
+	'inframe_insertion' : 9,
+	'inframe_deletion' : 10,
+	'missense_variant' : 11,
+	'protein_altering_variant' : 12,
+	'splice_region_variant' : 13,
+	'splice_donor_5th_base_variant' : 14,
+	'splice_donor_region_variant' : 15,
+	'splice_polypyrimidine_tract_variant' : 16,
+	'incomplete_terminal_codon_variant' : 17,
+	'start_retained_variant' : 18,
+	'stop_retained_variant' : 19,
+	'synonymous_variant' : 20,
+	'coding_sequence_variant' : 21,
+	'mature_miRNA_variant' : 22,
+	'5_prime_UTR_variant' : 23,
+	'3_prime_UTR_variant' : 24,
+	'non_coding_transcript_exon_variant' : 25,
+	'intron_variant' : 26,
+	'NMD_transcript_variant' : 27,
+	'non_coding_transcript_variant' : 28,
+	'upstream_gene_variant' : 29,
+	'downstream_gene_variant' : 30,
+	'TFBS_ablation' : 31,
+	'TFBS_amplification' : 32,
+	'TF_binding_site_variant' : 33,
+	'regulatory_region_ablation' : 34,
+	'regulatory_region_amplification' : 35,
+	'feature_elongation' : 36,
+	'regulatory_region_variant' : 37,
+	'feature_truncation' : 38,
+	'intergenic_variant' : 39}
+
+
+
+	# get flat priors from training data	
+	with open(modelPrefix + '.flatPriors.pkl', 'rb') as f:
+		flatPriors = pickle.load(f)
+
 
 
 
@@ -144,8 +183,26 @@ def main(argv):
 
 	keys = re.sub('^.*?: ', '', vcf.get_header_type('CSQ')['Description']).split("|")
 	keys = [ key.strip("\"") for key in keys ]
-	keysPredictors = [ "CADD_PHRED", "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score", "gnomAD_v2_exome_AF_popmax" ]
-	keysAscPred = [ x for x in keysPredictors if x not in [ 'SIFT_score', 'FATHMM_score' ] ]
+
+
+	if predictorsFile is not None:
+
+		d = {}
+
+		with open(predictorsFile, 'r') as f:
+			for line in f:
+				(key, value)=line.split()
+				d[key] = value
+
+		keysPredictors = sorted(list(d.keys()))
+		keysDescPred = sorted([ x for x in keysPredictors if d[x] == "-" ])
+		keysAscPred  = sorted([ x for x in keysPredictors if d[x] == "+" ])
+
+
+	else:
+		keysPredictors = sorted([ "CADD_PHRED", "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score", "gnomAD_v2_exome_AF_popmax" ])
+		keysDescPred = sorted([ "SIFT_score", "FATHMM_score", "gnomAD_v2_exome_AF_popmax" ])
+		keysAscPred  = sorted([ x for x in keysPredictors if x not in keysDescPred ])
 	
 
 
@@ -156,8 +213,12 @@ def main(argv):
 
 
 
+	logging.info("Converting annotation data to list")
+
 	# save variants in list 
 	DATA = []
+
+	flat_DATA = []
 	for variant in vcf:
 		# get the ID of the variant
 		ID = variant.CHROM + "_" + str(variant.start+1) + "_" + variant.REF + "_" + variant.ALT[0] 
@@ -219,7 +280,7 @@ def main(argv):
 				else:
 					dictVEP[key] = max(l)
 
-			for key in [ 'SIFT_score', 'FATHMM_score' ]:
+			for key in keysDescPred:
 				l = [ float(x) for x in dictVEP[key].split("&") if x != '.' and x != "" ]
 				if len(l) == 0:
 					dictVEP[key] = np.nan
@@ -249,18 +310,18 @@ def main(argv):
 			for i in range(len(csqVEP)):
 				l = [ ID, csqVEP[i]["SYMBOL"], typeVEP, csqVEP[i]["Consequence_select"] ]
 
-				for key in keysPredictors:
+				for key in keysAscPred + keysDescPred:
 					l.append(csqVEP[i][key])
 
 				DATA.append(l) 
 
 
-		# otherwise print to error file
+		# otherwise flat prior
 		else:
-			with open(outputErr, 'a') as f:
-				print(ID, "\tNA\tNoTranscript", file=f)
+			flat_DATA.append([ID, flatPriors['nonCoding']])
 
 
+	logging.info(" ")
 
 
 
@@ -271,123 +332,261 @@ def main(argv):
 	pd.set_option('display.max_colwidth', 100)
 
 	# read in the data
-	df = pd.DataFrame(DATA, columns = ['ID', 'Gene', 'typeVEP', 'csqVEP'] + keysPredictors )
+	df = pd.DataFrame(DATA, columns = ['ID', 'Gene', 'typeVEP', 'csqVEP'] + keysAscPred + keysDescPred )
 
-	df.to_csv("DATA.txt", index=False, sep='\t')
+	#df.to_csv("DATA.txt", index=False, sep='\t', na_rep='.')
 
 	df['csqVEP'] = pd.Categorical(df['csqVEP'], categories = sorted(vepCSQRank.keys()))
 	df['typeVEP'] = pd.Categorical(df['typeVEP'], categories = ['indel', 'SNV'])
 
 
 	# set missing allele frequencies to zero
-	#df["gnomAD_v2_exome_AF_popmax"] = df["gnomAD_v2_exome_AF_popmax"].fillna(0.0)
+	df["gnomAD_v2_exome_AF_popmax"] = df["gnomAD_v2_exome_AF_popmax"].fillna(0.0)
 
 
-	### Model 3 
-	logging.info("Model 3")
-	logging.info("Missense (CADD + AF + 5_PRED) and non-missense (CADD + AF + CSQ + TYPE)")
-
-	x = df.filter(['CADD_PHRED', 'MPC_score', 'Polyphen2_HDIV_score', 'REVEL_score', 'SIFT_score', 'FATHMM_score', 'gnomAD_v2_exome_AF_popmax', 'csqVEP', 'typeVEP'])
+	x = df.filter( ['csqVEP', 'typeVEP'] + keysAscPred + keysDescPred)
 	
+
+
+	## INDELS
+	logging.info("INDELS")
+
+	x_indel = x[ x['typeVEP'] == 'indel' ]
+	x_indel_csq = x_indel['csqVEP']
+	x_indel = pd.get_dummies(x_indel, columns = ['csqVEP'])
+	x_indel_index = x_indel.index
+
+	y_indel = df[ df['typeVEP'] == 'indel' ]
+
+
+
+	if os.path.isfile(modelPrefix + '.predictors_indel.npy'):
+
+		# load in the predictor IDs for the models
+		with open(modelPrefix + '.predictors_indel.npy', 'rb') as f:
+			predictors_indel = np.load(f, allow_pickle = True)
+			predictors_indel = [ s.replace('CV', 'VEP') for s in predictors_indel ]
+
+		x_indel = x_indel[predictors_indel]
+
+
+
+		# impute the missing data
+		logging.info("Impute the data")
+
+		with open(modelPrefix + '.imp_indel.pkl', 'rb') as f:
+			imp_indel = pickle.load(f)
+
+		x_indel_imp = imp_indel.transform(x_indel)
+
+
+
+		# scale the data
+		logging.info("Scaling to [0,1]")
+
+		with open(modelPrefix + '.scal_indel.pkl', 'rb') as f:
+			scal_indel = pickle.load(f)
+
+		x_indel_imp_scal = scal_indel.transform(x_indel_imp)
+
+
+		# run logistic regression
+		logging.info("Apply logistic regression")
+
+		with open(modelPrefix + '.logReg_indel.pkl', 'rb') as f:
+			logReg_indel = pickle.load(f)
+
+
+		y_indel_pred = logReg_indel.predict_proba(x_indel_imp_scal)[:,1]
+
+		#pprint.pprint(list(zip(logReg_indel.feature_names, logReg_indel.coef_.flatten())))
+		#print("Intercept: ", logReg_indel.intercept_)
+
+	else:
+		logging.info("Using flat priors for indels. ")
+		y_indel_pred = np.full(len(x_indel), flatPriors['indel'])
+
+
+	logging.info(" ")
+
+
+
+	## MISSENSE SNV
+	logging.info("MISSENSE SNV")
 
 	x_missense = x[ x['csqVEP'] == 'missense_variant' ]
 	x_missense_csq = x_missense['csqVEP']
-	x_missense = x_missense.drop(['CADD_PHRED', 'typeVEP', 'csqVEP'], axis=1)
 	x_missense_index = x_missense.index
-
-
-	x_nonMissense = x[ x['csqVEP'] != 'missense_variant' ]
-	x_nonMissense_csq = x_nonMissense['csqVEP']
-	x_nonMissense = pd.get_dummies(x_nonMissense, columns = ['csqVEP', 'typeVEP'])
-	x_nonMissense = x_nonMissense.drop(['MPC_score', 'Polyphen2_HDIV_score', 'REVEL_score', 'SIFT_score', 'FATHMM_score', 'csqVEP_3_prime_UTR_variant', 'csqVEP_missense_variant', 'typeVEP_SNV'], axis=1)
-	x_nonMissense_index = x_nonMissense.index
-
 
 
 	y_missense = df[ df['csqVEP'] == 'missense_variant' ]
 
-	y_nonMissense = df[ df['csqVEP'] != 'missense_variant' ]
+	if os.path.isfile(modelPrefix + '.predictors_missense.npy'):
+
+		# load in the predictor IDs for the models
+		with open(modelPrefix + '.predictors_missense.npy', 'rb') as f:
+			predictors_missense = np.load(f, allow_pickle = True)
+			predictors_missense = [ s.replace('CV', 'VEP') for s in predictors_missense ]
+
+		x_missense = x_missense[predictors_missense]
 
 
+		# impute the missing data
+		logging.info("Impute the data")
+
+		with open(modelPrefix + '.imp_missense.pkl', 'rb') as f:
+			imp_missense = pickle.load(f)
 
 
-	# impute the missing data
-	logging.info("Impute the data")
-
-	with open(modelPrefix + '.imp_missense.pkl', 'rb') as f:
-		imp_missense = pickle.load(f)
-
-	x_missense_imp = imp_missense.transform(x_missense)
+		x_missense_imp = imp_missense.transform(x_missense)
+		x_missense_imp_df = pd.DataFrame(x_missense_imp, columns = x_missense.columns)
 
 
+		# scale the data
+		logging.info("Scaling to [0,1]")
 
-	with open(modelPrefix + '.imp_nonMissense.pkl', 'rb') as f:
-		imp_nonMissense = pickle.load(f)
+		with open(modelPrefix + '.scal_missense.pkl', 'rb') as f:
+			scal_missense = pickle.load(f)
+
+		x_missense_imp_scal = scal_missense.transform(x_missense_imp)
+
+		x_missense_imp_scal_df = pd.DataFrame(x_missense_imp_scal, columns = x_missense.columns)
+
+		# run logistic regression
+		logging.info("Apply logistic regression")
+
+		with open(modelPrefix + '.logReg_missense.pkl', 'rb') as f:
+			logReg_missense = pickle.load(f)
+
+		y_missense_pred = logReg_missense.predict_proba(x_missense_imp_scal)[:,1]
+
+		#pprint.pprint(list(zip(logReg_missense.feature_names, logReg_missense.coef_.flatten())))
+		#print("Intercept: ", logReg_missense.intercept_)
 	
-	x_nonMissense_imp = imp_nonMissense.transform(x_nonMissense)
+	else:
+		logging.info("Using flat priors for missense variants. ")
+		y_missense_pred = np.full(len(x_missense), flatPriors['missense'])
+
+	logging.info(" ")
 
 
 
-	# scale the data
-	logging.info("Scaling to [0,1]")
+	## NON-MISSENSE SNV
+	logging.info("NON-MISSENSE SNV")
 
-	with open(modelPrefix + '.scal_missense.pkl', 'rb') as f:
-		scal_missense = pickle.load(f)
+	x_nonMissenseSNV = x[ (x['csqVEP'] != 'missense_variant') & (x['typeVEP'] == 'SNV') ]
+	x_nonMissenseSNV_csq = x_nonMissenseSNV['csqVEP']
+	x_nonMissenseSNV = pd.get_dummies(x_nonMissenseSNV, columns = ['csqVEP'])
+	x_nonMissenseSNV_index = x_nonMissenseSNV.index
 
-	x_missense_imp_scal = scal_missense.transform(x_missense_imp)
+	y_nonMissenseSNV = df[ (df['csqVEP'] != 'missense_variant') & (df['typeVEP'] == 'SNV') ]
 
+		
+	if os.path.isfile(modelPrefix + '.predictors_nonMissenseSNV.npy'):
 
-	with open(modelPrefix + '.scal_nonMissense.pkl', 'rb') as f:
-		scal_nonMissense = pickle.load(f)
+		# load in the predictor IDs for the models
+		with open(modelPrefix + '.predictors_nonMissenseSNV.npy', 'rb') as f:
+			predictors_nonMissenseSNV = np.load(f, allow_pickle = True)
+			predictors_nonMissenseSNV = [ s.replace('CV', 'VEP') for s in predictors_nonMissenseSNV ]
 
-	x_nonMissense_imp_scal = scal_nonMissense.transform(x_nonMissense_imp)
-
-
-
-
-	# run logistic regression
-	logging.info("Run logistic regression")
-
-	with open(modelPrefix + '.logReg_missense.pkl', 'rb') as f:
-		logReg_missense = pickle.load(f)
+		x_nonMissenseSNV = x_nonMissenseSNV[predictors_nonMissenseSNV]
 
 
-	with open(modelPrefix + '.logReg_nonMissense.pkl', 'rb') as f:
-		logReg_nonMissense = pickle.load(f)
+		# impute the missing data
+		logging.info("Impute the data")
+
+		with open(modelPrefix + '.imp_nonMissenseSNV.pkl', 'rb') as f:
+			imp_nonMissenseSNV = pickle.load(f)
+		
+		x_nonMissenseSNV_imp = imp_nonMissenseSNV.transform(x_nonMissenseSNV)
 
 
-	#pprint.pprint(list(zip(np.sort(logReg_missense.feature_names), np.sort(x_missense.columns.values))))
-	#print("\n")
-	#pprint.pprint(list(zip(np.sort(logReg_nonMissense.feature_names), np.sort(x_nonMissense.columns.values))))
+
+		# scale the data
+		logging.info("Scaling to [0,1]")
+
+		with open(modelPrefix + '.scal_nonMissenseSNV.pkl', 'rb') as f:
+			scal_nonMissenseSNV = pickle.load(f)
+
+		x_nonMissenseSNV_imp_scal = scal_nonMissenseSNV.transform(x_nonMissenseSNV_imp)
 
 
-	pprint.pprint(list(zip(logReg_missense.feature_names, logReg_missense.coef_.flatten())))
-	print("\n")
-	pprint.pprint(list(zip(logReg_nonMissense.feature_names, logReg_nonMissense.coef_.flatten())))
+
+		# run logistic regression
+		logging.info("Apply logistic regression")
+
+		with open(modelPrefix + '.logReg_nonMissenseSNV.pkl', 'rb') as f:
+			logReg_nonMissenseSNV = pickle.load(f)
 
 
-	# missense
-	y_missense_pred = logReg_missense.predict_proba(x_missense_imp_scal)
+		y_nonMissenseSNV_pred = logReg_nonMissenseSNV.predict_proba(x_nonMissenseSNV_imp_scal)[:,1]
+
+		#pprint.pprint(list(zip(logReg_nonMissenseSNV.feature_names, logReg_nonMissenseSNV.coef_.flatten())))
+		#print("Intercept: ", logReg_nonMissenseSNV.intercept_)
+
+	else:
+		logging.info("Using flat priors for non-missense SNVs")
+		y_nonMissenseSNV_pred = np.full(len(x_nonMissenseSNV), flatPriors['nonMissenseSNV'])
 
 
-	# nonMissense
-	y_nonMissense_pred = logReg_nonMissense.predict_proba(x_nonMissense_imp_scal)
+	logging.info(" ")
+
+
+
 
 
 	# combine and output to file
+	logging.info("Outputting the priors to file")
+
 	prior_prob = pd.DataFrame()
-	prior_prob["ID"] = np.append(y_missense["ID"], y_nonMissense["ID"]).flatten()
-	prior_prob["csq"] = np.append(x_missense_csq, x_nonMissense_csq).flatten()
-	prior_prob["Gene"] = np.append(y_missense["Gene"], y_nonMissense["Gene"]).flatten()
-	prior_prob["prior"] = np.append(y_missense_pred[:,1], y_nonMissense_pred[:,1]).flatten()
+	prior_prob["ID"] = np.concatenate((y_indel["ID"], y_missense["ID"], y_nonMissenseSNV["ID"]))
+	prior_prob["csq"] = np.concatenate((x_indel_csq, x_missense_csq, x_nonMissenseSNV_csq))
+	prior_prob["Gene"] = np.concatenate((y_indel["Gene"], y_missense["Gene"], y_nonMissenseSNV["Gene"]))
+	prior_prob["prior"] = np.concatenate((y_indel_pred, y_missense_pred, y_nonMissenseSNV_pred))
 
-	x_missense_imp_scal_df = pd.DataFrame(x_missense_imp_scal, index = x_missense_index, columns = x_missense.columns)
-	x_nonMissense_imp_scal_df = pd.DataFrame(x_nonMissense_imp_scal, index = x_nonMissense_index, columns = x_nonMissense.columns)
 
-	x_imp_scal_df = pd.concat([x_missense_imp_scal_df, x_nonMissense_imp_scal_df], ignore_index=True, sort=False)
+	x_indel_data = pd.DataFrame()		
+	x_missense_data = pd.DataFrame()		
+	x_nonMissenseSNV_data = pd.DataFrame()		
 
-	combined = pd.concat([x_imp_scal_df, prior_prob], axis=1)
-	combined.to_csv(outputPrefix+".Model3.priors.txt", index=False, sep='\t', na_rep='.')
+
+	# get the regression input data if available
+	if os.path.isfile(modelPrefix + '.predictors_indel.npy'):
+		x_indel_data = pd.DataFrame(x_indel_imp_scal, index = x_indel_index, columns = x_indel.columns)
+	
+	else:
+		if len(x_indel_index) > 0: 
+			x_indel_data = pd.DataFrame(np.nan, index=range(0, len(x_indel_index)), columns = x_indel.columns)
+
+
+
+	if os.path.isfile(modelPrefix + '.predictors_missense.npy'):
+		x_missense_data = pd.DataFrame(x_missense_imp_scal, index = x_missense_index, columns = x_missense.columns)
+
+	else:
+		if len(x_missense_index) > 0:
+			x_missense_data = pd.DataFrame(np.nan, index=range(0, len(x_missense_index)), columns = x_missense.columns)
+	
+
+
+	if os.path.isfile(modelPrefix + '.predictors_nonMissenseSNV.npy'):
+		x_nonMissenseSNV_data = pd.DataFrame(x_nonMissenseSNV_imp_scal, index = x_nonMissenseSNV_index, columns = x_nonMissenseSNV.columns)
+	
+	else:
+		if len(x_nonMissenseSNV_index) > 0:
+			x_nonMissenseSNV_data = pd.DataFrame(np.nan, index=range(0, len(x_nonMissenseSNV_index)), columns = x_nonMissenseSNV.columns)
+
+
+
+	x_data = pd.concat([x_indel_data, x_missense_data, x_nonMissenseSNV_data], ignore_index=True, sort=False)
+	combined = pd.concat([x_data, prior_prob], axis=1)
+	df_flat = pd.DataFrame(flat_DATA, columns = ['ID', 'prior'])
+	merged = pd.concat([combined, df_flat], sort = False)
+
+	#df_flat = pd.DataFrame(flat_DATA, columns = ['ID', 'prior'])
+	#merged = pd.concat([df_flat, prior_prob], sort = False)
+
+	merged.to_csv(outputPrefix+".priors.txt", index=False, sep='\t', na_rep='.')
 
 
 
@@ -396,21 +595,6 @@ def main(argv):
 	logging.info(" ")
 	logging.info(" ")
 	logging.info(" ")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

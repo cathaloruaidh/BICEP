@@ -7,7 +7,9 @@ import cProfile, csv, getopt, logging, math, multiprocessing, os, pprint, re, sy
 import numpy as np
 import scipy.special as sp
 
+
 from cyvcf2 import VCF
+from scipy.integrate import quad,dblquad
 from functools import partial
 from multiprocessing import Pool, Manager
 from threading import Lock
@@ -320,7 +322,7 @@ def I_del(k1, k2, l1, l2):
 
 	sum = 0.0
 	for i in range(l2 + 1):
-		sum += float( binomCoeff[l2][i] )*pow( -1.0, l2-i)/float( (l-i+1) * (n-i+2) * binomCoeff[n-i+1][k2] )
+		sum += binomCoeff[l2][i]*pow( -1.0, l2-i)/float( (l-i+1) * (n-i+2) * binomCoeff[n-i+1][k2] )
 
 	return 2*sum
 
@@ -353,20 +355,36 @@ def I_del_linear(k1, k2, l1, l2):
 			
 			tmp_r = 0.0
 			for r in range(k2 + 1):
-				tmp_coeff = float(binomCoeff[k2][r])*pow(-1.0, k2-r)
 
 				if q == k1+l+2-i and r == 0:
-					tmp_r += tmp_coeff*math.log(2)
+					tmp_r += pow(-1.0, k2)*math.log(2.0)
 					
 				else:
-					tmp_r += tmp_coeff*(pow(2.0, k1+l+2-i-q+r) - 1.0)/float(k1+l+2-i-q+r)
+					tmp_r += binomCoeff[k2][r]*pow(-1.0, k2-r)*(pow(2.0, k1+l+2-i-q+r) - 1.0)/float(k1+l+2-i-q+r)
 
-			tmp_q += float(binomCoeff[k1+l+2-i][q])*pow(2.0, q)*pow(-1.0, k1+l+2-i-q) * tmp_r
-
-		sum += float(binomCoeff[l2+1][i])*pow(-1.0, l2+1-i)/float( l+2-i ) * tmp_q
+			tmp_q += binomCoeff[k1+l+2-i][q]*pow(2.0, q)*pow(-1.0, k1+l+2-i-q) * tmp_r
+			print(tmp_q)
+		sum += binomCoeff[l2+1][i]*pow(-1.0, l2+1-i)/float( l+2-i ) * tmp_q
 			
 
 	return sum * 4.0
+
+
+
+
+def I_del_linear_numeric(k1, k2, l1, l2):
+	I = dblquad(lambda p, b: 4*(b**k1)*((1-b)**k2)*(p**l1)*((1-p)**(l2+1))/(2-b), 0, 1, lambda b: 0, lambda b: b)
+
+	return I[0]
+
+
+
+
+def I_del_beta_numeric(k1, k2, l1, l2, x):
+	I = dblquad(lambda p, b: x*x*(b**(k1+x-1))*((1-b)**k2)*(p**l1)*((1-p)**(l2+x-1))/(1 - (1-b)**(x)), 0, 1, lambda b: 0, lambda b: b)
+
+	return I[0]
+
 
 
 
@@ -379,13 +397,13 @@ def I_del_old(k1, k2, l1, l2):
 	sum = 0.0
 
 	for i in range(k2+1):
-		tmp_k = float(binomCoeff[k2][i])*pow(-1.0, k2-i)/float(k-i+1)
+		tmp_k = binomCoeff[k2][i]*pow(-1.0, k2-i)/float(k-i+1)
 
 		tmp_l = 0
 
 		if l2 > 0:
 			for j in range(l2):
-				tmp_l += float(binomCoeff[l2-1][j])*pow(-1.0, l2-1-j)*( (1.0/float(l-j)) - (1.0/float(n-i-j+1)) )
+				tmp_l += binomCoeff[l2-1][j]*pow(-1.0, l2-1-j)*( (1.0/float(l-j)) - (1.0/float(n-i-j+1)) )
 
 		else:
 			for j in range(k-i+1):
@@ -414,6 +432,12 @@ def I_neu_beta(k1, k2, l1, l2, xa, ya):
 	n = k1+k2+l1+l2
 
 	return 1.0 / float( binomCoeff[n + xa + ya - 2][k1 + l1 + xa - 1] * (n + xa + ya - 1) )
+
+
+
+def I_neu_numeric(k1, k2, l1, l2):
+	I = quad(lambda a: (a**(k1+l1))*((1-a)**(k2+l2)), 0, 1)
+	return I[0]
 
 
 
@@ -587,28 +611,40 @@ def calculateBF(pedInfo, allBF, priorParams, inputData):
 		
 		# Causal model, prior distribution for parameters
 		if priorCaus == "uniform":
+			#print(genotypeString(genotypeStates[i]), "I_unif = ", I_del(k1, k2, l1, l2), "\t - \tP(G_F) = ", genotypeProbabilities[i])
 			numerator = numerator + I_del(k1, k2, l1, l2)*genotypeProbabilities[i]
 			#numerator = numerator + I_del_alt(k1, k2, l1, l2)*genotypeProbabilities[i]
+
 		elif priorCaus == "linear":
-			numerator = numerator + I_del_linear(k1, k2, l1, l2)*genotypeProbabilities[i]
+			#print(genotypeString(genotypeStates[i]), "I_bet = ", I_del_beta_numeric(k1, k2, l1, l2, 7), "\t - \tP(G_F) = ", genotypeProbabilities[i])
+			#numerator = numerator + I_del_beta_numeric(k1, k2, l1, l2, 11)*genotypeProbabilities[i]
+
+			#print(genotypeString(genotypeStates[i]), "I_lin = ", I_del_linear_numeric(k1, k2, l1, l2), "\t - \tP(G_F) = ", genotypeProbabilities[i])
+			numerator = numerator + I_del_linear_numeric(k1, k2, l1, l2)*genotypeProbabilities[i]
+		
 		else:
 			logging.error("Prior distribution for parameters under causal model not known. ")
 
 
 		# Neutral model, prior distribution for parameters
 		if priorNeut == "uniform":
+			#print(genotypeString(genotypeStates[i]), "I_neu = ", I_neu(k1, k2, l1, l2), "\t - \tP(G_F) = ", genotypeProbabilities[i])
 			denominator = denominator + I_neu(k1, k2, l1, l2)*genotypeProbabilities[i]
+		
 		elif "," in priorNeut:
 			if len(priorNeut.split(",")) != 2:
-			msg = "Incorrect number of parameters for Beta distribution: " + priorNeut
-			logging.error(msg)
+				msg = "Incorrect number of parameters for Beta distribution: " + priorNeut
+				logging.error(msg)
 
 			a,b = [ int(x) for x in priorNeut.split(",") ]
 			denominator = denominator + I_neu_beta(k1, k2, l1, l2, a, b)*genotypeProbabilities[i]
+		
 		else:
 			logging.error("Prior distribution for parameters under neutral model not known. ")
 
-	
+	#print("\n")	
+	#print("num = ", numerator, "\t-\tdenom = ", denominator)
+	#print("\n\n\n")	
 
 
 	if denominator == 0.0 :
@@ -646,7 +682,7 @@ def main(argv):
 	priorNeut = "uniform"
 
 	try:
-		opts, args = getopt.getopt(argv, "c:f:l:o:v:", ["cores=", "fam=", "log=", "minAff=","output=", "vcf=", "priorCaus", "priorNeut"])
+		opts, args = getopt.getopt(argv, "c:f:l:o:v:", ["cores=", "fam=", "log=", "minAff=","output=", "vcf=", "priorCaus=", "priorNeut="])
 	except getopt.GetoptError:
 		print("Getopt Error")
 		logging.error("getopt error")
@@ -822,7 +858,7 @@ def main(argv):
 
 	for i in range(pedInfo.nPeople + 20):
 		for j in range(i+1):
-			binomCoeff[i][j] = sp.binom(i,j)
+			binomCoeff[i][j] = float(sp.binom(i,j))
 
 
 
@@ -880,7 +916,7 @@ def main(argv):
 
 		BFs = []
 		for i in range(len(genotypes)):
-			BFs.append(calculateBF(pedInfo, allBF, [priorCaus, priorNeut] data[i]))
+			BFs.append(calculateBF(pedInfo, allBF, [priorCaus, priorNeut], data[i]))
 	
 
 	results = [ '%.6f' % float(elem) for elem in BFs ]
