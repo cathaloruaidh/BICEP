@@ -29,6 +29,7 @@ import statsmodels.api as sm
 from argparse import SUPPRESS
 from cyvcf2 import VCF, Writer
 from cyvcf2 import Writer
+from datetime import datetime
 from functools import partial
 from joblib import dump, load
 from multiprocessing import Pool, Manager
@@ -48,7 +49,10 @@ from statsmodels.stats.outliers_influence import variance_inflation_factor
 from threading import Lock
 
 
-import BF_CoSeg
+import Prior_Train
+#import BF_CoSeg
+
+
 
 
 
@@ -115,6 +119,10 @@ def main(argv):
 	Train the regresison models to generate a prior'''))
 	parser_PT.add_argument("--predictors", nargs='?', help="File containing regression predictors", metavar='C')
 	parser_PT.add_argument("--clinvar", nargs='?', help="ClinVar VCF file annotated with VEP", metavar='C')
+	parser_PT.add_argument("-e", "--exclude", nargs='?', help="File of ClinVar IDs to exclude from training", metavar='C')
+	parser_PT.add_argument("-i", "--include", nargs='?', help="File of ClinVar IDs to include for training", metavar='C')
+	parser_PT.add_argument("-b", "--benign", nargs='?', help="File of benign variant IDs for training", metavar='C')
+	parser_PT.add_argument("-p", "--pathogenic", nargs='?', help="File of pathogenic variant IDs for training", metavar='C')
 
 	
 	
@@ -165,10 +173,31 @@ def main(argv):
 
 
 	if args.command is not None:
+
+		# directory paths
+		args.outputDir = "BICEP_results/"
+		args.tempDir = "BICEP_temp/"
+		args.logDir = "BICEP_log/"
+
+
+		# create directories
+		if not os.path.exists(args.outputDir):
+			os.makedirs(args.outputDir)
+
+		if not os.path.exists(args.tempDir):
+			os.makedirs(args.tempDir)
+
+		if not os.path.exists(args.logDir):
+			os.makedirs(args.logDir)
+
+
+
 		# set logging details
+		now = datetime.now()
+
 		logLevel = args.log.upper()
 		FORMAT = '# %(asctime)s [%(levelname)s] - %(message)s'
-		logging.basicConfig(format=FORMAT, level=logLevel)
+		logging.basicConfig(level=logLevel, format=FORMAT)
 
 		# add colours to log name
 		logging.addLevelName(logging.NOTSET, "NOT  ")
@@ -176,10 +205,35 @@ def main(argv):
 		logging.addLevelName(logging.INFO, "INFO ")
 		logging.addLevelName(logging.WARNING, "\u001b[33mWARN \u001b[0m")
 		logging.addLevelName(logging.ERROR, "\u001b[31mERROR\u001b[0m")
-		logging.addLevelName(logging.CRITICAL, "\u001b[35mCRIT\u001b[0m")
+		logging.addLevelName(logging.CRITICAL, "\u001b[35mCRIT \u001b[0m")
+
+		rootLogger = logging.getLogger()
+		logFormatter = logging.Formatter(FORMAT)
+
+		fileHandler = logging.FileHandler("{0}/{1}.{2}.{3}.log".format(args.logDir, args.output, args.command, now.strftime("%Y_%m_%d-%H_%M_%S")))
+		fileHandler.setFormatter(logFormatter)
+		rootLogger.addHandler(fileHandler)
+
+		#consoleHandler = logging.StreamHandler()
+		#consoleHandler.setFormatter(logFormatter)
+		#rootLogger.addHandler(consoleHandler)
 
 
+		if args.command == "PriorTrain":
+			Prior_Train.PT_main(args)
 
+		# not working currently!
+		if args.command == "PriorEvaluate":
+			Prior_Evaluate.PE_main(args)
+
+		if args.command == "PriorApply":
+			Prior_Apply.PA_main(args)
+
+		if args.command == "BayesFactor":
+			BayesFactor.BF_main(args)
+
+		if args.command == "Posterior":
+			Posterior.PO_main(args)
 
 
 if __name__ == "__main__":

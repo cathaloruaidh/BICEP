@@ -1,8 +1,3 @@
-#!/usr/bin/python
-
-
-
-
 import cProfile, getopt, logging, math, os, pickle, pprint, re, sys
 import numpy as np
 import pandas as pd
@@ -26,7 +21,7 @@ import warnings
 
 
 # main function
-def main(argv):
+def PT_main(args):
 
 
 	# ignore warnings
@@ -47,73 +42,27 @@ def main(argv):
 	pathogenicFile = None
 	predictorsFile = None
 
-	try:
-		opts, args = getopt.getopt(argv, "c:e:i:l:n:o:p:v:", ["clinvar=", "exclude=", "include=", "log=", "benign=", "output=", "pathogenic=", "predictors=", "vcf="])
-	except getopt.GetoptError:
-		logging.error("getopt error")
-		sys.exit("Exiting ... ")
+	if args.clinvar is not None:
+		clinVarAnnoVcfFile = args.clinvar
+		clinVarFullVcfFile = args.clinvar
 
-	for opt, arg in opts:
-		if opt in ("-c", "--clinvar"):
-			clinVarFullVcfFile = arg
-	
-		if opt in ("-e", "--exclude"):
-			excludeFile = arg
-	
-		if opt in ("-i", "--include"):
-			includeFile = arg
-	
-		if opt in ("-l", "--log"):
-			logLevel = arg.upper()
-			numericLevel = getattr(logging, arg.upper(), None)
-			if not isinstance(numericLevel, int):
-				raise ValueError('Invalid log level: %s' % arg)
+	if args.exclude is not None:
+		excludeFile = args.exclude
 
-		if opt in ("-n", "--benign"):
-			benignFile = arg
-	
-		if opt in ("-o", "--output"):
-			outputPrefix = arg
-	
-		if opt in ("-p", "--pathogenic"):
-			pathogenicFile = arg
-	
-		if opt in ("--predictors"):
-			predictorsFile = arg
-	
-		if opt in ("-v", "--vcf"):
-			clinVarAnnoVcfFile = arg
-	
+	if args.include is not None:
+		includeFile = args.include
 
+	if args.benign is not None:
+		benignFile = args.benign
 
-	FORMAT = '# %(asctime)s [%(levelname)s] - %(message)s'
-	
-	if logLevel is None:
-		logging.basicConfig(format=FORMAT)
-	else:
-		numericLevel = getattr(logging, logLevel, None)
-		if not isinstance(numericLevel, int):
-			raise ValueError('Invalid log level: %s' % logLevel)
-		logging.basicConfig(format=FORMAT, level=logLevel)
-	
+	if args.output is not None:
+		outputPrefix = args.output
 
+	if args.pathogenic is not None:
+		pathogenicFile = args.pathogenic
 
-	if outputPrefix is None:
-		outputPrefix = "output"
-
-
-	with open(outputPrefix + ".log", 'w') as f:
-		True
-
-
-
-	# add colours to the log name
-	logging.addLevelName(logging.NOTSET, "NOT  ")
-	logging.addLevelName(logging.DEBUG, "\u001b[36mDEBUG\u001b[0m")
-	logging.addLevelName(logging.INFO, "INFO ")
-	logging.addLevelName(logging.WARNING, "\u001b[33mWARN \u001b[0m")
-	logging.addLevelName(logging.ERROR, "\u001b[31mERROR\u001b[0m")
-	logging.addLevelName(logging.CRITICAL, "\u001b[35mCRIT \u001b[0m")
+	if args.predictors is not None:
+		predictorsFile = args.predictors
 
 
 
@@ -226,7 +175,7 @@ def main(argv):
 
 
 
-	with open(outputPrefix+'.flatPriors.pkl', 'wb') as f:
+	with open(args.tempDir + outputPrefix+'.flatPriors.pkl', 'wb') as f:
 		pickle.dump(flatPriors, f)
 
 
@@ -299,8 +248,6 @@ def main(argv):
 		elif variant.INFO.get('CLNVC') == "Indel":
 			typeCV = "indel"
 		else:
-			#with open(outputPrefix + ".err", 'a') as f:
-			#	print(ID, "\t", setCV, "\tNA\tTYPE", file=f)
 			continue
 
 
@@ -308,8 +255,6 @@ def main(argv):
 		# get the clinvar gene list
 		tmp = variant.INFO.get('GENEINFO')
 		if (tmp is None) or ("|" in tmp):
-			#with open(outputPrefix + ".err", 'a') as f:
-			#	print(ID, "\t", setCV, "\tNA\tGENEINFO=", tmp, file=f)
 			continue
 		geneCV = re.sub(':.*?$', '', tmp)
 
@@ -318,8 +263,6 @@ def main(argv):
 		# get the variant clinvar consequence
 		tmp = variant.INFO.get('MC')	
 		if (tmp is None) or ("," in tmp):
-			#with open(outputPrefix + ".err", 'a') as f:
-			#	print(ID, "\t", setCV, "\tNA\tMC=", tmp, file=f)
 			continue
 		csqCV = re.sub('^.*?\|', '', tmp)
 
@@ -429,9 +372,9 @@ def main(argv):
 
 
 		# otherwise print to error file
-		else:
-			with open(outputPrefix + ".err", 'a') as f:
-				print(ID, "\t", setCV, "\t", csqCV, file=f)
+		#else:
+		#	with open(outputPrefix + ".err", 'a') as f:
+		#		print(ID, "\t", setCV, "\t", csqCV, file=f)
 
 	
 	for i in range(len(DATA)):
@@ -573,7 +516,7 @@ def main(argv):
 		imp_indel.feature_names = list(x_indel.columns.values)
 		x_indel_imp = imp_indel.transform(x_indel)
 
-		with open(outputPrefix+'.imp_indel.pkl', 'wb') as f:
+		with open(args.tempDir + outputPrefix+'.imp_indel.pkl', 'wb') as f:
 			pickle.dump(imp_indel, f)
 
 		
@@ -585,7 +528,7 @@ def main(argv):
 		scal_indel.feature_names = list(x_indel.columns.values)
 		x_indel_imp_scal = scal_indel.transform(x_indel_imp)
 
-		with open(outputPrefix+'.scal_indel.pkl', 'wb') as f:
+		with open(args.tempDir + outputPrefix+'.scal_indel.pkl', 'wb') as f:
 			pickle.dump(scal_indel, f)
 
 
@@ -597,21 +540,23 @@ def main(argv):
 
 		logReg_indel.feature_names = list(x_indel.columns.values)
 
-		with open(outputPrefix+'.logReg_indel.pkl', 'wb') as f:
+		with open(args.tempDir + outputPrefix+'.logReg_indel.pkl', 'wb') as f:
 			pickle.dump(logReg_indel, f)
 
-		with open(outputPrefix+'.predictors_indel.npy', 'wb') as f:
+		with open(args.tempDir + outputPrefix+'.predictors_indel.npy', 'wb') as f:
 			np.save(f, x_indel.columns)
 
 		results_indel = logReg_indel.predict_proba(x_indel_imp_scal)[:,1]
 		
-		pprint.pprint(list(zip(logReg_indel.feature_names, np.round(logReg_indel.coef_.flatten(), 6))))
-		print("Intercept: ", np.round(logReg_indel.intercept_, 6))
+		with open(args.tempDir + outputPrefix + ".indel_coef.txt", 'a') as f:
+			pprint.pprint(list(zip(logReg_indel.feature_names, np.round(logReg_indel.coef_.flatten(), 6))), f)
+			print("Intercept: ", np.round(logReg_indel.intercept_, 6), file=f)
 	else:
 		msg = "Not enough indels in training data, using flat prior: " + str(np.round(flatPriors['indel'], 6))
 		logging.info(msg)
 		results_indel = np.full(len(x_indel.index), flatPriors['indel'])
 
+	logging.info(" ")
 	logging.info(" ")
 
 
@@ -661,7 +606,7 @@ def main(argv):
 
 		x_missense_imp = imp_missense.transform(x_missense)
 
-		with open(outputPrefix+'.imp_missense.pkl', 'wb') as f:
+		with open(args.tempDir + outputPrefix+'.imp_missense.pkl', 'wb') as f:
 			pickle.dump(imp_missense, f)
 
 
@@ -674,7 +619,7 @@ def main(argv):
 
 		x_missense_imp_scal = scal_missense.transform(x_missense_imp)
 
-		with open(outputPrefix+'.scal_missense.pkl', 'wb') as f:
+		with open(args.tempDir + outputPrefix+'.scal_missense.pkl', 'wb') as f:
 			pickle.dump(scal_missense, f)
 
 
@@ -686,22 +631,24 @@ def main(argv):
 
 		logReg_missense.feature_names = list(x_missense.columns.values)
 
-		with open(outputPrefix+'.logReg_missense.pkl', 'wb') as f:
+		with open(args.tempDir + outputPrefix+'.logReg_missense.pkl', 'wb') as f:
 			pickle.dump(logReg_missense, f)
 
-		with open(outputPrefix+'.predictors_missense.npy', 'wb') as f:
+		with open(args.tempDir + outputPrefix+'.predictors_missense.npy', 'wb') as f:
 			np.save(f, x_missense.columns)
 
 		results_missense = logReg_missense.predict_proba(x_missense_imp_scal)[:,1]
 
-		pprint.pprint(list(zip(logReg_missense.feature_names, np.round(logReg_missense.coef_.flatten(), 6))))
-		print("Intercept: ", np.round(logReg_missense.intercept_, 6))
+		with open(args.tempDir + outputPrefix + ".missense_coef.txt", 'a') as f:
+		 pprint.pprint(list(zip(logReg_missense.feature_names, np.round(logReg_missense.coef_.flatten(), 6))), f)
+		 print("Intercept: ", np.round(logReg_missense.intercept_, 6), file=f)
 	else:
 		msg = "Not enough missense variants in training data, using flat prior: " + str(np.round(flatPriors['missense'], 6))
 		logging.info(msg)
 		results_missense = np.full(len(x_missense.index), flatPriors['missense'])
 
 
+	logging.info(" ")
 	logging.info(" ")
 
 
@@ -760,7 +707,7 @@ def main(argv):
 
 		x_nonMissenseSNV_imp = imp_nonMissenseSNV.transform(x_nonMissenseSNV)
 
-		with open(outputPrefix+'.imp_nonMissenseSNV.pkl', 'wb') as f:
+		with open(args.tempDir + outputPrefix+'.imp_nonMissenseSNV.pkl', 'wb') as f:
 			pickle.dump(imp_nonMissenseSNV, f)
 
 
@@ -773,7 +720,7 @@ def main(argv):
 
 		x_nonMissenseSNV_imp_scal = scal_nonMissenseSNV.transform(x_nonMissenseSNV_imp)
 
-		with open(outputPrefix+'.scal_nonMissenseSNV.pkl', 'wb') as f:
+		with open(args.tempDir + outputPrefix+'.scal_nonMissenseSNV.pkl', 'wb') as f:
 			pickle.dump(scal_nonMissenseSNV, f)
 
 
@@ -785,16 +732,17 @@ def main(argv):
 
 		logReg_nonMissenseSNV.feature_names = list(x_nonMissenseSNV.columns.values)
 
-		with open(outputPrefix+'.logReg_nonMissenseSNV.pkl', 'wb') as f:
+		with open(args.tempDir + outputPrefix+'.logReg_nonMissenseSNV.pkl', 'wb') as f:
 			pickle.dump(logReg_nonMissenseSNV, f)
 
-		with open(outputPrefix+'.predictors_nonMissenseSNV.npy', 'wb') as f:
+		with open(args.tempDir + outputPrefix+'.predictors_nonMissenseSNV.npy', 'wb') as f:
 			np.save(f, x_nonMissenseSNV.columns)
 
 		results_nonMissenseSNV = logReg_nonMissenseSNV.predict_proba(x_nonMissenseSNV_imp_scal)[:,1]
 
-		pprint.pprint(list(zip(logReg_nonMissenseSNV.feature_names, np.round(logReg_nonMissenseSNV.coef_.flatten(), 6))))
-		print("Intercept: ", np.round(logReg_nonMissenseSNV.intercept_, 6))
+		with open(args.tempDir + outputPrefix + ".nonMissenseSNV_coef.txt", 'a') as f:
+		 pprint.pprint(list(zip(logReg_nonMissenseSNV.feature_names, np.round(logReg_nonMissenseSNV.coef_.flatten(), 6))), f)
+		 print("Intercept: ", np.round(logReg_nonMissenseSNV.intercept_, 6), file=f)
 	else:
 		msg = "Not enough non-missense SNVs in training data, using flat prior: " + str(np.round(flatPriors['nonMissenseSNV'], 6))
 		logging.info(msg)
@@ -836,8 +784,5 @@ def main(argv):
 
 
 
-
-if __name__ == "__main__":
-	main(sys.argv[1:])
 
 
