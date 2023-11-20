@@ -1,1 +1,174 @@
-#!/usr/bin/python
+#!/usr/bin/python3
+
+
+import argparse
+import cProfile
+import csv
+import getopt
+import glob
+import logging
+import math
+import multiprocessing
+import os
+import os.path
+import pickle
+import pprint
+import re
+import sys
+import textwrap
+import threading
+import warnings
+
+
+import numpy as np
+import pandas as pd
+import scipy.special as sp
+import statsmodels.api as sm
+
+
+from argparse import SUPPRESS
+from cyvcf2 import VCF, Writer
+from cyvcf2 import Writer
+from functools import partial
+from joblib import dump, load
+from multiprocessing import Pool, Manager
+from scipy.integrate import quad,dblquad
+from sklearn import metrics
+from sklearn.experimental import enable_iterative_imputer
+from sklearn.impute import IterativeImputer
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import matthews_corrcoef
+from sklearn.metrics import classification_report
+from sklearn.metrics import r2_score
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+from threading import Lock
+
+
+#import BF_CoSeg
+
+
+
+
+
+# create formatting class for argparse
+class UltimateHelpFormatter(argparse.RawTextHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
+	pass
+
+
+
+
+
+
+
+
+
+
+
+
+
+# main function
+def main(argv):
+	
+
+	warnings.filterwarnings("ignore")
+	pd.set_option('display.max_columns', None)
+
+
+	# argparse lobal arguments
+	BICEP_textwrap = textwrap.dedent('''\
+	----------------------------------------
+	         _   ___   __   __   _ 
+	        |_)   |   /    |_   |_)
+	        |_)  _|_  \__  |__  |  
+
+	        Bayesian Inference for 
+	   Causality Evaluation in Pedigrees
+	----------------------------------------
+	 ''')
+
+	parser = argparse.ArgumentParser(prog="BICEP",
+	usage=SUPPRESS,
+	formatter_class=UltimateHelpFormatter,
+	description=BICEP_textwrap)
+	parser._optionals.title = "Global arguments"
+
+	sub_parsers = parser.add_subparsers(title="Sub-commands", dest='command')
+
+	parser_parent = argparse.ArgumentParser(formatter_class=UltimateHelpFormatter, usage=SUPPRESS)
+	parser_parent.add_argument("-f", "--fam", nargs='?', help="FAM file describing the pedigree structure and phenotypes", metavar='F')
+	parser_parent.add_argument("-l", "--log", nargs='?', default="INFO", help="Logging level: ERROR, WARN, INFO, DEBUG", choices=['ERROR', 'WARN', 'INFO', 'DEBUG'], metavar='C')
+	parser_parent.add_argument("-n", "--cores", nargs='?', default=1, type=int, help="Number of CPU cores available", metavar='N')
+	parser_parent.add_argument("-o", "--output", nargs='?', help="Output prefix", metavar='C')
+	parser_parent.add_argument("-v", "--vcf", nargs='?', help="VCF file for variants", metavar='F')
+
+
+
+	# BF sub-command
+	parser_BF = sub_parsers.add_parser("BF", help = "Calculate Bayes factors for co-segregation", 
+	parents = [parser_parent], add_help=False, formatter_class=UltimateHelpFormatter, usage=SUPPRESS, 
+	description= BICEP_textwrap + textwrap.dedent('''\
+
+	Calculate Bayes factors for co-segregation'''))
+	parser_BF.add_argument("--minAff", nargs='?', default=0, type=int, help="Minimum affected individuals per pedigree", metavar='N')
+	parser_BF.add_argument("--priorCaus", nargs='?', default="linear", choices=["uniform", "linear"], help="Prior parameter distribution for causal model", metavar='C')
+	parser_BF.add_argument("--priorNeut", nargs='?', default="uniform", choices=["uniform", "linear"], help="Prior parameter distribution for neutral model", metavar='C')
+
+
+
+	# PriorTrain sub-command
+	parser_PT = sub_parsers.add_parser("PriorTrain", help = "Train the regresison models to generate a prior", 
+	parents = [parser_parent], add_help=False, formatter_class=UltimateHelpFormatter, usage=SUPPRESS, 
+	description = BICEP_textwrap + textwrap.dedent('''\
+
+	Train the regresison models to generate a prior'''))
+	parser_PT.add_argument("--predictors", nargs='?', help="File containing regression predictors", metavar='C')
+	parser_PT.add_argument("--clinvar", nargs='?', help="ClinVar VCF file annotated with VEP", metavar='C')
+
+	
+	
+	parser_PA = sub_parsers.add_parser("PriorApply", help = "Apply the regression models to the pedigree data", 
+	parents = [parser_parent], add_help=False, formatter_class=UltimateHelpFormatter, usage=SUPPRESS, 
+	description = BICEP_textwrap + textwrap.dedent('''\
+	
+	Apply the regression models to the pedigree data'''))
+	parser_PA.add_argument("--predictors", nargs='?', help="File containing regression predictors", metavar='C')
+	
+	
+	
+	parser_PE = sub_parsers.add_parser("PriorEvaluate", help = "Evaluate the performance of the regression models", 
+	parents = [parser_parent], add_help=False, formatter_class=UltimateHelpFormatter, usage=SUPPRESS, 
+	description = BICEP_textwrap + textwrap.dedent('''\
+	
+	Evaluate the performance of the regression models'''))
+	parser_PE.add_argument("--predictors", nargs='?', help="File containing regression predictors", metavar='C')
+	parser_PE.add_argument("--boot", nargs='?', default=1, type=int, help="Number of bootstraps", metavar='N')
+	parser_PE.add_argument("--clinvar", nargs='?', help="ClinVar VCF file annotated with VEP", metavar='C')
+	
+
+	args = parser.parse_args()
+
+
+	if args.command is not None:
+		# set logging details
+		logLevel = args.log.upper()
+		FORMAT = '# %(asctime)s [%(levelname)s] - %(message)s'
+		logging.basicConfig(format=FORMAT, level=logLevel)
+
+		# add colours to log name
+		logging.addLevelName(logging.NOTSET, "NOT  ")
+		logging.addLevelName(logging.DEBUG, "\u001b[36mDEBUG\u001b[0m")
+		logging.addLevelName(logging.INFO, "INFO ")
+		logging.addLevelName(logging.WARNING, "\u001b[33mWARN \u001b[0m")
+		logging.addLevelName(logging.ERROR, "\u001b[31mERROR\u001b[0m")
+		logging.addLevelName(logging.CRITICAL, "\u001b[35mCRIT\u001b[0m")
+
+
+
+
+
+if __name__ == "__main__":
+	main(sys.argv[1:])
