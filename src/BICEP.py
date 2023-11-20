@@ -2,55 +2,22 @@
 
 
 import argparse
-import cProfile
-import csv
-import getopt
-import glob
 import logging
-import math
-import multiprocessing
 import os
 import os.path
-import pickle
-import pprint
-import re
 import sys
 import textwrap
-import threading
 import warnings
 
 
-import numpy as np
-import pandas as pd
-import scipy.special as sp
-import statsmodels.api as sm
-
-
 from argparse import SUPPRESS
-from cyvcf2 import VCF, Writer
-from cyvcf2 import Writer
 from datetime import datetime
-from functools import partial
-from joblib import dump, load
-from multiprocessing import Pool, Manager
-from scipy.integrate import quad,dblquad
-from sklearn import metrics
-from sklearn.experimental import enable_iterative_imputer
-from sklearn.impute import IterativeImputer
-from sklearn.impute import SimpleImputer
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import confusion_matrix
-from sklearn.metrics import matthews_corrcoef
-from sklearn.metrics import classification_report
-from sklearn.metrics import r2_score
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import MinMaxScaler
-from statsmodels.stats.outliers_influence import variance_inflation_factor
 from threading import Lock
 
 
 import Prior_Train
-#import BF_CoSeg
+import Prior_Apply
+import BF_CoSeg
 
 
 
@@ -79,7 +46,6 @@ def main(argv):
 	
 
 	warnings.filterwarnings("ignore")
-	pd.set_option('display.max_columns', None)
 
 
 	# argparse lobal arguments
