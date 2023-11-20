@@ -5,3 +5,4 @@ test.py
 results*
 train/*
 *pkl
+__pycache__
