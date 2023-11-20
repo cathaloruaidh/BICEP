@@ -17,7 +17,7 @@ from threading import Lock
 
 import Prior_Train
 import Prior_Apply
-import BF_CoSeg
+import BayesFactor
 
 
 

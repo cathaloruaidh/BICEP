@@ -1,17 +1,23 @@
-#!/usr/bin/python
+import cProfile
+import csv
+import getopt
+import logging
+import math
+import multiprocessing
+import os
+import pprint
+import re
+import sys
+import threading
 
-
-
-
-import cProfile, csv, getopt, logging, math, multiprocessing, os, pprint, re, sys, threading
 import numpy as np
 import scipy.special as sp
 
 
 from cyvcf2 import VCF
-from scipy.integrate import quad,dblquad
 from functools import partial
-from multiprocessing import Pool, Manager
+from multiprocessing import cpu_count, Pool, Manager
+from scipy.integrate import quad, dblquad
 from threading import Lock
 
 
@@ -681,55 +687,33 @@ def BF_main(args):
 	priorCaus = "uniform"
 	priorNeut = "uniform"
 
-	for opt, arg in opts:
-		if opt in ("-c", "--cores"):
-			if int(arg) <= multiprocessing.cpu_count():
-				nCores = int(arg)
 
-		if opt in ("-f", "--fam"):
-			inputFamFile = arg
-	
-		if opt in ("-l", "--log"):
-			logLevel = arg.upper()
-			numericLevel = getattr(logging, arg.upper(), None)
-			if not isinstance(numericLevel, int):
-				raise ValueError('Invalid log level: %s' % arg)
 
-		if opt in ("--minAff"):
-			minAffecteds = int(arg)
-	
-		if opt in ("-o", "--output"):
-			outputFile = arg
-	
-		if opt in ("-v", "--vcf"):
-			inputVcfFile = arg
-	
-		if opt in ("--priorCaus"):
-			priorCaus = arg
-	
-		if opt in ("--priorNeut"):
-			priorNeut = arg
-	
-	FORMAT = '# %(asctime)s [%(levelname)s] - %(message)s'
-	
-	try:
-		logLevel
-	except:
-		logging.basicConfig(format=FORMAT)
-	else:
-		numericLevel = getattr(logging, logLevel, None)
-		if not isinstance(numericLevel, int):
-			raise ValueError('Invalid log level: %s' % logLevel)
-		logging.basicConfig(format=FORMAT, level=logLevel)
-	
 
-	# add colours to the log name
-	logging.addLevelName(logging.NOTSET, "NOT  ")
-	logging.addLevelName(logging.DEBUG, "\u001b[36mDEBUG\u001b[0m")
-	logging.addLevelName(logging.INFO, "INFO ")
-	logging.addLevelName(logging.WARNING, "\u001b[33mWARN \u001b[0m")
-	logging.addLevelName(logging.ERROR, "\u001b[31mERROR\u001b[0m")
-	logging.addLevelName(logging.CRITICAL, "\u001b[35mCRIT\u001b[0m")
+
+	if args.cores is not None:
+		if int(args.cores) <= cpu_count():
+			nCores = int(args.cores)
+
+	if args.fam is not None:
+		inputFamFile = args.fam
+
+	if args.minAff is not None:
+		minAffecteds = int(args.minAff)
+
+	if args.output is not None:
+		outputFile = args.output
+
+	if args.vcf is not None:
+		inputVcfFile = args.vcf
+
+	if args.priorCaus is not None:
+		priorCaus = args.priorCaus
+
+	if args.priorNeut is not None:
+		priorNeut = args.priorNeut
+
+
 
 
 	# up recursion limit
@@ -930,9 +914,6 @@ def BF_main(args):
 			for i in range(len(varID)):
 				print(varID[i], "\t", results[i], "\t", varString[i], "\t", varString[i].count("."), "\t", allBF[varString[i]][3], file=f)
 		
-
-
-
 
 
 
