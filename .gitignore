@@ -1,8 +1,2 @@
-test/*
-test.py
-*.swp
-*.bak
-results*
-train/*
 *pkl
 __pycache__/

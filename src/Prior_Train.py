@@ -1,20 +1,29 @@
-import cProfile, getopt, logging, math, os, pickle, pprint, re, sys
+import cProfile
+import logging
+import math
+import os
+import pickle
+import pprint
+import re
+import sys
+import warnings
+
 import numpy as np
 import pandas as pd
+import statsmodels.api as sm
 
+
+from cyvcf2 import VCF, Writer
+from joblib import dump, load
 from sklearn import metrics
 from sklearn.linear_model import LogisticRegression
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer, SimpleImputer
 from sklearn.metrics import confusion_matrix, matthews_corrcoef, classification_report, r2_score
 from sklearn.preprocessing import MinMaxScaler
-import statsmodels.api as sm
 
-from joblib import dump, load
 
-from cyvcf2 import VCF, Writer
 
-import warnings
 
 
 
