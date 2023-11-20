@@ -668,7 +668,7 @@ def calculateBF(pedInfo, allBF, priorParams, inputData):
 
 
 # main function
-def main(argv):
+def BF_main(args):
 
 
 	# command line arguments
@@ -680,13 +680,6 @@ def main(argv):
 	minAffecteds = 0
 	priorCaus = "uniform"
 	priorNeut = "uniform"
-
-	try:
-		opts, args = getopt.getopt(argv, "c:f:l:o:v:", ["cores=", "fam=", "log=", "minAff=","output=", "vcf=", "priorCaus=", "priorNeut="])
-	except getopt.GetoptError:
-		print("Getopt Error")
-		logging.error("getopt error")
-		sys.exit("Exiting ... ")
 
 	for opt, arg in opts:
 		if opt in ("-c", "--cores"):
@@ -943,7 +936,5 @@ def main(argv):
 
 
 
-if __name__ == "__main__":
-	main(sys.argv[1:])
 
 

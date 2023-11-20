@@ -48,7 +48,7 @@ from statsmodels.stats.outliers_influence import variance_inflation_factor
 from threading import Lock
 
 
-#import BF_CoSeg
+import BF_CoSeg
 
 
 
@@ -99,23 +99,11 @@ def main(argv):
 	sub_parsers = parser.add_subparsers(title="Sub-commands", dest='command')
 
 	parser_parent = argparse.ArgumentParser(formatter_class=UltimateHelpFormatter, usage=SUPPRESS)
-	parser_parent.add_argument("-f", "--fam", nargs='?', help="FAM file describing the pedigree structure and phenotypes", metavar='F')
+	parser_parent.add_argument("-f", "--fam", nargs='?', help="FAM file describing the pedigree structure and phenotypes", metavar='F', required = True)
 	parser_parent.add_argument("-l", "--log", nargs='?', default="INFO", help="Logging level: ERROR, WARN, INFO, DEBUG", choices=['ERROR', 'WARN', 'INFO', 'DEBUG'], metavar='C')
 	parser_parent.add_argument("-n", "--cores", nargs='?', default=1, type=int, help="Number of CPU cores available", metavar='N')
-	parser_parent.add_argument("-o", "--output", nargs='?', help="Output prefix", metavar='C')
-	parser_parent.add_argument("-v", "--vcf", nargs='?', help="VCF file for variants", metavar='F')
-
-
-
-	# BF sub-command
-	parser_BF = sub_parsers.add_parser("BF", help = "Calculate Bayes factors for co-segregation", 
-	parents = [parser_parent], add_help=False, formatter_class=UltimateHelpFormatter, usage=SUPPRESS, 
-	description= BICEP_textwrap + textwrap.dedent('''\
-
-	Calculate Bayes factors for co-segregation'''))
-	parser_BF.add_argument("--minAff", nargs='?', default=0, type=int, help="Minimum affected individuals per pedigree", metavar='N')
-	parser_BF.add_argument("--priorCaus", nargs='?', default="linear", choices=["uniform", "linear"], help="Prior parameter distribution for causal model", metavar='C')
-	parser_BF.add_argument("--priorNeut", nargs='?', default="uniform", choices=["uniform", "linear"], help="Prior parameter distribution for neutral model", metavar='C')
+	parser_parent.add_argument("-o", "--output", nargs='?', default="BICEP_output", help="Output prefix", metavar='C')
+	parser_parent.add_argument("-v", "--vcf", nargs='?', help="VCF file for variants", metavar='F', required = True)
 
 
 
@@ -130,15 +118,7 @@ def main(argv):
 
 	
 	
-	parser_PA = sub_parsers.add_parser("PriorApply", help = "Apply the regression models to the pedigree data", 
-	parents = [parser_parent], add_help=False, formatter_class=UltimateHelpFormatter, usage=SUPPRESS, 
-	description = BICEP_textwrap + textwrap.dedent('''\
-	
-	Apply the regression models to the pedigree data'''))
-	parser_PA.add_argument("--predictors", nargs='?', help="File containing regression predictors", metavar='C')
-	
-	
-	
+	# PriorEvaluate sub-command
 	parser_PE = sub_parsers.add_parser("PriorEvaluate", help = "Evaluate the performance of the regression models", 
 	parents = [parser_parent], add_help=False, formatter_class=UltimateHelpFormatter, usage=SUPPRESS, 
 	description = BICEP_textwrap + textwrap.dedent('''\
@@ -147,6 +127,38 @@ def main(argv):
 	parser_PE.add_argument("--predictors", nargs='?', help="File containing regression predictors", metavar='C')
 	parser_PE.add_argument("--boot", nargs='?', default=1, type=int, help="Number of bootstraps", metavar='N')
 	parser_PE.add_argument("--clinvar", nargs='?', help="ClinVar VCF file annotated with VEP", metavar='C')
+	
+
+
+	# PriorApply sub-command
+	parser_PA = sub_parsers.add_parser("PriorApply", help = "Apply the regression models to the pedigree data", 
+	parents = [parser_parent], add_help=False, formatter_class=UltimateHelpFormatter, usage=SUPPRESS, 
+	description = BICEP_textwrap + textwrap.dedent('''\
+	
+	Apply the regression models to the pedigree data'''))
+	parser_PA.add_argument("--predictors", nargs='?', help="File containing regression predictors", metavar='C')
+	parser_PA.add_argument("-m", "--model", nargs='?', help="Prefix for the regression model files", metavar='C')
+	
+	
+	
+	# BF sub-command
+	parser_BF = sub_parsers.add_parser("BayesFactor", help = "Calculate Bayes factors for co-segregation", 
+	parents = [parser_parent], add_help=False, formatter_class=UltimateHelpFormatter, usage=SUPPRESS, 
+	description= BICEP_textwrap + textwrap.dedent('''\
+
+	Calculate Bayes factors for co-segregation'''))
+	parser_BF.add_argument("--minAff", nargs='?', default=0, type=int, help="Minimum affected individuals per pedigree", metavar='N')
+	parser_BF.add_argument("--priorCaus", nargs='?', default="linear", choices=["uniform", "linear"], help="Prior parameter distribution for causal model", metavar='C')
+	parser_BF.add_argument("--priorNeut", nargs='?', default="uniform", choices=["uniform", "linear"], help="Prior parameter distribution for neutral model", metavar='C')
+
+
+
+	# Posterior sub-command
+	parser_Post = sub_parsers.add_parser("Posterior", help = "Generate posteriors and plots", 
+	parents = [parser_parent], add_help=False, formatter_class=UltimateHelpFormatter, usage=SUPPRESS, 
+	description = BICEP_textwrap + textwrap.dedent('''\
+	
+	Generate posteriors and plots'''))
 	
 
 	args = parser.parse_args()
