@@ -765,6 +765,7 @@ def BF_main(args):
 	logging.info("Reading VCF file")
 
 
+
 	# get VCF file and variant/sample information
 	vcf = VCF(inputVcfFile, gts012=True)
 	nVariants = sum(1 for line in open(inputVcfFile) if not bool(re.match("^#", line)))
@@ -910,15 +911,30 @@ def BF_main(args):
 	
 	if outputPrefix is None:
 		for i in range(len(varID)):
-			print(varID[i], "\t", BFs[i], "\t", varString[i], "\t")
+			print(varID[i], "\t", BFs[i], "\t", varString[i], "\t", sep="")
 	else:
 		with open(args.outputDir + outputPrefix + ".BF.txt", 'w') as f:
 			print("ID\tBF\tlogBF\tSTRING", file=f)
 			for i in range(len(varID)):
-				print(varID[i], "\t", BFs[i], "\t", np.log10(float(BFs[i])), "\t", varString[i], file=f)
+				print(varID[i], "\t", BFs[i], "\t", np.log10(float(BFs[i])), "\t", varString[i], file=f, sep="")
 		
 
 
+	perfectCoseg = genotypeString(pedInfo.phenotypeActual)
+
+	if perfectCoseg in allBF.keys():
+		with open(args.tempDir + outputPrefix + ".max_logBF.txt", 'w') as f:
+			print(np.log10(allBF[perfectCoseg]), file=f)
+
+	else:
+		l = multiprocessing.Lock()
+		lock_init(l)
+		BF = calculateBF(pedInfo, allBF, [priorCaus, priorNeut], (pedInfo.phenotypeActual, perfectCoseg))
+		with open(args.tempDir + outputPrefix + ".max_logBF.txt", 'w') as f:
+			print(np.log10(BF), file=f)
+
+	
+	
 
 
 
