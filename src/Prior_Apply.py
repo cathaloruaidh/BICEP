@@ -55,8 +55,8 @@ def PA_main(args):
 	if args.model is not None:
 		modelPrefix = args.model
 
-	if args.output is not None:
-		outputPrefix = args.output
+	if args.prefix is not None:
+		outputPrefix = args.prefix
 
 	if args.vcf is not None:
 		inputVcfFile = args.vcf
