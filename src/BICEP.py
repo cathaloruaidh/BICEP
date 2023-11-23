@@ -130,12 +130,12 @@ def main(argv):
 
 
 	# Posterior sub-command
-	parser_Post = sub_parsers.add_parser("Posterior", help = "Generate posteriors and plots", 
+	parser_PO = sub_parsers.add_parser("Posterior", help = "Generate posteriors and plots", 
 	parents = [parser_parent], add_help=False, formatter_class=UltimateHelpFormatter, usage=SUPPRESS, 
 	description = BICEP_textwrap + textwrap.dedent('''\
 	
 	Generate posteriors and plots'''))
-	parser_PO.add_argument("--input", nargs='?', help="Common prefix for the Bayes factor and prior input", metavar='C')
+	parser_PO.add_argument("--input", nargs='?', default='BICEP_output', help="Common prefix for the Bayes factor and prior input", metavar='C')
 	parser_PO.add_argument("--prior", nargs='?', help="Prefix for the prior input", metavar='C')
 	parser_PO.add_argument("--bf", nargs='?', help="Prefix for the Bayes factor input", metavar='C')
 	
@@ -181,7 +181,7 @@ def main(argv):
 		rootLogger = logging.getLogger()
 		logFormatter = logging.Formatter(FORMAT)
 
-		fileHandler = logging.FileHandler("{0}/{1}.{2}.{3}.log".format(args.logDir, args.output, args.command, now.strftime("%Y_%m_%d-%H_%M_%S")))
+		fileHandler = logging.FileHandler("{0}/{1}.{2}.{3}.log".format(args.logDir, args.prefix, args.command, now.strftime("%Y_%m_%d-%H_%M_%S")))
 		fileHandler.setFormatter(logFormatter)
 		rootLogger.addHandler(fileHandler)
 
