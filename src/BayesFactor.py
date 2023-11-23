@@ -701,8 +701,8 @@ def BF_main(args):
 	if args.minAff is not None:
 		minAffecteds = int(args.minAff)
 
-	if args.output is not None:
-		outputPrefix = args.output
+	if args.prefix is not None:
+		outputPrefix = args.prefix
 
 	if args.vcf is not None:
 		inputVcfFile = args.vcf

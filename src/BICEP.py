@@ -70,11 +70,9 @@ def main(argv):
 	sub_parsers = parser.add_subparsers(title="Sub-commands", dest='command')
 
 	parser_parent = argparse.ArgumentParser(formatter_class=UltimateHelpFormatter, usage=SUPPRESS)
-	parser_parent.add_argument("-f", "--fam", nargs='?', help="FAM file describing the pedigree structure and phenotypes", metavar='F', required = True)
 	parser_parent.add_argument("-l", "--log", nargs='?', default="INFO", help="Logging level: ERROR, WARN, INFO, DEBUG", choices=['ERROR', 'WARN', 'INFO', 'DEBUG'], metavar='C')
 	parser_parent.add_argument("-n", "--cores", nargs='?', default=1, type=int, help="Number of CPU cores available", metavar='N')
-	parser_parent.add_argument("-o", "--output", nargs='?', default="BICEP_output", help="Output prefix", metavar='C')
-	parser_parent.add_argument("-v", "--vcf", nargs='?', help="VCF file for variants", metavar='F', required = True)
+	parser_parent.add_argument("--prefix", nargs='?', default="BICEP_output", help="Output prefix", metavar='C')
 
 
 
@@ -111,8 +109,9 @@ def main(argv):
 	description = BICEP_textwrap + textwrap.dedent('''\
 	
 	Apply the regression models to the pedigree data'''))
-	parser_PA.add_argument("--predictors", nargs='?', help="File containing regression predictors", metavar='C')
+	parser_PA.add_argument("-v", "--vcf", nargs='?', help="VCF file for variants", metavar='F', required = True)
 	parser_PA.add_argument("-m", "--model", nargs='?', help="Prefix for the regression model files", metavar='C')
+	parser_PA.add_argument("--predictors", nargs='?', help="File containing regression predictors", metavar='C')
 	
 	
 	
@@ -122,6 +121,8 @@ def main(argv):
 	description= BICEP_textwrap + textwrap.dedent('''\
 
 	Calculate Bayes factors for co-segregation'''))
+	parser_BF.add_argument("-f", "--fam", nargs='?', help="FAM file describing the pedigree structure and phenotypes", metavar='F', required = True)
+	parser_BF.add_argument("-v", "--vcf", nargs='?', help="VCF file for variants", metavar='F', required = True)
 	parser_BF.add_argument("--minAff", nargs='?', default=0, type=int, help="Minimum affected individuals per pedigree", metavar='N')
 	parser_BF.add_argument("--priorCaus", nargs='?', default="linear", choices=["uniform", "linear"], help="Prior parameter distribution for causal model", metavar='C')
 	parser_BF.add_argument("--priorNeut", nargs='?', default="uniform", choices=["uniform", "linear"], help="Prior parameter distribution for neutral model", metavar='C')
@@ -134,6 +135,9 @@ def main(argv):
 	description = BICEP_textwrap + textwrap.dedent('''\
 	
 	Generate posteriors and plots'''))
+	parser_PO.add_argument("--input", nargs='?', help="Common prefix for the Bayes factor and prior input", metavar='C')
+	parser_PO.add_argument("--prior", nargs='?', help="Prefix for the prior input", metavar='C')
+	parser_PO.add_argument("--bf", nargs='?', help="Prefix for the Bayes factor input", metavar='C')
 	
 
 	args = parser.parse_args()
