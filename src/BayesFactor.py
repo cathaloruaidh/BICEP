@@ -681,7 +681,7 @@ def BF_main(args):
 	nCores = 1
 	inputFamFile = None
 	inputVcfFile = None
-	outputFile = None
+	outputPrefix = None
 	outputLog = None
 	minAffecteds = 0
 	priorCaus = "uniform"
@@ -702,7 +702,7 @@ def BF_main(args):
 		minAffecteds = int(args.minAff)
 
 	if args.output is not None:
-		outputFile = args.output
+		outputPrefix = args.output
 
 	if args.vcf is not None:
 		inputVcfFile = args.vcf
@@ -896,7 +896,9 @@ def BF_main(args):
 			BFs.append(calculateBF(pedInfo, allBF, [priorCaus, priorNeut], data[i]))
 	
 
-	results = [ '%.6f' % float(elem) for elem in BFs ]
+	#results = [ '%.6f' % float(elem) for elem in BFs ]
+
+	#print(float(results[1:10]))
 
 
 	################################################################################
@@ -906,13 +908,14 @@ def BF_main(args):
 	logging.info("Output")
 
 	
-	if outputFile is None:
+	if outputPrefix is None:
 		for i in range(len(varID)):
-			print(varID[i], "\t", results[i], "\t", varString[i], "\t", varString[i].count("."), "\t", allBF[varString[i]][3])
+			print(varID[i], "\t", BFs[i], "\t", varString[i], "\t")
 	else:
-		with open(outputFile, 'w') as f:
+		with open(args.outputDir + outputPrefix + ".BF.txt", 'w') as f:
+			print("ID\tBF\tlogBF\tSTRING", file=f)
 			for i in range(len(varID)):
-				print(varID[i], "\t", results[i], "\t", varString[i], "\t", varString[i].count("."), "\t", allBF[varString[i]][3], file=f)
+				print(varID[i], "\t", BFs[i], "\t", np.log10(float(BFs[i])), "\t", varString[i], file=f)
 		
 
 
