@@ -492,7 +492,8 @@ def PA_main(args):
 
 	# get the regression input data if available
 	if os.path.isfile(modelPrefix + '.predictors_indel.npy'):
-		x_indel_data = pd.DataFrame(x_indel_imp_scal, index = x_indel_index, columns = x_indel.columns)
+		#x_indel_data = pd.DataFrame(x_indel_imp_scal, index = x_indel_index, columns = x_indel.columns)
+		x_indel_data = pd.DataFrame(x_indel, index = x_indel_index, columns = x_indel.columns)
 	
 	else:
 		if len(x_indel_index) > 0: 
@@ -501,7 +502,8 @@ def PA_main(args):
 
 
 	if os.path.isfile(modelPrefix + '.predictors_missense.npy'):
-		x_missense_data = pd.DataFrame(x_missense_imp_scal, index = x_missense_index, columns = x_missense.columns)
+		#x_missense_data = pd.DataFrame(x_missense_imp_scal, index = x_missense_index, columns = x_missense.columns)
+		x_missense_data = pd.DataFrame(x_missense, index = x_missense_index, columns = x_missense.columns)
 
 	else:
 		if len(x_missense_index) > 0:
@@ -510,7 +512,8 @@ def PA_main(args):
 
 
 	if os.path.isfile(modelPrefix + '.predictors_nonMissenseSNV.npy'):
-		x_nonMissenseSNV_data = pd.DataFrame(x_nonMissenseSNV_imp_scal, index = x_nonMissenseSNV_index, columns = x_nonMissenseSNV.columns)
+		#x_nonMissenseSNV_data = pd.DataFrame(x_nonMissenseSNV_imp_scal, index = x_nonMissenseSNV_index, columns = x_nonMissenseSNV.columns)
+		x_nonMissenseSNV_data = pd.DataFrame(x_nonMissenseSNV, index = x_nonMissenseSNV_index, columns = x_nonMissenseSNV.columns)
 	
 	else:
 		if len(x_nonMissenseSNV_index) > 0:
@@ -524,6 +527,8 @@ def PA_main(args):
 	merged = pd.concat([combined, df_flat], sort = False)
 	merged["PriorOC"] = merged["prior"] / (1 - merged["prior"])
 	merged["logPriorOC"] = np.log10(merged["PriorOC"])
+	
+	merged = merged[merged.columns.drop(list(merged.filter(regex='csqVEP_')))]
 
 
 	merged.to_csv(args.outputDir + outputPrefix+".priors.txt", index=False, sep='\t', na_rep='.')
