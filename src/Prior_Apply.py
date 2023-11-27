@@ -32,6 +32,10 @@ from sklearn.preprocessing import MinMaxScaler
 def PA_main(args):
 
 
+	logging.info("PRIOR - APPLY")
+	logging.info(" ")
+
+
 	# ignore warnings
 	warnings.filterwarnings("ignore")
 	pd.set_option('display.max_columns', None)
@@ -536,8 +540,10 @@ def PA_main(args):
 
 
 	logging.info(" ")
-	logging.info(" ")
 	logging.info("Done")
+	logging.info(" ")
+	logging.info("--------------------------------------------------")
+	logging.info(" ")
 
 	
 
