@@ -677,6 +677,10 @@ def calculateBF(pedInfo, allBF, priorParams, inputData):
 def BF_main(args):
 
 
+	logging.info("BAYES FACTOR")
+	logging.info(" ")
+
+
 	# command line arguments
 	nCores = 1
 	inputFamFile = None
@@ -936,7 +940,12 @@ def BF_main(args):
 			print(np.log10(BF), file=f)
 
 	
-	
+	logging.info(" ")
+	logging.info("Done")
+	logging.info(" ")
+	logging.info("--------------------------------------------------")
+	logging.info(" ")
+
 
 
 

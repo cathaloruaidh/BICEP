@@ -14,6 +14,10 @@ import BayesFactor
 # main function
 def PO_main(args):
 
+	logging.info("POSTERIOR")
+	logging.info(" ")
+
+
 	priorFile = None
 	bfFile = None
 	
@@ -123,6 +127,12 @@ def PO_main(args):
 
 
 
+	
+	logging.info(" ")
+	logging.info("Done")
+	logging.info(" ")
+	logging.info("--------------------------------------------------")
+	logging.info(" ")
 
 
 

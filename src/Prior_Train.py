@@ -32,6 +32,9 @@ from sklearn.preprocessing import MinMaxScaler
 # main function
 def PT_main(args):
 
+	logging.info("PRIOR - TRAIN")
+	logging.info(" ")
+
 
 	# ignore warnings
 	warnings.filterwarnings("ignore")
@@ -787,7 +790,11 @@ def PT_main(args):
 
 
 
+	logging.info(" ")
 	logging.info("Done")
+	logging.info(" ")
+	logging.info("--------------------------------------------------")
+	logging.info(" ")
 
 	
 
