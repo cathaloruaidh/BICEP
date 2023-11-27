@@ -923,6 +923,8 @@ def BF_main(args):
 	perfectCoseg = genotypeString(pedInfo.phenotypeActual)
 
 	if perfectCoseg in allBF.keys():
+		print(perfectCoseg)
+		print(allBF[perfectCoseg])
 		with open(args.tempDir + outputPrefix + ".max_logBF.txt", 'w') as f:
 			print(np.log10(allBF[perfectCoseg]), file=f)
 
