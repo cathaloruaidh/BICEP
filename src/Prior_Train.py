@@ -64,8 +64,8 @@ def PT_main(args):
 	if args.benign is not None:
 		benignFile = args.benign
 
-	if args.output is not None:
-		outputPrefix = args.output
+	if args.prefix is not None:
+		outputPrefix = args.prefix
 
 	if args.pathogenic is not None:
 		pathogenicFile = args.pathogenic
