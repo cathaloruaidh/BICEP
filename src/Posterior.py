@@ -19,15 +19,20 @@ def PO_main(args):
 	
 
 	# command line arguments
-	if args.input is not None:
-		priorFile = args.input + ".priors.txt"
-		bfFile = args.input + ".BF.txt"
+	if (args.input is None) and (args.prior is None) and (args.bf is None):
+		priorFile = args.prefix + ".priors.txt"
+		bfFile = args.prefix + ".BF.txt"
 
-	if args.prior is not None:
-		priorFile = args.prior
+	else:
+		if args.input is not None:
+			priorFile = args.input + ".priors.txt"
+			bfFile = args.input + ".BF.txt"
 
-	if args.bf is not None:
-		bfFile = args.bf
+		if args.prior is not None:
+			priorFile = args.prior
+
+		if args.bf is not None:
+			bfFile = args.bf
 
 
 	# load the prior and BF files
@@ -74,14 +79,26 @@ def PO_main(args):
 	plt.setp((ax1, ax2, ax3), xticks=x_ticks, xticklabels=x_ticks_label, ylim=(min_y, max_y))
 	plt.gca().set_ylim(min_y, max_y)
 
-	ax1.bar(merged_sub["Rank"], merged_sub["logPostOC"], color="#61D04F")
+	if args.highlight is not None:
+		ax1.bar(merged_sub[merged_sub["ID"] == args.highlight]["Rank"], merged_sub[merged_sub["ID"] == args.highlight]["logPostOC"], color="#61D04F")
+		ax1.bar(merged_sub[merged_sub["ID"] != args.highlight]["Rank"], merged_sub[merged_sub["ID"] != args.highlight]["logPostOC"], color="#61D04F")
+	
+	else:
+		ax1.bar(merged_sub["Rank"], merged_sub["logPostOC"], color="#61D04F")
+		
 	ax1.set(ylabel="logPostOC")
 	ax1.margins(0.05, 0.2)
 	ax1.set_xlim([0, args.top + 1])
 	ax1.axhline(y=0,linewidth=2, color='k')
 
 
-	ax2.bar(merged_sub["Rank"], merged_sub["logBF"], color="#2297E6")
+	if args.highlight is not None:
+		ax2.bar(merged_sub[merged_sub["ID"] == args.highlight]["Rank"], merged_sub[merged_sub["ID"] == args.highlight]["logBF"], color="#2297E6")
+		ax2.bar(merged_sub[merged_sub["ID"] != args.highlight]["Rank"], merged_sub[merged_sub["ID"] != args.highlight]["logBF"], color="#2297E6")
+
+	else:
+		ax2.bar(merged_sub["Rank"], merged_sub["logBF"], color="#2297E6")
+
 	ax2.set(ylabel="logBF")
 	ax2.margins(0.05, 0.2)
 	ax2.set_xlim([0, args.top + 1])
@@ -89,7 +106,13 @@ def PO_main(args):
 	ax2.axhline(y=max_logBF, linewidth=2, color='k', linestyle='--')
 
 
-	ax3.bar(merged_sub["Rank"], merged_sub["logPriorOC"], color="#DF536B")
+	if args.highlight is not None:
+		ax3.bar(merged_sub[merged_sub["ID"] == args.highlight]["Rank"], merged_sub[merged_sub["ID"] == args.highlight]["logPriorOC"], color="#DF536B")
+		ax3.bar(merged_sub[merged_sub["ID"] != args.highlight]["Rank"], merged_sub[merged_sub["ID"] != args.highlight]["logPriorOC"], color="#DF536B")
+
+	else:
+		ax3.bar(merged_sub["Rank"], merged_sub["logPriorOC"], color="#DF536B")
+
 	ax3.set(xlabel="Rank", ylabel="logPriorOC")
 	ax3.margins(0.05, 0.2)
 	ax3.set_xlim([0, args.top + 1])
