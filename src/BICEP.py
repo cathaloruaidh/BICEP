@@ -138,6 +138,7 @@ def main(argv):
 	parser_PO.add_argument("--input", nargs='?', default='BICEP_output', help="Common prefix for the Bayes factor and prior input", metavar='C')
 	parser_PO.add_argument("--prior", nargs='?', help="Prefix for the prior input", metavar='C')
 	parser_PO.add_argument("--bf", nargs='?', help="Prefix for the Bayes factor input", metavar='C')
+	parser_PO.add_argument("--top", nargs='?', default=50, type=int, help="Number of top ranking variants to plot", metavar='N')
 	
 
 	args = parser.parse_args()
