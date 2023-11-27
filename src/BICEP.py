@@ -75,6 +75,30 @@ def main(argv):
 	parser_parent.add_argument("--prefix", nargs='?', default="BICEP_output", help="Output prefix", metavar='C')
 
 
+	# All sub-command
+	parser_ALL = sub_parsers.add_parser("All", help = "Run all steps of BICEP", 
+	parents = [parser_parent], add_help=False, formatter_class=UltimateHelpFormatter, usage=SUPPRESS, 
+	description = BICEP_textwrap + textwrap.dedent('''\
+
+	Run all steps of BICEP'''))
+	parser_ALL.add_argument("--predictors", nargs='?', help="File containing regression predictors", metavar='C')
+	parser_ALL.add_argument("--clinvar", nargs='?', help="ClinVar VCF file annotated with VEP", metavar='C')
+	parser_ALL.add_argument("-e", "--exclude", nargs='?', help="File of ClinVar IDs to exclude from training", metavar='C')
+	parser_ALL.add_argument("-i", "--include", nargs='?', help="File of ClinVar IDs to include for training", metavar='C')
+	parser_ALL.add_argument("-b", "--benign", nargs='?', help="File of benign variant IDs for training", metavar='C')
+	parser_ALL.add_argument("-p", "--pathogenic", nargs='?', help="File of pathogenic variant IDs for training", metavar='C')
+	parser_ALL.add_argument("--predictors", nargs='?', help="File containing regression predictors", metavar='C')
+	parser_ALL.add_argument("--boot", nargs='?', default=1, type=int, help="Number of bootstraps", metavar='N')
+	parser_ALL.add_argument("-v", "--vcf", nargs='?', help="VCF file for variants", metavar='F', required = True)
+	parser_ALL.add_argument("-f", "--fam", nargs='?', help="FAM file describing the pedigree structure and phenotypes", metavar='F', required = True)
+	parser_ALL.add_argument("--minAff", nargs='?', default=0, type=int, help="Minimum affected individuals per pedigree", metavar='N')
+	parser_ALL.add_argument("--priorCaus", nargs='?', default="linear", choices=["uniform", "linear"], help="Prior parameter distribution for causal model", metavar='C')
+	parser_ALL.add_argument("--priorNeut", nargs='?', default="uniform", choices=["uniform", "linear"], help="Prior parameter distribution for neutral model", metavar='C')
+	parser_ALL.add_argument("--top", nargs='?', default=50, type=int, help="Number of top ranking variants to plot", metavar='N')
+	parser_ALL.add_argument("--highlight", nargs='?', help="ID of variant to highlight in plot", metavar='C')
+	
+	
+
 
 	# PriorTrain sub-command
 	parser_PT = sub_parsers.add_parser("PriorTrain", help = "Train the regresison models to generate a prior", 
@@ -88,6 +112,8 @@ def main(argv):
 	parser_PT.add_argument("-i", "--include", nargs='?', help="File of ClinVar IDs to include for training", metavar='C')
 	parser_PT.add_argument("-b", "--benign", nargs='?', help="File of benign variant IDs for training", metavar='C')
 	parser_PT.add_argument("-p", "--pathogenic", nargs='?', help="File of pathogenic variant IDs for training", metavar='C')
+	
+
 
 	
 	
