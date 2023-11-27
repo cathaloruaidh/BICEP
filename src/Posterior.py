@@ -79,9 +79,9 @@ def PO_main(args):
 	plt.setp((ax1, ax2, ax3), xticks=x_ticks, xticklabels=x_ticks_label, ylim=(min_y, max_y))
 	plt.gca().set_ylim(min_y, max_y)
 
-	if args.highlight is not None:
-		ax1.bar(merged_sub[merged_sub["ID"] == args.highlight]["Rank"], merged_sub[merged_sub["ID"] == args.highlight]["logPostOC"], color="#61D04F")
-		ax1.bar(merged_sub[merged_sub["ID"] != args.highlight]["Rank"], merged_sub[merged_sub["ID"] != args.highlight]["logPostOC"], color="#61D04F")
+	if (args.highlight is not None) and (merged_sub["ID"].str.contains(args.highlight)):
+		ax1.bar(merged_sub[merged_sub["ID"].str.contains(args.highlight)]["Rank"], merged_sub[merged_sub["ID"].str.contains(args.highlight)]["logPostOC"], color="#61D04F")
+		ax1.bar(merged_sub[~merged_sub["ID"].str.contains(args.highlight)]["Rank"], merged_sub[~merged_sub["ID"].str.contains(args.highlight)]["logPostOC"], color="#61D04F")
 	
 	else:
 		ax1.bar(merged_sub["Rank"], merged_sub["logPostOC"], color="#61D04F")
@@ -92,9 +92,9 @@ def PO_main(args):
 	ax1.axhline(y=0,linewidth=2, color='k')
 
 
-	if args.highlight is not None:
-		ax2.bar(merged_sub[merged_sub["ID"] == args.highlight]["Rank"], merged_sub[merged_sub["ID"] == args.highlight]["logBF"], color="#2297E6")
-		ax2.bar(merged_sub[merged_sub["ID"] != args.highlight]["Rank"], merged_sub[merged_sub["ID"] != args.highlight]["logBF"], color="#2297E6")
+	if (args.highlight is not None) and (merged_sub["ID"].str.contains(args.highlight)):
+		ax2.bar(merged_sub[merged_sub["ID"].str.contains(args.highlight)]["Rank"], merged_sub[merged_sub["ID"].str.contains(args.highlight)]["logBF"], color="#2297E6")
+		ax2.bar(merged_sub[~merged_sub["ID"].str.contains(args.highlight)]["Rank"], merged_sub[~merged_sub["ID"].str.contains(args.highlight)]["logBF"], color="#2297E6")
 
 	else:
 		ax2.bar(merged_sub["Rank"], merged_sub["logBF"], color="#2297E6")
@@ -106,9 +106,9 @@ def PO_main(args):
 	ax2.axhline(y=max_logBF, linewidth=2, color='k', linestyle='--')
 
 
-	if args.highlight is not None:
-		ax3.bar(merged_sub[merged_sub["ID"] == args.highlight]["Rank"], merged_sub[merged_sub["ID"] == args.highlight]["logPriorOC"], color="#DF536B")
-		ax3.bar(merged_sub[merged_sub["ID"] != args.highlight]["Rank"], merged_sub[merged_sub["ID"] != args.highlight]["logPriorOC"], color="#DF536B")
+	if args.highlight is not None and (merged_sub["ID"].str.contains(args.highlight)):
+		ax3.bar(merged_sub[merged_sub["ID"].str.contains(args.highlight)]["Rank"], merged_sub[merged_sub["ID"].str.contains(args.highlight)]["logPriorOC"], color="#DF536B")
+		ax3.bar(merged_sub[~merged_sub["ID"].str.contains(args.highlight)]["Rank"], merged_sub[~merged_sub["ID"].str.contains(args.highlight)]["logPriorOC"], color="#DF536B")
 
 	else:
 		ax3.bar(merged_sub["Rank"], merged_sub["logPriorOC"], color="#DF536B")
