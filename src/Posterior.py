@@ -83,7 +83,7 @@ def PO_main(args):
 	plt.setp((ax1, ax2, ax3), xticks=x_ticks, xticklabels=x_ticks_label, ylim=(min_y, max_y))
 	plt.gca().set_ylim(min_y, max_y)
 
-	if (args.highlight is not None) and (merged_sub["ID"].str.contains(args.highlight)):
+	if (args.highlight is not None) and (merged_sub["ID"].str.contains(args.highlight).any()):
 		ax1.bar(merged_sub[merged_sub["ID"].str.contains(args.highlight)]["Rank"], merged_sub[merged_sub["ID"].str.contains(args.highlight)]["logPostOC"], color="#61D04F", hatch='//')
 		ax1.bar(merged_sub[~merged_sub["ID"].str.contains(args.highlight)]["Rank"], merged_sub[~merged_sub["ID"].str.contains(args.highlight)]["logPostOC"], color="#61D04F")
 	
@@ -96,7 +96,7 @@ def PO_main(args):
 	ax1.axhline(y=0,linewidth=2, color='k')
 
 
-	if (args.highlight is not None) and (merged_sub["ID"].str.contains(args.highlight)):
+	if (args.highlight is not None) and (merged_sub["ID"].str.contains(args.highlight).any()):
 		ax2.bar(merged_sub[merged_sub["ID"].str.contains(args.highlight)]["Rank"], merged_sub[merged_sub["ID"].str.contains(args.highlight)]["logBF"], color="#2297E6", hatch='//')
 		ax2.bar(merged_sub[~merged_sub["ID"].str.contains(args.highlight)]["Rank"], merged_sub[~merged_sub["ID"].str.contains(args.highlight)]["logBF"], color="#2297E6")
 
@@ -110,7 +110,7 @@ def PO_main(args):
 	ax2.axhline(y=max_logBF, linewidth=2, color='k', linestyle='--')
 
 
-	if args.highlight is not None and (merged_sub["ID"].str.contains(args.highlight)):
+	if args.highlight is not None and (merged_sub["ID"].str.contains(args.highlight).any()):
 		ax3.bar(merged_sub[merged_sub["ID"].str.contains(args.highlight)]["Rank"], merged_sub[merged_sub["ID"].str.contains(args.highlight)]["logPriorOC"], color="#DF536B", hatch='//')
 		ax3.bar(merged_sub[~merged_sub["ID"].str.contains(args.highlight)]["Rank"], merged_sub[~merged_sub["ID"].str.contains(args.highlight)]["logPriorOC"], color="#DF536B")
 
