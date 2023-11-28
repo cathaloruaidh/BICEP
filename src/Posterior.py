@@ -57,7 +57,7 @@ def PO_main(args):
 	merged["logPostOC"] = merged["logPriorOC"] + merged["logBF"]
 
 
-	with open(args.tempDir + args.input + '.max_logBF.txt', 'r') as f:
+	with open(args.tempDir + args.prefix + '.max_logBF.txt', 'r') as f:
 		tmp = f.readlines()
 		max_logBF = float(tmp[0])
 
