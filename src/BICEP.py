@@ -87,7 +87,6 @@ def main(argv):
 	parser_ALL.add_argument("-i", "--include", nargs='?', help="File of ClinVar IDs to include for training", metavar='C')
 	parser_ALL.add_argument("-b", "--benign", nargs='?', help="File of benign variant IDs for training", metavar='C')
 	parser_ALL.add_argument("-p", "--pathogenic", nargs='?', help="File of pathogenic variant IDs for training", metavar='C')
-	parser_ALL.add_argument("--predictors", nargs='?', help="File containing regression predictors", metavar='C')
 	parser_ALL.add_argument("--boot", nargs='?', default=1, type=int, help="Number of bootstraps", metavar='N')
 	parser_ALL.add_argument("-v", "--vcf", nargs='?', help="VCF file for variants", metavar='F', required = True)
 	parser_ALL.add_argument("-f", "--fam", nargs='?', help="FAM file describing the pedigree structure and phenotypes", metavar='F', required = True)
@@ -217,6 +216,13 @@ def main(argv):
 		#consoleHandler.setFormatter(logFormatter)
 		#rootLogger.addHandler(consoleHandler)
 
+		if args.command == "All":
+			Prior_Train.PT_main(args)
+			#Prior_Evaluate.PE_main(args)
+			Prior_Apply.PA_main(args)
+			BayesFactor.BF_main(args)
+			Posterior.PO_main(args)
+			
 
 		if args.command == "PriorTrain":
 			Prior_Train.PT_main(args)
