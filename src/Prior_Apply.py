@@ -124,6 +124,7 @@ def PA_main(args):
 
 
 	# get flat priors from training data	
+	flatPriors = {}
 	with open(modelPrefix + '.flatPriors.pkl', 'rb') as f:
 		flatPriors = pickle.load(f)
 
@@ -267,9 +268,13 @@ def PA_main(args):
 				DATA.append(l) 
 
 
-		# otherwise flat prior
+		# otherwise flat, nonCoding prior
 		else:
-			flat_DATA.append([ID, flatPriors['nonCoding']])
+			if 'nonCoding' in flatPriors.keys():
+				flat_DATA.append([ID, flatPriors['nonCoding']])
+
+			else:
+				flat_DATA.append([ID, np.nan])
 
 
 	logging.info(" ")
@@ -351,8 +356,12 @@ def PA_main(args):
 
 
 	else:
-		logging.info("Using flat priors for indels. ")
-		y_indel_pred = np.full(len(x_indel), flatPriors['indel'])
+		if 'indel' in flatPriors.keys():
+			logging.info("Using flat priors for indels. ")
+			y_indel_pred = np.full(len(x_indel), flatPriors['indel'])
+		else:
+			logging.info("Ignoring all indels. ")
+			y_indel_pred = np.full(len(x_indel), np.nan)
 
 
 	logging.info(" ")
@@ -410,8 +419,12 @@ def PA_main(args):
 
 	
 	else:
-		logging.info("Using flat priors for missense variants. ")
-		y_missense_pred = np.full(len(x_missense), flatPriors['missense'])
+		if 'missense' in flatPriors.keys():
+			logging.info("Using flat priors for missense variants. ")
+			y_missense_pred = np.full(len(x_missense), flatPriors['missense'])
+		else
+			logging.info("Ignoring all missense variants")
+			y_missense_pred = np.full(len(x_missense), np.nan)
 
 	logging.info(" ")
 
@@ -469,8 +482,12 @@ def PA_main(args):
 
 
 	else:
-		logging.info("Using flat priors for non-missense SNVs")
-		y_nonMissenseSNV_pred = np.full(len(x_nonMissenseSNV), flatPriors['nonMissenseSNV'])
+		if 'nonMissenseSNV' in flatPriors:
+			logging.info("Using flat priors for non-missense SNVs")
+			y_nonMissenseSNV_pred = np.full(len(x_nonMissenseSNV), flatPriors['nonMissenseSNV'])
+		else:
+			logging.info("Ignoring all non-missense SNVs")
+			y_nonMissenseSNV_pred = np.full(len(x_nonMissenseSNV), np.nan)
 
 
 	logging.info(" ")
@@ -533,9 +550,15 @@ def PA_main(args):
 	merged["logPriorOC"] = np.log10(merged["PriorOC"])
 	
 	merged = merged[merged.columns.drop(list(merged.filter(regex='csqVEP_')))]
+	merged = merged[merged.columns.drop(list(merged.filter(regex='typeVEP_')))]
 
 
 	merged.to_csv(args.outputDir + outputPrefix+".priors.txt", index=False, sep='\t', na_rep='.')
+
+
+	# get IDs of variants with a prior
+	merged_ID = merged["ID"].notna().unique()
+	merged_ID.to_csv(args.tempDir + outputPrefix+".priors.ID.txt", index=False, sep='\t', na_rep='.')
 
 
 
