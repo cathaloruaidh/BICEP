@@ -15,6 +15,7 @@ import statsmodels.api as sm
 
 from cyvcf2 import VCF, Writer
 from joblib import dump, load
+from pathlib import Path
 from sklearn import metrics
 from sklearn.linear_model import LogisticRegression
 from sklearn.experimental import enable_iterative_imputer
@@ -56,6 +57,8 @@ def PT_main(args):
 
 	if args.clinvar is not None:
 		clinVarAnnoVcfFile = args.clinvar
+
+	if args.clinvarFull is not None:
 		clinVarFullVcfFile = args.clinvar
 
 	if args.exclude is not None:
@@ -122,7 +125,8 @@ def PT_main(args):
 
 
 
-
+	# dictionary for flat prior
+	flatPriors = {}
 
 
 
@@ -136,65 +140,72 @@ def PT_main(args):
 	logging.info("Reading VCF file")
 
 
-	# get VCF file and variant/sample information
-	CV_full_vcf = VCF(clinVarFullVcfFile, gts012=True)
-
 
 	# generate the flat priors
-	logging.info("Generating the flat priors")
 
-	ALL_DATA = []
-	for variant in CV_full_vcf:
-		sig = variant.INFO.get('CLNSIG')
-		if sig is not None:
-			sig = sig.split(",", 1)[0]
+	if clinVarFullVcfFile is not None:
 
-		gene = variant.INFO.get('GENEINFO')
-		vc = variant.INFO.get('CLNVC')
-		mc = variant.INFO.get('MC')
+		CV_full_path = Path(clinVarFullVcfFile)
 
-		if not (vc == "single_nucleotide_variant" or vc == "Indel"):
-			continue
-		ALL_DATA.append([ sig, vc, gene, mc ])
-	
-	df_all = pd.DataFrame(ALL_DATA, columns=['sig', 'vc', 'gene', 'mc'])
-	df_all_path = df_all.dropna(subset=['sig'])
-	df_all_path = df_all_path[ df_all_path['sig'].str.contains("athogenic") ]
-	df_all_path = df_all_path[ df_all_path['sig'].str.contains("Conflicting") == False ]
+		if CV_full_path.is_file():
+			logging.info("Generating the flat priors")
 
+			CV_full_vcf = VCF(clinVarFullVcfFile, gts012=True)
+			ALL_DATA = []
+			for variant in CV_full_vcf:
+				sig = variant.INFO.get('CLNSIG')
+				if sig is not None:
+					sig = sig.split(",", 1)[0]
 
-	flatPrior_nonCoding =  df_all_path['gene'].isna().sum() / df_all['gene'].isna().sum()
+				gene = variant.INFO.get('GENEINFO')
+				vc = variant.INFO.get('CLNVC')
+				mc = variant.INFO.get('MC')
 
-
-	df_all = df_all.dropna(subset=['gene'])
-	df_all_path = df_all_path.dropna(subset=['gene'])
-
-	flatPrior_indel = len(df_all_path[ df_all_path['vc'] == "Indel" ].index) / len(df_all[ df_all['vc'] == "Indel" ].index)
+				if not (vc == "single_nucleotide_variant" or vc == "Indel"):
+					continue
+				ALL_DATA.append([ sig, vc, gene, mc ])
+			
+			df_all = pd.DataFrame(ALL_DATA, columns=['sig', 'vc', 'gene', 'mc'])
+			df_all_path = df_all.dropna(subset=['sig'])
+			df_all_path = df_all_path[ df_all_path['sig'].str.contains("athogenic") ]
+			df_all_path = df_all_path[ df_all_path['sig'].str.contains("Conflicting") == False ]
 
 
-	df_all = df_all.dropna(subset=['mc'])
-	df_all_path = df_all_path.dropna(subset=['mc'])
-
-	flatPrior_missense = len(df_all_path[ df_all_path['mc'].str.contains("missense") ].index) / len(df_all[ df_all['mc'].str.contains("missense") ].index)
-
-	df_all = df_all[ df_all['vc'] == "single_nucleotide_variant" ]
-	df_all_path = df_all_path[ df_all_path['vc'] == "single_nucleotide_variant" ]
-
-	flatPrior_nonMissenseSNV = len(df_all_path[ ~df_all_path['mc'].str.contains("missense") ].index) / len(df_all[ ~df_all['mc'].str.contains("missense") ].index)
+			flatPrior_nonCoding =  df_all_path['gene'].isna().sum() / df_all['gene'].isna().sum()
 
 
-	flatPriors = { 'nonCoding' : flatPrior_nonCoding, 'indel' : flatPrior_indel, 'missense' : flatPrior_missense, 'nonMissenseSNV' : flatPrior_nonMissenseSNV }
+			df_all = df_all.dropna(subset=['gene'])
+			df_all_path = df_all_path.dropna(subset=['gene'])
+
+			flatPrior_indel = len(df_all_path[ df_all_path['vc'] == "Indel" ].index) / len(df_all[ df_all['vc'] == "Indel" ].index)
+
+
+			df_all = df_all.dropna(subset=['mc'])
+			df_all_path = df_all_path.dropna(subset=['mc'])
+
+			flatPrior_missense = len(df_all_path[ df_all_path['mc'].str.contains("missense") ].index) / len(df_all[ df_all['mc'].str.contains("missense") ].index)
+
+			df_all = df_all[ df_all['vc'] == "single_nucleotide_variant" ]
+			df_all_path = df_all_path[ df_all_path['vc'] == "single_nucleotide_variant" ]
+
+			flatPrior_nonMissenseSNV = len(df_all_path[ ~df_all_path['mc'].str.contains("missense") ].index) / len(df_all[ ~df_all['mc'].str.contains("missense") ].index)
+
+
+			flatPriors = { 'nonCoding' : flatPrior_nonCoding, 'indel' : flatPrior_indel, 'missense' : flatPrior_missense, 'nonMissenseSNV' : flatPrior_nonMissenseSNV }
 
 
 
-	with open(args.tempDir + outputPrefix+'.flatPriors.pkl', 'wb') as f:
-		pickle.dump(flatPriors, f)
+			with open(args.tempDir + outputPrefix+'.flatPriors.pkl', 'wb') as f:
+				pickle.dump(flatPriors, f)
+		else:
+			msg = "Could not find the ClinVar file: " + clinVarFullVcfFile
+			logging.warning(msg)
+	else:
+		logging.info("Not generating flat priors for indels and non-coding variants")
 
 
 
-
-
-	# now, use annotated file 
+	# parse data from annotated ClinVar file 
 	logging.info("Parsing the annotation information")
 	CV_anno_vcf = VCF(clinVarAnnoVcfFile, gts012=True)
 
@@ -410,8 +421,6 @@ def PT_main(args):
 	df = pd.DataFrame(DATA, columns = [ 'ID', 'setCV', 'geneCV', 'csqCV', 'typeCV', 'alleleID' ] + keysAscPred + keysDescPred )
 	df['alleleID'] = df.alleleID.astype(str).replace('\.0', '', regex=True)
 
-	df.to_csv("DATA.txt", index=False, sep='\t', na_rep='.')
-
 
 
 	# if there are pathogenic/benign files, subset to these
@@ -563,10 +572,17 @@ def PT_main(args):
 		with open(args.tempDir + outputPrefix + ".indel_coef.txt", 'a') as f:
 			pprint.pprint(list(zip(logReg_indel.feature_names, np.round(logReg_indel.coef_.flatten(), 6))), f)
 			print("Intercept: ", np.round(logReg_indel.intercept_, 6), file=f)
+
 	else:
-		msg = "Not enough indels in training data, using flat prior: " + str(np.round(flatPriors['indel'], 6))
+		if 'indel' in flatPriors.keys():
+			msg = "Not enough indels in training data, using flat prior: " + str(np.round(flatPriors['indel'], 6))
+			results_indel = np.full(len(x_indel.index), flatPriors['indel'])
+
+		else:
+			msg = "Not enough indels in training data, all indels will be ignored"
+			results_indel = np.full(len(x_indel.index), np.nan)
+
 		logging.info(msg)
-		results_indel = np.full(len(x_indel.index), flatPriors['indel'])
 
 	logging.info(" ")
 	logging.info(" ")
@@ -654,10 +670,18 @@ def PT_main(args):
 		with open(args.tempDir + outputPrefix + ".missense_coef.txt", 'a') as f:
 		 pprint.pprint(list(zip(logReg_missense.feature_names, np.round(logReg_missense.coef_.flatten(), 6))), f)
 		 print("Intercept: ", np.round(logReg_missense.intercept_, 6), file=f)
+	
 	else:
-		msg = "Not enough missense variants in training data, using flat prior: " + str(np.round(flatPriors['missense'], 6))
+		if 'missense' in flatPriors.keys():
+			msg = "Not enough missense variants in training data, using flat prior: " + str(np.round(flatPriors['missense'], 6))
+			results_missense = np.full(len(x_missense.index), flatPriors['missense'])
+
+		else:
+			msg = "Not enough missense variants in training data, all missense variants will be ignored"
+			results_missense = np.full(len(x_missense.index), np.nan)
+
 		logging.info(msg)
-		results_missense = np.full(len(x_missense.index), flatPriors['missense'])
+
 
 
 	logging.info(" ")
@@ -755,10 +779,17 @@ def PT_main(args):
 		with open(args.tempDir + outputPrefix + ".nonMissenseSNV_coef.txt", 'a') as f:
 		 pprint.pprint(list(zip(logReg_nonMissenseSNV.feature_names, np.round(logReg_nonMissenseSNV.coef_.flatten(), 6))), f)
 		 print("Intercept: ", np.round(logReg_nonMissenseSNV.intercept_, 6), file=f)
+
 	else:
-		msg = "Not enough non-missense SNVs in training data, using flat prior: " + str(np.round(flatPriors['nonMissenseSNV'], 6))
+		if 'nonMissenseSNV' in flatPriors.keys():
+			msg = "Not enough non-missense SNVs in training data, using flat prior: " + str(np.round(flatPriors['nonMissenseSNV'], 6))
+			results_nonMissenseSNV = np.full(len(x_nonMissenseSNV.index), flatPriors['nonMissenseSNV'])
+
+		else:
+			msg = "Not enough non-missense SNVs in training data, all non-missense SNVs will be ignored"
+			results_nonMissenseSNV = np.full(len(x_nonMissenseSNV.index), np.nan)
+
 		logging.info(msg)
-		results_nonMissenseSNV = np.full(len(x_nonMissenseSNV.index), flatPriors['nonMissenseSNV'])
 
 
 	logging.info(" ")
@@ -766,16 +797,16 @@ def PT_main(args):
 
 
 	# gather the results
-	pred_prob = np.concatenate( (results_indel, results_missense, results_nonMissenseSNV) )
+	#pred_prob = np.concatenate( (results_indel, results_missense, results_nonMissenseSNV) )
 
 
 
-	prior_prob = pd.DataFrame()
-	prior_prob["alleleID"] = np.concatenate((alleleID_indel, alleleID_missense, alleleID_nonMissenseSNV))
-	prior_prob["Gene"] = np.concatenate((geneCV_indel, geneCV_missense, geneCV_nonMissenseSNV))
-	prior_prob["csqCV"] = np.concatenate((x_indel_csq, x_missense_csq, x_nonMissenseSNV_csq))
-	prior_prob["setCV"] = np.concatenate((y_indel, y_missense, y_nonMissenseSNV))
-	prior_prob["prior"] = pred_prob.flatten()
+	#prior_prob = pd.DataFrame()
+	#prior_prob["alleleID"] = np.concatenate((alleleID_indel, alleleID_missense, alleleID_nonMissenseSNV))
+	#prior_prob["Gene"] = np.concatenate((geneCV_indel, geneCV_missense, geneCV_nonMissenseSNV))
+	#prior_prob["csqCV"] = np.concatenate((x_indel_csq, x_missense_csq, x_nonMissenseSNV_csq))
+	#prior_prob["setCV"] = np.concatenate((y_indel, y_missense, y_nonMissenseSNV))
+	#prior_prob["prior"] = pred_prob.flatten()
 
 
 	#x_indel_imp_scal_df = pd.DataFrame(x_indel_imp_scal, index = x_indel_index, columns = x_indel.columns)
