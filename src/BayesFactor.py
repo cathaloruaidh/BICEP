@@ -780,8 +780,7 @@ def BF_main(args):
 			ind = np.where(pedInfo.indID == vcf.samples[i])[0][0]
 		except:
 			msg = "Sample " + vcf.samples[i] + " is in VCF but not FAM."
-			logging.warning(msg)
-			sys.exit("Exiting ... ")
+			logging.error(msg)
 		else:
 			vcfSampleIndex.append(ind)
 
@@ -796,11 +795,23 @@ def BF_main(args):
 	varID = []
 
 
+	# get IDs of variants which recieved a prior
+	prior_IDs = None
+	with open(args.tempDir + args.prefix + '.priors.ID.npy', 'rb') as f:
+		prior_IDs = np.load(f, allow_pickle = True)
+
+
 	# loop over all samples in VCF and get genotype
 	j = 0
 	for variant in vcf:
 		# get the ID of the variant
-		varID.append(variant.CHROM + "_" + str(variant.start+1) + "_" + variant.REF + "_" + variant.ALT[0])
+		var_tmp = variant.CHROM + "_" + str(variant.start+1) + "_" + variant.REF + "_" + variant.ALT[0]
+
+		if prior_IDs is not None:
+			if var_tmp in prior_IDs:
+				varID.append(var_tmp)
+			else:
+				continue
 
 
 		# fill the known genotypes

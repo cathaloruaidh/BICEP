@@ -558,8 +558,8 @@ def PA_main(args):
 
 
 	# get IDs of variants with a prior
-	merged_ID = merged["ID"].notna().unique()
-	np.savetxt(args.tempDir + outputPrefix+".priors.ID.txt", merged_ID)
+	merged_ID = merged[merged["prior"].notna()]["ID"].unique()
+	np.save(args.tempDir + outputPrefix+".priors.ID.npy", merged_ID)
 
 
 
