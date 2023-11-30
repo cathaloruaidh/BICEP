@@ -930,7 +930,7 @@ def BF_main(args):
 		print(perfectCoseg)
 		print(allBF[perfectCoseg])
 		with open(args.tempDir + outputPrefix + ".max_logBF.txt", 'w') as f:
-			print(np.log10(allBF[perfectCoseg][0]), file=f)
+			print(np.log10(float(allBF[perfectCoseg][0])), file=f)
 
 	else:
 		l = multiprocessing.Lock()
