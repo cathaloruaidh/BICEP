@@ -461,7 +461,7 @@ def PT_main(args):
 	
 
 	
-	msg = "A total of " + str(len(df.index)) + " variants used (" + str((df.setCV.values == 'PATHOGENIC').sum()) + " PATH and " + str((df.setCV.values == 'BENIGN').sum()) + " BEN)"
+	msg = str(len(df.index)) + " training variants used (" + str((df.setCV.values == 'PATHOGENIC').sum()) + " PATH, " + str((df.setCV.values == 'BENIGN').sum()) + " BEN)"
 
 	logging.info(msg)
 
@@ -481,7 +481,7 @@ def PT_main(args):
 
 
 	## INDELS
-	logging.info("INDELS (CADD + AF + CSQ)")
+	logging.info("INDELS")
 	x_indel = x[ x['typeCV'] == 'indel' ]
 	ID_indel = x_indel['ID']
 	alleleID_indel = x_indel['alleleID']
@@ -507,7 +507,7 @@ def PT_main(args):
 		x_indel = x_indel.drop(['FATHMM_score', 'MPC_score', 'Polyphen2_HDIV_score', 'REVEL_score', 'SIFT_score', 'typeCV'], axis=1, errors='ignore')
 
 
-		msg = "A total of " + str(np.size(y_indel)) + " indels used (" + str(sum(y_indel == 'PATHOGENIC')) + " PATH and " + str(sum(y_indel == 'BENIGN')) + " BEN)"
+		msg = str(np.size(y_indel)) + " indels used (" + str(sum(y_indel == 'PATHOGENIC')) + " PATH, " + str(sum(y_indel == 'BENIGN')) + " BEN)"
 		logging.info(msg)
 	
 		# remove columns that are all NA
@@ -574,7 +574,7 @@ def PT_main(args):
 
 
 	## MISSENSE SNV
-	logging.info("MISSENSE SNV (AF + 5_PRED)")
+	logging.info("MISSENSE VARIANTS")
 	x_missense = x[ (x['csqCV'] == 'missense_variant') & (x['typeCV'] == 'SNV') ]
 	x_missense_csq = x_missense['csqCV'] 
 	x_missense = x_missense.drop(['CADD_PHRED', 'typeCV', 'csqCV'], axis=1, errors='ignore')
@@ -597,7 +597,7 @@ def PT_main(args):
 	uniq, counts = np.unique(y_missense, return_counts = True)
 
 	if (len(x_missense.index) > 0) and (len(uniq) == 2) and (counts.min() > 15*len(x_missense.columns)):
-		msg = "A total of " + str(np.size(y_missense)) + " missense variants used (" + str(sum(y_missense == 'PATHOGENIC')) + " PATH and " + str(sum(y_missense == 'BENIGN')) + " BEN)"
+		msg = str(np.size(y_missense)) + " missense variants used (" + str(sum(y_missense == 'PATHOGENIC')) + " PATH, " + str(sum(y_missense == 'BENIGN')) + " BEN)"
 		logging.info(msg)
 		
 		# remove columns that are all NA
@@ -666,7 +666,7 @@ def PT_main(args):
 
 
 	## NON-MISSENSE SNV
-	logging.info("NON-MISSENSE SNV (CADD + AF + CSQ)")
+	logging.info("NON-MISSENSE SNV")
 	x_nonMissenseSNV = x[ (x['csqCV'] != 'missense_variant') & (x['typeCV'] == 'SNV') ]
 	x_nonMissenseSNV_csq = x_nonMissenseSNV['csqCV'] 
 
@@ -697,7 +697,7 @@ def PT_main(args):
 		x_nonMissenseSNV = x_nonMissenseSNV.drop(['FATHMM_score', 'MPC_score', 'Polyphen2_HDIV_score', 'REVEL_score', 'SIFT_score', 'typeCV'], axis=1, errors='ignore')
 
 
-		msg = "A total of " + str(np.size(y_nonMissenseSNV)) + " non-missense SNVs used (" + str(sum(y_nonMissenseSNV == 'PATHOGENIC')) + " PATH and " + str(sum(y_nonMissenseSNV == 'BENIGN')) + " BEN)"
+		msg = str(np.size(y_nonMissenseSNV)) + " non-missense SNVs used (" + str(sum(y_nonMissenseSNV == 'PATHOGENIC')) + " PATH, " + str(sum(y_nonMissenseSNV == 'BENIGN')) + " BEN)"
 		logging.info(msg)
 		
 		# remove columns that are all NA

@@ -217,6 +217,8 @@ def main(argv):
 		#rootLogger.addHandler(consoleHandler)
 
 		if args.command == "All":
+			args.model = args.tempDir + "/" + args.prefix
+
 			Prior_Train.PT_main(args)
 			#Prior_Evaluate.PE_main(args)
 			Prior_Apply.PA_main(args)
