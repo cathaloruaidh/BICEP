@@ -23,7 +23,7 @@ def PO_main(args):
 	
 
 	# command line arguments
-	if (args.input is None) and (args.prior is None) and (args.bf is None):
+	if (args.prior is None) or (args.bf is None):
 		priorFile = args.prefix + ".priors.txt"
 		bfFile = args.prefix + ".BF.txt"
 
