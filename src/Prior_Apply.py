@@ -125,8 +125,9 @@ def PA_main(args):
 
 	# get flat priors from training data	
 	flatPriors = {}
-	with open(modelPrefix + '.flatPriors.pkl', 'rb') as f:
-		flatPriors = pickle.load(f)
+	if os.path.isfile(modelPrefix + '.flatPriors.pkl'):
+		with open(modelPrefix + '.flatPriors.pkl', 'rb') as f:
+			flatPriors = pickle.load(f)
 
 
 
@@ -422,7 +423,7 @@ def PA_main(args):
 		if 'missense' in flatPriors.keys():
 			logging.info("Using flat priors for missense variants. ")
 			y_missense_pred = np.full(len(x_missense), flatPriors['missense'])
-		else
+		else:
 			logging.info("Ignoring all missense variants")
 			y_missense_pred = np.full(len(x_missense), np.nan)
 
@@ -558,7 +559,7 @@ def PA_main(args):
 
 	# get IDs of variants with a prior
 	merged_ID = merged["ID"].notna().unique()
-	merged_ID.to_csv(args.tempDir + outputPrefix+".priors.ID.txt", index=False, sep='\t', na_rep='.')
+	np.savetxt(args.tempDir + outputPrefix+".priors.ID.txt", merged_ID)
 
 
 
