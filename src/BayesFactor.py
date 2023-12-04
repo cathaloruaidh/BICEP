@@ -474,7 +474,8 @@ def calculateBF(pedInfo, allBF, priorParams, inputData):
 				minIndex = i
 
 
-		# if all genotypes are set and the proband is a carrier, add the vector to the list and return
+		# if all genotypes are set and the proband is a carrier, 
+		# add the vector to the list and return
 		if minGen == 1 :
 			genotypeStates.append(vector.copy())
 			return
@@ -501,6 +502,16 @@ def calculateBF(pedInfo, allBF, priorParams, inputData):
 		return
 
 
+	inheritanceProbability = np.array(
+		[ [ [ 1.0, 0.0, 0.0 ], [ 0.5, 0.5, 0.0 ], [ 0.0, 1.0, 0.0 ] ], 
+		[ [ 0.5, 0.5, 0.0 ], [ 0.25, 0.5, 0.25 ], [ 0.0, 0.75, 0.25 ] ], 
+		[ [ 0.0, 1.0, 0.0 ], [ 0.0, 0.75, 0.25 ], [ 0.0, 0.0, 0.1 ] ] ]
+	)
+
+	inheritanceProbabilityDominant = np.array(
+		[ [ [ 1.0, 0.0 ], [ 0.5, 0.5 ] ], 
+		[ [ 0.5, 0.5 ], [ 0.0, 1.0 ] ] ]
+	)
 
 
 
@@ -510,8 +521,6 @@ def calculateBF(pedInfo, allBF, priorParams, inputData):
 	# get prior parameters
 	priorCaus, priorNeut = priorParams
 
-	#logging.debug(name)
-	#print(name)
 
 	# if we've already calculated it, return the value
 	if name in allBF:
@@ -525,7 +534,6 @@ def calculateBF(pedInfo, allBF, priorParams, inputData):
 
 
 	founderVector = {}
-	#findGenerations(inputGenotype, genotypeStates, pedInfo)
 	findGenerations(inputGenotype, founderVector, pedInfo)
 
 	
@@ -580,10 +588,6 @@ def calculateBF(pedInfo, allBF, priorParams, inputData):
 	# calculate the numerator and denominator of the Bayes Factor
 	genotypeProbabilities = np.zeros(len(genotypeStates))
 
-	#local_vars = list(locals().items())
-	#for var, obj in local_vars:
-	#	print(var, sys.getsizeof(obj))
-	#print("\n")
 
 	for i in range(len(genotypeStates)):
 		p = 1.0
@@ -595,10 +599,6 @@ def calculateBF(pedInfo, allBF, priorParams, inputData):
 
 		nList = range(pedInfo.nPeople)
 		
-		#k1 = len([ x for x in nList if pedInfo.phenotypeActual[x] == 1 and genotypeStates[i][x] == 1 ])
-		#k2 = len([ x for x in nList if pedInfo.phenotypeActual[x] == 0 and genotypeStates[i][x] == 1 ])
-		#l1 = len([ x for x in nList if pedInfo.phenotypeActual[x] == 1 and genotypeStates[i][x] == 0 ])
-		#l2 = len([ x for x in nList if pedInfo.phenotypeActual[x] == 0 and genotypeStates[i][x] == 0 ])
 
 		k1 = k2 = l1 = l2 = 0
 		for x in range(pedInfo.nPeople):
@@ -648,13 +648,9 @@ def calculateBF(pedInfo, allBF, priorParams, inputData):
 		else:
 			logging.error("Prior distribution for parameters under neutral model not known. ")
 
-	#print("\n")	
-	#print("num = ", numerator, "\t-\tdenom = ", denominator)
-	#print("\n\n\n")	
 
 
 	if denominator == 0.0 :
-		#BF = float("inf")
 		BF = 0.0
 	else:
 		BF = numerator/denominator
@@ -806,12 +802,13 @@ def BF_main(args):
 	for variant in vcf:
 		# get the ID of the variant
 		var_tmp = variant.CHROM + "_" + str(variant.start+1) + "_" + variant.REF + "_" + variant.ALT[0]
+		varID.append(var_tmp)
 
-		if prior_IDs is not None:
-			if var_tmp in prior_IDs:
-				varID.append(var_tmp)
-			else:
-				continue
+		#if prior_IDs is not None:
+		#	if var_tmp in prior_IDs:
+		#		varID.append(var_tmp)
+		#	else:
+		#		continue
 
 
 		# fill the known genotypes
