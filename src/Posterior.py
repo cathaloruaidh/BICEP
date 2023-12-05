@@ -23,7 +23,7 @@ def PO_main(args):
 	
 
 	# command line arguments
-	if (args.prior is None) or (args.bf is None):
+	if (args.prefix is None) or (args.bf is None):
 		priorFile = args.prefix + ".priors.txt"
 		bfFile = args.prefix + ".BF.txt"
 
@@ -54,7 +54,9 @@ def PO_main(args):
 	# combine values and output
 	logging.info("Merge and output")
 	merged = prior.merge(bf, on="ID")
+	merged["logPriorOC"] = pd.to_numeric(merged["logPriorOC"], errors='coerce')
 	merged["logPostOC"] = merged["logPriorOC"] + merged["logBF"]
+	merged["Rank"] = merged["logPostOC"].rank()
 
 
 	with open(args.tempDir + args.prefix + '.max_logBF.txt', 'r') as f:
