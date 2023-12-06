@@ -238,7 +238,12 @@ def PT_main(args):
 
 	# save variants in list 
 	DATA = []
+	CHROMS = set([ "chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7", "chr8", "chr9", "chr10", "chr11", "chr12", "chr13", "chr14", "chr15", "chr16", "chr17", "chr18", "chr19", "chr20", "chr21", "chr22" ])
 	for variant in CV_anno_vcf:
+		# remove variants not on autosomes
+		if len( set([variant.CHROM, "chr"+variant.CHROM]) & CHROMS ) == 0:
+			continue
+
 		# get the ID of the variant
 		ID = variant.CHROM + "_" + str(variant.start+1) + "_" + variant.REF + "_" + variant.ALT[0] 
 		

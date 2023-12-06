@@ -23,13 +23,13 @@ def PO_main(args):
 	
 
 	# command line arguments
-	if (args.prior is None) or (args.bf is None):
-		priorFile = args.prefix + ".priors.txt"
-		bfFile = args.prefix + ".BF.txt"
+	#if (args.prior is None) or (args.bf is None):
+	priorFile = args.prefix + ".priors.txt"
+	bfFile = args.prefix + ".BF.txt"
 
-	else:
-		priorFile = args.prior
-		bfFile = args.bf
+	#else:
+	#	priorFile = args.prior
+	#	bfFile = args.bf
 
 
 	# load the prior and BF files
@@ -66,7 +66,7 @@ def PO_main(args):
 	merged["logPriorOC"] = pd.to_numeric(merged["logPriorOC"], errors='coerce')
 	merged["logPostOC"] = merged["logPriorOC"] + merged["logBF"]
 	merged.dropna(subset=['logPostOC'], inplace=True)
-	merged["Rank"] = merged["logPostOC"].rank(ascending=False)
+	merged["Rank"] = merged["logPostOC"].rank(ascending=False, method='first')
 
 
 	with open(args.tempDir + args.prefix + '.max_logBF.txt', 'r') as f:
@@ -85,8 +85,6 @@ def PO_main(args):
 	min_y = np.floor(np.min(np.concatenate((merged_sub['logPostOC'].values, merged_sub['logBF'].values, merged_sub['logPriorOC'].values, np.array([max_logBF])))))
 	max_y = np.ceil(np.max(np.concatenate((merged_sub['logPostOC'].values, merged_sub['logBF'].values, merged_sub['logPriorOC'].values, np.array([max_logBF])))))
 
-	print(min_y)
-	print(max_y)
 
 	fig, (ax1, ax2, ax3) = plt.subplots(nrows=3, ncols=1, sharex=True)
 
