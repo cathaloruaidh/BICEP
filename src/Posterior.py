@@ -23,40 +23,50 @@ def PO_main(args):
 	
 
 	# command line arguments
-	if (args.prefix is None) or (args.bf is None):
+	if (args.prior is None) or (args.bf is None):
 		priorFile = args.prefix + ".priors.txt"
 		bfFile = args.prefix + ".BF.txt"
 
 	else:
-		if args.input is not None:
-			priorFile = args.input + ".priors.txt"
-			bfFile = args.input + ".BF.txt"
-
-		if args.prior is not None:
-			priorFile = args.prior
-
-		if args.bf is not None:
-			bfFile = args.bf
+		priorFile = args.prior
+		bfFile = args.bf
 
 
 	# load the prior and BF files
 	logging.info("Reading in the prior file")
 	with open(args.outputDir + priorFile) as f:
-		prior = pd.read_csv(f, sep="\t")
+		prior = pd.read_csv(f, sep="\t", na_values=['.'])
+		prior.dropna(subset=['prior'], inplace=True)
 	
 	
 	logging.info("Reading in the Bayes factor file")
 	with open(args.outputDir + bfFile) as f:
-		bf = pd.read_csv(f, sep="\t")
+		bf = pd.read_csv(f, sep="\t", na_values=['.'])
+		bf.dropna(subset=['BF'], inplace=True)
+		bf = bf[bf["BF"] > 0]
 	
 
 
 	# combine values and output
 	logging.info("Merge and output")
 	merged = prior.merge(bf, on="ID")
+
+
+	# if Prior == 0, set to min non-zero
+	merged.loc[merged["prior"] == 0, "prior"] = np.min(merged[merged["prior"] > 0]["prior"])
+	merged["PriorOC"] = merged["prior"] / (1 - merged["prior"] )
+	merged["logPriorOC"] = np.log10(merged["PriorOC"])
+
+	# drop NA values
+	merged.replace([np.inf, -np.inf], np.nan, inplace=True)
+	merged.dropna(subset=['prior', 'PriorOC', 'logPriorOC', 'BF', 'logBF'], inplace=True)
+
+
+	# calculate the posteriors
 	merged["logPriorOC"] = pd.to_numeric(merged["logPriorOC"], errors='coerce')
 	merged["logPostOC"] = merged["logPriorOC"] + merged["logBF"]
-	merged["Rank"] = merged["logPostOC"].rank()
+	merged.dropna(subset=['logPostOC'], inplace=True)
+	merged["Rank"] = merged["logPostOC"].rank(ascending=False)
 
 
 	with open(args.tempDir + args.prefix + '.max_logBF.txt', 'r') as f:
@@ -64,7 +74,6 @@ def PO_main(args):
 		max_logBF = float(tmp[0])
 
 	merged_sub = merged.sort_values(by=['logPostOC'], ascending=False).head(n=args.top)
-	merged_sub["Rank"] = range(1, args.top + 1)
 
 	merged.to_csv(args.outputDir + args.prefix + ".posteriors.txt", index=False, sep='\t', na_rep='.')
 
@@ -76,6 +85,8 @@ def PO_main(args):
 	min_y = np.floor(np.min(np.concatenate((merged_sub['logPostOC'].values, merged_sub['logBF'].values, merged_sub['logPriorOC'].values, np.array([max_logBF])))))
 	max_y = np.ceil(np.max(np.concatenate((merged_sub['logPostOC'].values, merged_sub['logBF'].values, merged_sub['logPriorOC'].values, np.array([max_logBF])))))
 
+	print(min_y)
+	print(max_y)
 
 	fig, (ax1, ax2, ax3) = plt.subplots(nrows=3, ncols=1, sharex=True)
 
