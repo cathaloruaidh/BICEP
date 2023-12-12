@@ -1,7 +1,0 @@
-[('MPC_score', 2.638597),
- ('Polyphen2_HDIV_score', -0.000633),
- ('REVEL_score', 9.136002),
- ('FATHMM_score', 3.600074),
- ('SIFT_score', -1.035376),
- ('gnomAD_v2_exome_AF_popmax', -1302.033389)]
-Intercept:  [-6.342225]
