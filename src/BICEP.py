@@ -89,6 +89,7 @@ def main(argv):
 	parser_ALL.add_argument("-b", "--benign", nargs='?', help="File of benign variant IDs for training", metavar='C')
 	parser_ALL.add_argument("-p", "--pathogenic", nargs='?', help="File of pathogenic variant IDs for training", metavar='C')
 	parser_ALL.add_argument("--boot", nargs='?', default=1, type=int, help="Number of bootstraps", metavar='N')
+	parser_ALL.add_argument("-m", "--model", nargs='?', help="Prefix for the regression model files", metavar='C')
 	parser_ALL.add_argument("-v", "--vcf", nargs='?', help="VCF file for variants", metavar='F', required = True)
 	parser_ALL.add_argument("-f", "--fam", nargs='?', help="FAM file describing the pedigree structure and phenotypes", metavar='F', required = True)
 	parser_ALL.add_argument("--minAff", nargs='?', default=0, type=int, help="Minimum affected individuals per pedigree", metavar='N')
@@ -218,9 +219,11 @@ def main(argv):
 		#rootLogger.addHandler(consoleHandler)
 
 		if args.command == "All":
-			args.model = args.tempDir + args.prefix
 
-			Prior_Train.PT_main(args)
+			if args.model is None:
+				args.model = args.tempDir + args.prefix
+				Prior_Train.PT_main(args)
+
 			#Prior_Evaluate.PE_main(args)
 			Prior_Apply.PA_main(args)
 			BayesFactor.BF_main(args)
