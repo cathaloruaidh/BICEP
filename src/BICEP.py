@@ -73,6 +73,7 @@ def main(argv):
 	parser_parent.add_argument("-l", "--log", nargs='?', default="INFO", help="Logging level: ERROR, WARN, INFO, DEBUG", choices=['ERROR', 'WARN', 'INFO', 'DEBUG'], metavar='C')
 	parser_parent.add_argument("-n", "--cores", nargs='?', default=1, type=int, help="Number of CPU cores available", metavar='N')
 	parser_parent.add_argument("--prefix", nargs='?', default="BICEP_output", help="Output prefix", metavar='C')
+	parser_parent.add_argument("--build", nargs='?', default='GRCh38', help="Reference genome build: GRCh37, GRCh38", choices=['GRCh37', 'GRCh38'], metavar='C')
 
 
 	# All sub-command
@@ -110,6 +111,7 @@ def main(argv):
 	parser_PT.add_argument("--predictors", nargs='?', help="File containing regression predictors", metavar='C')
 	parser_PT.add_argument("--clinvar", nargs='?', help="ClinVar VCF file annotated with VEP", metavar='C')
 	parser_PT.add_argument("--clinvarFull", nargs='?', help="Full ClinVar VCF file to generate flat priors", metavar='C')
+	parser_PT.add_argument("-v", "--vcf", nargs='?', help="VCF file for variants", metavar='F', required = True)
 	parser_PT.add_argument("-e", "--exclude", nargs='?', help="File of ClinVar IDs to exclude from training", metavar='C')
 	parser_PT.add_argument("-i", "--include", nargs='?', help="File of ClinVar IDs to include for training", metavar='C')
 	parser_PT.add_argument("-b", "--benign", nargs='?', help="File of benign variant IDs for training", metavar='C')
@@ -224,6 +226,9 @@ def main(argv):
 			if args.model is None:
 				args.model = args.tempDir + args.prefix
 				Prior_Train.PT_main(args)
+
+			if args.clinvar is None:
+				args.clinvar = args.scriptDir + "../data/clinvar_20231126." + args.build +".PATH_BEN.single.strip.vep.vcf.gz"
 
 			#Prior_Evaluate.PE_main(args)
 			Prior_Apply.PA_main(args)
