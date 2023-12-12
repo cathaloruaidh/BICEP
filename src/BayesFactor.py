@@ -943,6 +943,10 @@ def BF_main(args):
 
 	print(perfectCoseg_vector)
 	for i in range(pedInfo.nPeople):
+		if pedInfo.indID[i] not in vcf.samples:
+			perfectCoseg_vector[i] = -1
+			continue
+
 		if perfectCoseg_vector[i] == 0:
 			if pedInfo.hasParents[i] and ( perfectCoseg_vector[pedInfo.dadIndex[i]] + perfectCoseg_vector[pedInfo.mamIndex[i]] > 0 ):
 				c = sum([ perfectCoseg_vector[child] for child in pedInfo.children[i] ])
