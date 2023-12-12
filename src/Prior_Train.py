@@ -413,6 +413,14 @@ def PT_main(args):
 				DATA[i][j] = float(DATA[i][j])
 			
 
+	# get the IDs of the variants in the pedigree VCF file
+	ped_vcf = VCF(args.vcf, gts012=True)
+
+	ped_ID = []
+	for variant in ped_vcf:
+		ped_ID.append(variant.CHROM + "_" + str(variant.start+1) + "_" + variant.REF + "_" + variant.ALT[0])
+
+
 
 
 	################################################################################
@@ -422,9 +430,13 @@ def PT_main(args):
 
 	# read in the data
 	logging.debug("Converting to DataFrame")
-	#df = pd.DataFrame(DATA, columns = [ 'ID', 'setCV', 'geneCV', 'csqCV', 'typeCV', 'alleleID' ] + )
 	df = pd.DataFrame(DATA, columns = [ 'ID', 'setCV', 'geneCV', 'csqCV', 'typeCV', 'alleleID' ] + keysAscPred + keysDescPred )
 	df['alleleID'] = df.alleleID.astype(str).replace('\.0', '', regex=True)
+
+
+	# if there is overlap between the ClinVar and pedigree data,
+	# remove the variants from the Clinvar data prior to training. 
+	df = df[~df['ID'].isin(ped_ID)]
 
 
 
