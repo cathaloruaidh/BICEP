@@ -180,7 +180,7 @@ def main(argv):
 		args.outputDir = "BICEP_results/"
 		args.tempDir = "BICEP_temp/"
 		args.logDir = "BICEP_log/"
-		args.scriptDir = os.path.dirname(os.path.realpath(__file__))
+		args.scriptDir = os.path.dirname(os.path.realpath(__file__)) + "/"
 
 
 		# create directories
