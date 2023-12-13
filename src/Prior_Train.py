@@ -56,8 +56,8 @@ def PT_main(args):
 		else:
 			clinVarAnnoVcfFile = args.scriptDir + "../data/" + args.clinvarPrefix + "." + args.build + ".PATH_BEN.single.strip.vep.vcf.gz"
 
-	if args.clinvarFull is None:
-		clinVarFullVcfFile = clinVarAnnoVcfFile
+	if args.clinvarFull is not None:
+		clinVarFullVcfFile = args.clinvarFull
 
 
 
