@@ -44,41 +44,17 @@ def PT_main(args):
 
 
 	# command line arguments
-	nCores = 1
-	excludeFile = None
-	includeFile = None
 	clinVarFullVcfFile = None
 	clinVarAnnoVcfFile = None
-	outputPrefix = None
-	logLevel = None
-	benignFile = None
-	pathogenicFile = None
-	predictorsFile = None
 
 	if args.clinvar is not None:
 		clinVarAnnoVcfFile = args.clinvar
 
-	if args.clinvarFull is not None:
-		clinVarFullVcfFile = args.clinvar
+	else:
+		clinVarAnnoVcfFile = args.scriptDir + "../data/clinvar_20231126." + args.build + ".PATH_BEN.single.strip.vep.vcf.gz"
 
-	if args.exclude is not None:
-		excludeFile = args.exclude
-
-	if args.include is not None:
-		includeFile = args.include
-
-	if args.benign is not None:
-		benignFile = args.benign
-
-	if args.prefix is not None:
-		outputPrefix = args.prefix
-
-	if args.pathogenic is not None:
-		pathogenicFile = args.pathogenic
-
-	if args.predictors is not None:
-		predictorsFile = args.predictors
-
+	if args.clinvarFull is None:
+		clinVarFullVcfFile = clinVarAnnoVcfFile
 
 
 
@@ -195,7 +171,7 @@ def PT_main(args):
 
 
 
-			with open(args.tempDir + outputPrefix+'.flatPriors.pkl', 'wb') as f:
+			with open(args.tempDir + args.prefix+'.flatPriors.pkl', 'wb') as f:
 				pickle.dump(flatPriors, f)
 		else:
 			msg = "Could not find the ClinVar file: " + clinVarFullVcfFile
@@ -213,11 +189,11 @@ def PT_main(args):
 	keys = [ key.strip("\"") for key in keys ]
 
 
-	if predictorsFile is not None:
+	if args.predictors is not None:
 
 		d = {}
 
-		with open(predictorsFile, 'r') as f:
+		with open(args.predictors, 'r') as f:
 			for line in f:
 				(key, value)=line.split()
 				d[key] = value
@@ -401,7 +377,7 @@ def PT_main(args):
 
 		# otherwise print to error file
 		#else:
-		#	with open(outputPrefix + ".err", 'a') as f:
+		#	with open(args.prefix + ".err", 'a') as f:
 		#		print(ID, "\t", setCV, "\t", csqCV, file=f)
 
 	
@@ -441,16 +417,16 @@ def PT_main(args):
 
 
 	# if there are pathogenic/benign files, subset to these
-	if (pathogenicFile is not None) and (benignFile is not None):
+	if (args.pathogenic is not None) and (args.benign is not None):
 		logging.info("Setting the pathogenic/benign training elements from input file")
 
 		df['setCV'] = "."
 
-		with open(pathogenicFile, 'r') as f:
+		with open(args.pathogenic, 'r') as f:
 			pathogenicList = pd.read_csv(f, header=None, names = ['alleleID'], dtype=str)
 			df.loc[df.alleleID.isin(pathogenicList.alleleID), 'setCV'] = "PATHOGENIC"
 
-		with open(benignFile, 'r') as f:
+		with open(args.benign, 'r') as f:
 			benignList = pd.read_csv(f, header=None, names = ['alleleID'], dtype=str)
 			df.loc[df.alleleID.isin(benignList.alleleID), 'setCV'] = "BENIGN"
 
@@ -458,28 +434,28 @@ def PT_main(args):
 
 
 
-	if pathogenicFile is not None and benignFile is None:
+	if args.pathogenic is not None and args.benign is None:
 		logging.warning("Pathogenic file is not specified, ignoring benign file")
 	
 	
-	if pathogenicFile is None and benignFile is not None:
+	if args.pathogenic is None and args.benign is not None:
 		logging.warning("Benign file is not specified, ignoring pathogenic file")
 
 
 
 
 	# if there is an exclude file, remove them 
-	if excludeFile is not None:
+	if args.exclude is not None:
 		logging.info("Removing variants in exclude file")
-		with open(excludeFile, 'r') as f:
+		with open(args.exclude, 'r') as f:
 			excludeList = pd.read_csv(f, header=None, names = ['alleleID'], dtype=str)
 			df = df[~df.alleleID.isin(excludeList.alleleID)]
 
 
 	# if there is an include file, remove everything else 
-	if includeFile is not None:
+	if args.include is not None:
 		logging.info("Susbetting to variants in include file")
-		with open(includeFile, 'r') as f:
+		with open(args.include, 'r') as f:
 			includeList = pd.read_csv(f, header=None, names = ['alleleID'], dtype=str)
 			df = df[df.alleleID.isin(includeList.alleleID)]
 
@@ -554,7 +530,7 @@ def PT_main(args):
 		imp_indel.feature_names = list(x_indel.columns.values)
 		x_indel_imp = imp_indel.transform(x_indel)
 
-		with open(args.tempDir + outputPrefix+'.imp_indel.pkl', 'wb') as f:
+		with open(args.tempDir + args.prefix+'.imp_indel.pkl', 'wb') as f:
 			pickle.dump(imp_indel, f)
 
 		
@@ -566,7 +542,7 @@ def PT_main(args):
 		scal_indel.feature_names = list(x_indel.columns.values)
 		x_indel_imp_scal = scal_indel.transform(x_indel_imp)
 
-		with open(args.tempDir + outputPrefix+'.scal_indel.pkl', 'wb') as f:
+		with open(args.tempDir + args.prefix+'.scal_indel.pkl', 'wb') as f:
 			pickle.dump(scal_indel, f)
 
 
@@ -578,15 +554,15 @@ def PT_main(args):
 
 		logReg_indel.feature_names = list(x_indel.columns.values)
 
-		with open(args.tempDir + outputPrefix+'.logReg_indel.pkl', 'wb') as f:
+		with open(args.tempDir + args.prefix+'.logReg_indel.pkl', 'wb') as f:
 			pickle.dump(logReg_indel, f)
 
-		with open(args.tempDir + outputPrefix+'.predictors_indel.npy', 'wb') as f:
+		with open(args.tempDir + args.prefix+'.predictors_indel.npy', 'wb') as f:
 			np.save(f, x_indel.columns)
 
 		results_indel = logReg_indel.predict_proba(x_indel_imp_scal)[:,1]
 		
-		with open(args.tempDir + outputPrefix + ".indel_coef.txt", 'a') as f:
+		with open(args.tempDir + args.prefix + ".indel_coef.txt", 'a') as f:
 			pprint.pprint(list(zip(logReg_indel.feature_names, np.round(logReg_indel.coef_.flatten(), 6))), f)
 			print("Intercept: ", np.round(logReg_indel.intercept_, 6), file=f)
 
@@ -651,7 +627,7 @@ def PT_main(args):
 
 		x_missense_imp = imp_missense.transform(x_missense)
 
-		with open(args.tempDir + outputPrefix+'.imp_missense.pkl', 'wb') as f:
+		with open(args.tempDir + args.prefix+'.imp_missense.pkl', 'wb') as f:
 			pickle.dump(imp_missense, f)
 
 
@@ -664,7 +640,7 @@ def PT_main(args):
 
 		x_missense_imp_scal = scal_missense.transform(x_missense_imp)
 
-		with open(args.tempDir + outputPrefix+'.scal_missense.pkl', 'wb') as f:
+		with open(args.tempDir + args.prefix+'.scal_missense.pkl', 'wb') as f:
 			pickle.dump(scal_missense, f)
 
 
@@ -676,15 +652,15 @@ def PT_main(args):
 
 		logReg_missense.feature_names = list(x_missense.columns.values)
 
-		with open(args.tempDir + outputPrefix+'.logReg_missense.pkl', 'wb') as f:
+		with open(args.tempDir + args.prefix+'.logReg_missense.pkl', 'wb') as f:
 			pickle.dump(logReg_missense, f)
 
-		with open(args.tempDir + outputPrefix+'.predictors_missense.npy', 'wb') as f:
+		with open(args.tempDir + args.prefix+'.predictors_missense.npy', 'wb') as f:
 			np.save(f, x_missense.columns)
 
 		results_missense = logReg_missense.predict_proba(x_missense_imp_scal)[:,1]
 
-		with open(args.tempDir + outputPrefix + ".missense_coef.txt", 'a') as f:
+		with open(args.tempDir + args.prefix + ".missense_coef.txt", 'a') as f:
 		 pprint.pprint(list(zip(logReg_missense.feature_names, np.round(logReg_missense.coef_.flatten(), 6))), f)
 		 print("Intercept: ", np.round(logReg_missense.intercept_, 6), file=f)
 	
@@ -760,7 +736,7 @@ def PT_main(args):
 
 		x_nonMissenseSNV_imp = imp_nonMissenseSNV.transform(x_nonMissenseSNV)
 
-		with open(args.tempDir + outputPrefix+'.imp_nonMissenseSNV.pkl', 'wb') as f:
+		with open(args.tempDir + args.prefix+'.imp_nonMissenseSNV.pkl', 'wb') as f:
 			pickle.dump(imp_nonMissenseSNV, f)
 
 
@@ -773,7 +749,7 @@ def PT_main(args):
 
 		x_nonMissenseSNV_imp_scal = scal_nonMissenseSNV.transform(x_nonMissenseSNV_imp)
 
-		with open(args.tempDir + outputPrefix+'.scal_nonMissenseSNV.pkl', 'wb') as f:
+		with open(args.tempDir + args.prefix+'.scal_nonMissenseSNV.pkl', 'wb') as f:
 			pickle.dump(scal_nonMissenseSNV, f)
 
 
@@ -785,15 +761,15 @@ def PT_main(args):
 
 		logReg_nonMissenseSNV.feature_names = list(x_nonMissenseSNV.columns.values)
 
-		with open(args.tempDir + outputPrefix+'.logReg_nonMissenseSNV.pkl', 'wb') as f:
+		with open(args.tempDir + args.prefix+'.logReg_nonMissenseSNV.pkl', 'wb') as f:
 			pickle.dump(logReg_nonMissenseSNV, f)
 
-		with open(args.tempDir + outputPrefix+'.predictors_nonMissenseSNV.npy', 'wb') as f:
+		with open(args.tempDir + args.prefix+'.predictors_nonMissenseSNV.npy', 'wb') as f:
 			np.save(f, x_nonMissenseSNV.columns)
 
 		results_nonMissenseSNV = logReg_nonMissenseSNV.predict_proba(x_nonMissenseSNV_imp_scal)[:,1]
 
-		with open(args.tempDir + outputPrefix + ".nonMissenseSNV_coef.txt", 'a') as f:
+		with open(args.tempDir + args.prefix + ".nonMissenseSNV_coef.txt", 'a') as f:
 		 pprint.pprint(list(zip(logReg_nonMissenseSNV.feature_names, np.round(logReg_nonMissenseSNV.coef_.flatten(), 6))), f)
 		 print("Intercept: ", np.round(logReg_nonMissenseSNV.intercept_, 6), file=f)
 
@@ -833,7 +809,7 @@ def PT_main(args):
 	#x_imp_scal_df = pd.concat([x_indel_imp_scal_df, x_missense_imp_scal_df, x_nonMissenseSNV_imp_scal_df], ignore_index=True, sort=False)
 
 	#combined = pd.concat([x_imp_scal_df, prior_prob], axis=1)
-	#combined.to_csv(outputPrefix+".priors.txt", index=False, sep='\t', na_rep='.')
+	#combined.to_csv(args.prefix+".priors.txt", index=False, sep='\t', na_rep='.')
 
 
 

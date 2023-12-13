@@ -941,7 +941,6 @@ def BF_main(args):
 	# note: set obligate carriers regardless of phenotype
 	perfectCoseg_vector = pedInfo.phenotypeActual
 
-	print(perfectCoseg_vector)
 	for i in range(pedInfo.nPeople):
 		if pedInfo.indID[i] not in vcf.samples:
 			perfectCoseg_vector[i] = -1
@@ -953,7 +952,6 @@ def BF_main(args):
 				if c > 0:
 					perfectCoseg_vector[i] = 1
 
-	print(perfectCoseg_vector)
 	perfectCoseg_string = genotypeString(perfectCoseg_vector)
 
 	if perfectCoseg_string in allBF.keys():
