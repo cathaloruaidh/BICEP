@@ -792,9 +792,9 @@ def BF_main(args):
 
 
 	# get IDs of variants which recieved a prior
-	prior_IDs = None
-	with open(args.tempDir + args.prefix + '.priors.ID.npy', 'rb') as f:
-		prior_IDs = np.load(f, allow_pickle = True)
+	#prior_IDs = None
+	#with open(args.tempDir + args.prefix + '.priors.ID.npy', 'rb') as f:
+	#	prior_IDs = np.load(f, allow_pickle = True)
 
 
 	# loop over all samples in VCF and get genotype
