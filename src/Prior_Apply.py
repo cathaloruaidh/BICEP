@@ -524,7 +524,7 @@ def PA_main(args):
 	
 	else:
 		if len(x_indel_index) > 0: 
-			x_indel_data = pd.DataFrame(np.nan, index=range(0, len(x_indel_index)), columns = x_indel.columns)
+			x_indel_data = pd.DataFrame(np.nan, index=range(len(x_indel_index)), columns = x_indel.columns)
 
 
 
@@ -534,7 +534,7 @@ def PA_main(args):
 
 	else:
 		if len(x_missense_index) > 0:
-			x_missense_data = pd.DataFrame(np.nan, index=range(0, len(x_missense_index)), columns = x_missense.columns)
+			x_missense_data = pd.DataFrame(np.nan, index=range(len(x_missense_index)), columns = x_missense.columns)
 	
 
 
@@ -544,7 +544,7 @@ def PA_main(args):
 	
 	else:
 		if len(x_nonMissenseSNV_index) > 0:
-			x_nonMissenseSNV_data = pd.DataFrame(np.nan, index=range(0, len(x_nonMissenseSNV_index)), columns = x_nonMissenseSNV.columns)
+			x_nonMissenseSNV_data = pd.DataFrame(np.nan, index=range(len(x_nonMissenseSNV_index)), columns = x_nonMissenseSNV.columns)
 
 
 
