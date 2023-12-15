@@ -111,6 +111,7 @@ def main(argv):
 	Train the regresison models to generate a prior'''))
 	parser_PT.add_argument("--predictors", nargs='?', help="File containing regression predictors", metavar='C')
 	parser_PT.add_argument("--clinvar", nargs='?', help="ClinVar VCF file annotated with VEP", metavar='C')
+	parser_PT.add_argument("--clinvarPrefix", nargs='?', help="Which release of ClinVar used to train the prior", metavar='C')
 	parser_PT.add_argument("--clinvarFull", nargs='?', help="Full ClinVar VCF file to generate flat priors", metavar='C')
 	parser_PT.add_argument("-v", "--vcf", nargs='?', help="VCF file for variants", metavar='F', required = True)
 	parser_PT.add_argument("-e", "--exclude", nargs='?', help="File of ClinVar IDs to exclude from training", metavar='C')
