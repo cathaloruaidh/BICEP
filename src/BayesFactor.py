@@ -11,6 +11,7 @@ import sys
 import threading
 
 import numpy as np
+import pandas as pd
 import scipy.special as sp
 
 
@@ -793,8 +794,10 @@ def BF_main(args):
 
 	# get IDs of variants which recieved a prior
 	#prior_IDs = None
-	#with open(args.tempDir + args.prefix + '.priors.ID.npy', 'rb') as f:
-	#	prior_IDs = np.load(f, allow_pickle = True)
+	#with open(args.outputDir + args.prefix + '.priors.txt', 'rb') as f:
+	#	 prior_IDs = pd.read_csv(f, dtype=str, na_values = ['.'], sep = '\t')
+	#	 prior_IDs = prior_IDs.dropna(subset=['logPriorOC'])
+	#	 prior_IDs = prior_IDs["ID"]
 
 
 	# loop over all samples in VCF and get genotype
@@ -811,7 +814,7 @@ def BF_main(args):
 		varID.append(var_tmp)
 
 		#if prior_IDs is not None:
-		#	if var_tmp in prior_IDs:
+		#	if prior_IDs.str.contains(var_tmp).any():
 		#		varID.append(var_tmp)
 		#	else:
 		#		continue
@@ -834,6 +837,14 @@ def BF_main(args):
 			# set known genotype
 			genotypes[vcfSampleIndex[i]][j] = gt
 		j += 1
+
+	# ignore variants which haven't recieved a prior
+	#if prior_IDs is not None:
+	#	logging.info("Remove variants with no prior")
+	#	ind = np.in1d(varID, prior_IDs)
+	#	varID = varID[ind]
+	#	genotypes = genotypes[:][ind]
+
 
 	varString = np.apply_along_axis(genotypeString, 0, genotypes)
 

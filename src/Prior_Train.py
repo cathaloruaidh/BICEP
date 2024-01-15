@@ -103,6 +103,28 @@ def PT_main(args):
 	'intergenic_variant' : 39}
 
 
+	vepCSQRankCoding = {'transcript_ablation' : 1,
+	'splice_acceptor_variant' : 2,
+	'splice_donor_variant' : 3,
+	'stop_gained' : 4,
+	'frameshift_variant' : 5,
+	'stop_lost' : 6,
+	'start_lost' : 7,
+	'transcript_amplification' : 8,
+	'inframe_insertion' : 9,
+	'inframe_deletion' : 10,
+	'missense_variant' : 11,
+	'protein_altering_variant' : 12,
+	'splice_region_variant' : 13,
+	'start_retained_variant' : 14,
+	'stop_retained_variant' : 15,
+	'synonymous_variant' : 16,
+	'coding_sequence_variant' : 17,
+	'5_prime_UTR_variant' : 18,
+	'3_prime_UTR_variant' : 19}
+
+
+
 
 	# dictionary for flat prior
 	flatPriors = {}
@@ -276,6 +298,11 @@ def PT_main(args):
 
 		# change 'nonsense' to 'stop_gained'
 		csqCV = re.sub('nonsense', 'stop_gained', csqCV)
+
+
+		# remove non-coding variants
+		if csqCV not in vepCSQRankCoding.keys():
+			continue
 
 
 
