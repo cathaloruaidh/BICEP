@@ -1,32 +1,39 @@
-#!/usr/bin/python
+import glob
+import logging
+import math
+import os
+import os.path
+import pickle
+import re
+import sys
+import warnings
 
-
-
-
-import cProfile, getopt, glob, logging, math, os, os.path, pickle, pprint, re, sys
 import numpy as np
 import pandas as pd
+import statsmodels.api as sm
 
 from cyvcf2 import VCF, Writer
-
+from joblib import dump, load
+from multiprocessing import cpu_count
 from sklearn import metrics
 from sklearn.linear_model import LogisticRegression
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer, SimpleImputer
 from sklearn.metrics import confusion_matrix, matthews_corrcoef, classification_report, r2_score
 from sklearn.preprocessing import MinMaxScaler
-import statsmodels.api as sm
 
-from joblib import dump, load
 
-import warnings
 
 
 
 
 
 # main function
-def main(argv):
+def PA_main(args):
+
+
+	logging.info("PRIOR - APPLY")
+	logging.info(" ")
 
 
 	# ignore warnings
@@ -44,78 +51,32 @@ def main(argv):
 	outputPrefix = None
 	predictorsFile = None
 
-	try:
-		opts, args = getopt.getopt(argv, "c:l:m:o:v:", ["cores=", "log=", "model=", "output=", "predictors=", "vcf="])
-	except getopt.GetoptError:
-		print("Getopt Error")
-		logging.error("getopt error")
-		sys.exit("Exiting ... ")
 
-	for opt, arg in opts:
-		if opt in ("-b", "--boot"):
-			nBoot = int(arg)
+	if args.cores is not None:
+		if int(args.cores) <= cpu_count():
+			nCores = int(args.cores)
 
-		if opt in ("-c", "--cores"):
-			if int(arg) <= multiprocessing.cpu_count():
-				nCores = int(arg)
+	if args.model is not None:
+		modelPrefix = args.model
 
-		if opt in ("-l", "--log"):
-			logLevel = arg.upper()
-			numericLevel = getattr(logging, arg.upper(), None)
-			if not isinstance(numericLevel, int):
-				raise ValueError('Invalid log level: %s' % arg)
+	if args.prefix is not None:
+		outputPrefix = args.prefix
 
-		if opt in ("-m", "--model"):
-			modelPrefix = arg
+	if args.vcf is not None:
+		inputVcfFile = args.vcf
+
+	if args.predictors is not None:
+		predictorsFile = args.predictors
 	
-		if opt in ("-o", "--output"):
-			outputPrefix = arg
-	
-		if opt in ("-v", "--vcf"):
-			inputVcfFile = arg
-	
-		if opt in ("--predictors"):
-			predictorsFile = arg
-	
-
-
-	# get the output file names
-	if outputPrefix is None:
-		outputErr= "output.err"
-
-	else:
-		outputErr = outputPrefix + ".err"
-
-
-
-	# set the logging info
-	FORMAT = '# %(asctime)s [%(levelname)s] - %(message)s'
-	
-	if logLevel is None:
-		logging.basicConfig(format=FORMAT)
-	else:
-		numericLevel = getattr(logging, logLevel, None)
-		if not isinstance(numericLevel, int):
-			raise ValueError('Invalid log level: %s' % logLevel)
-		logging.basicConfig(format=FORMAT, level=logLevel)
-	
-	
-	# add colours to the log name
-	logging.addLevelName(logging.NOTSET, "NOT  ")
-	logging.addLevelName(logging.DEBUG, "\u001b[36mDEBUG\u001b[0m")
-	logging.addLevelName(logging.INFO, "INFO ")
-	logging.addLevelName(logging.WARNING, "\u001b[33mWARN \u001b[0m")
-	logging.addLevelName(logging.ERROR, "\u001b[31mERROR\u001b[0m")
-	logging.addLevelName(logging.CRITICAL, "\u001b[35mCRIT\u001b[0m")
-
 
 	# check if model files exist
 	if modelPrefix is None:
 		logging.error("No model files specified")
 		sys.exit(1)
 
+
 	if not glob.glob(modelPrefix + "*.pkl"):
-		logging.error("No model files found")
+		logging.critical("No model files found")
 		sys.exit(1)
 
 
@@ -161,10 +122,34 @@ def main(argv):
 	'intergenic_variant' : 39}
 
 
+	vepCSQRankCoding = {'transcript_ablation' : 1,
+	'splice_acceptor_variant' : 2,
+	'splice_donor_variant' : 3,
+	'stop_gained' : 4,
+	'frameshift_variant' : 5,
+	'stop_lost' : 6,
+	'start_lost' : 7,
+	'transcript_amplification' : 8,
+	'inframe_insertion' : 9,
+	'inframe_deletion' : 10,
+	'missense_variant' : 11,
+	'protein_altering_variant' : 12,
+	'splice_region_variant' : 13,
+	'start_retained_variant' : 14,
+	'stop_retained_variant' : 15,
+	'synonymous_variant' : 16,
+	'coding_sequence_variant' : 17,
+	'5_prime_UTR_variant' : 18,
+	'3_prime_UTR_variant' : 19}
+
+
+
 
 	# get flat priors from training data	
-	with open(modelPrefix + '.flatPriors.pkl', 'rb') as f:
-		flatPriors = pickle.load(f)
+	flatPriors = {}
+	if os.path.isfile(modelPrefix + '.flatPriors.pkl'):
+		with open(modelPrefix + '.flatPriors.pkl', 'rb') as f:
+			flatPriors = pickle.load(f)
 
 
 
@@ -207,19 +192,18 @@ def main(argv):
 
 
 
-	# print header
-	with open(outputErr, 'w') as f:
-		print("ID\tINFO\tOTHER", file=f)
-
-
-
 	logging.info("Converting annotation data to list")
 
 	# save variants in list 
 	DATA = []
-
 	flat_DATA = []
+	CHROMS = set([ "chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7", "chr8", "chr9", "chr10", "chr11", "chr12", "chr13", "chr14", "chr15", "chr16", "chr17", "chr18", "chr19", "chr20", "chr21", "chr22" ])
+
 	for variant in vcf:
+		# remove variants not on autosomes
+		if len( set([variant.CHROM, "chr"+variant.CHROM]) & CHROMS ) == 0:
+			continue
+
 		# get the ID of the variant
 		ID = variant.CHROM + "_" + str(variant.start+1) + "_" + variant.REF + "_" + variant.ALT[0] 
 
@@ -233,10 +217,6 @@ def main(argv):
 			typeVEP = "SNV"
 		elif ( (len(variant.REF) == 1 and len(variant.ALT[0]) > 1) or ((len(variant.REF) > 1 and len(variant.ALT[0]) == 1)) ) and max(len(variant.REF), len(variant.ALT[0])) < 50:
 			typeVEP = "indel"
-		else:
-			with open(outputErr, 'a') as f:
-				print(ID, "\tNA\tTYPE", file=f)
-			continue
 
 
 
@@ -262,13 +242,14 @@ def main(argv):
 
 
 			# select the consequence with the highest vep rank
-			csqCVSubset = [ x for x in dictVEP["Consequence_split"] if x in vepCSQRank.keys() ]
+			csqCVSubset = [ x for x in dictVEP["Consequence_split"] if x in vepCSQRankCoding.keys() ]
 			
 			if len(csqCVSubset) > 0:
 				d = dict((k, vepCSQRank[k]) for k in csqCVSubset)
 				dictVEP["Consequence_select"] = min(d, key=d.get)
 			else:
-				dictVEP["Consequence_select"] = np.nan
+				#dictVEP["Consequence_select"] = np.nan
+				add = False
 
 
 			# extract the transcript-specific metrics from dbNSFP
@@ -316,9 +297,13 @@ def main(argv):
 				DATA.append(l) 
 
 
-		# otherwise flat prior
+		# otherwise flat, nonCoding prior
 		else:
-			flat_DATA.append([ID, flatPriors['nonCoding']])
+			if 'nonCoding' in flatPriors.keys():
+				flat_DATA.append([ID, flatPriors['nonCoding']])
+
+			else:
+				flat_DATA.append([ID, np.nan])
 
 
 	logging.info(" ")
@@ -334,7 +319,6 @@ def main(argv):
 	# read in the data
 	df = pd.DataFrame(DATA, columns = ['ID', 'Gene', 'typeVEP', 'csqVEP'] + keysAscPred + keysDescPred )
 
-	#df.to_csv("DATA.txt", index=False, sep='\t', na_rep='.')
 
 	df['csqVEP'] = pd.Categorical(df['csqVEP'], categories = sorted(vepCSQRank.keys()))
 	df['typeVEP'] = pd.Categorical(df['typeVEP'], categories = ['indel', 'SNV'])
@@ -399,12 +383,14 @@ def main(argv):
 
 		y_indel_pred = logReg_indel.predict_proba(x_indel_imp_scal)[:,1]
 
-		#pprint.pprint(list(zip(logReg_indel.feature_names, logReg_indel.coef_.flatten())))
-		#print("Intercept: ", logReg_indel.intercept_)
 
 	else:
-		logging.info("Using flat priors for indels. ")
-		y_indel_pred = np.full(len(x_indel), flatPriors['indel'])
+		if 'indel' in flatPriors.keys():
+			logging.info("Using flat priors for indels. ")
+			y_indel_pred = np.full(len(x_indel), flatPriors['indel'])
+		else:
+			logging.info("Ignoring all indels. ")
+			y_indel_pred = np.full(len(x_indel), np.nan)
 
 
 	logging.info(" ")
@@ -460,12 +446,14 @@ def main(argv):
 
 		y_missense_pred = logReg_missense.predict_proba(x_missense_imp_scal)[:,1]
 
-		#pprint.pprint(list(zip(logReg_missense.feature_names, logReg_missense.coef_.flatten())))
-		#print("Intercept: ", logReg_missense.intercept_)
 	
 	else:
-		logging.info("Using flat priors for missense variants. ")
-		y_missense_pred = np.full(len(x_missense), flatPriors['missense'])
+		if 'missense' in flatPriors.keys():
+			logging.info("Using flat priors for missense variants. ")
+			y_missense_pred = np.full(len(x_missense), flatPriors['missense'])
+		else:
+			logging.info("Ignoring all missense variants")
+			y_missense_pred = np.full(len(x_missense), np.nan)
 
 	logging.info(" ")
 
@@ -521,12 +509,14 @@ def main(argv):
 
 		y_nonMissenseSNV_pred = logReg_nonMissenseSNV.predict_proba(x_nonMissenseSNV_imp_scal)[:,1]
 
-		#pprint.pprint(list(zip(logReg_nonMissenseSNV.feature_names, logReg_nonMissenseSNV.coef_.flatten())))
-		#print("Intercept: ", logReg_nonMissenseSNV.intercept_)
 
 	else:
-		logging.info("Using flat priors for non-missense SNVs")
-		y_nonMissenseSNV_pred = np.full(len(x_nonMissenseSNV), flatPriors['nonMissenseSNV'])
+		if 'nonMissenseSNV' in flatPriors:
+			logging.info("Using flat priors for non-missense SNVs")
+			y_nonMissenseSNV_pred = np.full(len(x_nonMissenseSNV), flatPriors['nonMissenseSNV'])
+		else:
+			logging.info("Ignoring all non-missense SNVs")
+			y_nonMissenseSNV_pred = np.full(len(x_nonMissenseSNV), np.nan)
 
 
 	logging.info(" ")
@@ -552,29 +542,32 @@ def main(argv):
 
 	# get the regression input data if available
 	if os.path.isfile(modelPrefix + '.predictors_indel.npy'):
-		x_indel_data = pd.DataFrame(x_indel_imp_scal, index = x_indel_index, columns = x_indel.columns)
+		#x_indel_data = pd.DataFrame(x_indel_imp_scal, index = x_indel_index, columns = x_indel.columns)
+		x_indel_data = pd.DataFrame(x_indel, index = x_indel_index, columns = x_indel.columns)
 	
 	else:
 		if len(x_indel_index) > 0: 
-			x_indel_data = pd.DataFrame(np.nan, index=range(0, len(x_indel_index)), columns = x_indel.columns)
+			x_indel_data = pd.DataFrame(np.nan, index=range(len(x_indel_index)), columns = x_indel.columns)
 
 
 
 	if os.path.isfile(modelPrefix + '.predictors_missense.npy'):
-		x_missense_data = pd.DataFrame(x_missense_imp_scal, index = x_missense_index, columns = x_missense.columns)
+		#x_missense_data = pd.DataFrame(x_missense_imp_scal, index = x_missense_index, columns = x_missense.columns)
+		x_missense_data = pd.DataFrame(x_missense, index = x_missense_index, columns = x_missense.columns)
 
 	else:
 		if len(x_missense_index) > 0:
-			x_missense_data = pd.DataFrame(np.nan, index=range(0, len(x_missense_index)), columns = x_missense.columns)
+			x_missense_data = pd.DataFrame(np.nan, index=range(len(x_missense_index)), columns = x_missense.columns)
 	
 
 
 	if os.path.isfile(modelPrefix + '.predictors_nonMissenseSNV.npy'):
-		x_nonMissenseSNV_data = pd.DataFrame(x_nonMissenseSNV_imp_scal, index = x_nonMissenseSNV_index, columns = x_nonMissenseSNV.columns)
+		#x_nonMissenseSNV_data = pd.DataFrame(x_nonMissenseSNV_imp_scal, index = x_nonMissenseSNV_index, columns = x_nonMissenseSNV.columns)
+		x_nonMissenseSNV_data = pd.DataFrame(x_nonMissenseSNV, index = x_nonMissenseSNV_index, columns = x_nonMissenseSNV.columns)
 	
 	else:
 		if len(x_nonMissenseSNV_index) > 0:
-			x_nonMissenseSNV_data = pd.DataFrame(np.nan, index=range(0, len(x_nonMissenseSNV_index)), columns = x_nonMissenseSNV.columns)
+			x_nonMissenseSNV_data = pd.DataFrame(np.nan, index=range(len(x_nonMissenseSNV_index)), columns = x_nonMissenseSNV.columns)
 
 
 
@@ -582,41 +575,32 @@ def main(argv):
 	combined = pd.concat([x_data, prior_prob], axis=1)
 	df_flat = pd.DataFrame(flat_DATA, columns = ['ID', 'prior'])
 	merged = pd.concat([combined, df_flat], sort = False)
+	merged["PriorOC"] = merged["prior"] / (1 - merged["prior"])
+	merged["logPriorOC"] = np.log10(merged["PriorOC"])
+	
+	merged = merged[merged.columns.drop(list(merged.filter(regex='csqVEP_')))]
+	merged = merged[merged.columns.drop(list(merged.filter(regex='typeVEP_')))]
 
-	#df_flat = pd.DataFrame(flat_DATA, columns = ['ID', 'prior'])
-	#merged = pd.concat([df_flat, prior_prob], sort = False)
 
-	merged.to_csv(outputPrefix+".priors.txt", index=False, sep='\t', na_rep='.')
+	merged.to_csv(args.outputDir + outputPrefix+".priors.txt", index=False, sep='\t', na_rep='.')
+
+
+	# get IDs of variants with a prior
+	merged_ID = merged[merged["prior"].notna()]["ID"].unique()
+	np.save(args.tempDir + outputPrefix+".priors.ID.npy", merged_ID)
 
 
 
 	logging.info(" ")
-	logging.info(" ")
-	logging.info(" ")
-	logging.info(" ")
-	logging.info(" ")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 	logging.info("Done")
+	logging.info(" ")
+	logging.info("--------------------------------------------------")
+	logging.info(" ")
 
 	
 
 
 
 
-if __name__ == "__main__":
-	main(sys.argv[1:])
 
 

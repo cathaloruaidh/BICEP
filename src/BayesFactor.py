@@ -1,17 +1,24 @@
-#!/usr/bin/python
+import cProfile
+import csv
+import getopt
+import logging
+import math
+import multiprocessing
+import os
+import pprint
+import re
+import sys
+import threading
 
-
-
-
-import cProfile, csv, getopt, logging, math, multiprocessing, os, pprint, re, sys, threading
 import numpy as np
+import pandas as pd
 import scipy.special as sp
 
 
 from cyvcf2 import VCF
-from scipy.integrate import quad,dblquad
 from functools import partial
-from multiprocessing import Pool, Manager
+from multiprocessing import cpu_count, Pool, Manager
+from scipy.integrate import quad, dblquad
 from threading import Lock
 
 
@@ -468,7 +475,8 @@ def calculateBF(pedInfo, allBF, priorParams, inputData):
 				minIndex = i
 
 
-		# if all genotypes are set and the proband is a carrier, add the vector to the list and return
+		# if all genotypes are set and the proband is a carrier, 
+		# add the vector to the list and return
 		if minGen == 1 :
 			genotypeStates.append(vector.copy())
 			return
@@ -495,6 +503,16 @@ def calculateBF(pedInfo, allBF, priorParams, inputData):
 		return
 
 
+	inheritanceProbability = np.array(
+		[ [ [ 1.0, 0.0, 0.0 ], [ 0.5, 0.5, 0.0 ], [ 0.0, 1.0, 0.0 ] ], 
+		[ [ 0.5, 0.5, 0.0 ], [ 0.25, 0.5, 0.25 ], [ 0.0, 0.75, 0.25 ] ], 
+		[ [ 0.0, 1.0, 0.0 ], [ 0.0, 0.75, 0.25 ], [ 0.0, 0.0, 0.1 ] ] ]
+	)
+
+	inheritanceProbabilityDominant = np.array(
+		[ [ [ 1.0, 0.0 ], [ 0.5, 0.5 ] ], 
+		[ [ 0.5, 0.5 ], [ 0.0, 1.0 ] ] ]
+	)
 
 
 
@@ -504,8 +522,6 @@ def calculateBF(pedInfo, allBF, priorParams, inputData):
 	# get prior parameters
 	priorCaus, priorNeut = priorParams
 
-	#logging.debug(name)
-	#print(name)
 
 	# if we've already calculated it, return the value
 	if name in allBF:
@@ -519,7 +535,6 @@ def calculateBF(pedInfo, allBF, priorParams, inputData):
 
 
 	founderVector = {}
-	#findGenerations(inputGenotype, genotypeStates, pedInfo)
 	findGenerations(inputGenotype, founderVector, pedInfo)
 
 	
@@ -574,10 +589,6 @@ def calculateBF(pedInfo, allBF, priorParams, inputData):
 	# calculate the numerator and denominator of the Bayes Factor
 	genotypeProbabilities = np.zeros(len(genotypeStates))
 
-	#local_vars = list(locals().items())
-	#for var, obj in local_vars:
-	#	print(var, sys.getsizeof(obj))
-	#print("\n")
 
 	for i in range(len(genotypeStates)):
 		p = 1.0
@@ -589,10 +600,6 @@ def calculateBF(pedInfo, allBF, priorParams, inputData):
 
 		nList = range(pedInfo.nPeople)
 		
-		#k1 = len([ x for x in nList if pedInfo.phenotypeActual[x] == 1 and genotypeStates[i][x] == 1 ])
-		#k2 = len([ x for x in nList if pedInfo.phenotypeActual[x] == 0 and genotypeStates[i][x] == 1 ])
-		#l1 = len([ x for x in nList if pedInfo.phenotypeActual[x] == 1 and genotypeStates[i][x] == 0 ])
-		#l2 = len([ x for x in nList if pedInfo.phenotypeActual[x] == 0 and genotypeStates[i][x] == 0 ])
 
 		k1 = k2 = l1 = l2 = 0
 		for x in range(pedInfo.nPeople):
@@ -642,13 +649,9 @@ def calculateBF(pedInfo, allBF, priorParams, inputData):
 		else:
 			logging.error("Prior distribution for parameters under neutral model not known. ")
 
-	#print("\n")	
-	#print("num = ", numerator, "\t-\tdenom = ", denominator)
-	#print("\n\n\n")	
 
 
 	if denominator == 0.0 :
-		#BF = float("inf")
 		BF = 0.0
 	else:
 		BF = numerator/denominator
@@ -668,75 +671,50 @@ def calculateBF(pedInfo, allBF, priorParams, inputData):
 
 
 # main function
-def main(argv):
+def BF_main(args):
+
+
+	logging.info("BAYES FACTOR")
+	logging.info(" ")
 
 
 	# command line arguments
 	nCores = 1
 	inputFamFile = None
 	inputVcfFile = None
-	outputFile = None
+	outputPrefix = None
 	outputLog = None
 	minAffecteds = 0
 	priorCaus = "uniform"
 	priorNeut = "uniform"
 
-	try:
-		opts, args = getopt.getopt(argv, "c:f:l:o:v:", ["cores=", "fam=", "log=", "minAff=","output=", "vcf=", "priorCaus=", "priorNeut="])
-	except getopt.GetoptError:
-		print("Getopt Error")
-		logging.error("getopt error")
-		sys.exit("Exiting ... ")
 
-	for opt, arg in opts:
-		if opt in ("-c", "--cores"):
-			if int(arg) <= multiprocessing.cpu_count():
-				nCores = int(arg)
 
-		if opt in ("-f", "--fam"):
-			inputFamFile = arg
-	
-		if opt in ("-l", "--log"):
-			logLevel = arg.upper()
-			numericLevel = getattr(logging, arg.upper(), None)
-			if not isinstance(numericLevel, int):
-				raise ValueError('Invalid log level: %s' % arg)
 
-		if opt in ("--minAff"):
-			minAffecteds = int(arg)
-	
-		if opt in ("-o", "--output"):
-			outputFile = arg
-	
-		if opt in ("-v", "--vcf"):
-			inputVcfFile = arg
-	
-		if opt in ("--priorCaus"):
-			priorCaus = arg
-	
-		if opt in ("--priorNeut"):
-			priorNeut = arg
-	
-	FORMAT = '# %(asctime)s [%(levelname)s] - %(message)s'
-	
-	try:
-		logLevel
-	except:
-		logging.basicConfig(format=FORMAT)
-	else:
-		numericLevel = getattr(logging, logLevel, None)
-		if not isinstance(numericLevel, int):
-			raise ValueError('Invalid log level: %s' % logLevel)
-		logging.basicConfig(format=FORMAT, level=logLevel)
-	
 
-	# add colours to the log name
-	logging.addLevelName(logging.NOTSET, "NOT  ")
-	logging.addLevelName(logging.DEBUG, "\u001b[36mDEBUG\u001b[0m")
-	logging.addLevelName(logging.INFO, "INFO ")
-	logging.addLevelName(logging.WARNING, "\u001b[33mWARN \u001b[0m")
-	logging.addLevelName(logging.ERROR, "\u001b[31mERROR\u001b[0m")
-	logging.addLevelName(logging.CRITICAL, "\u001b[35mCRIT\u001b[0m")
+	if args.cores is not None:
+		if int(args.cores) <= cpu_count():
+			nCores = int(args.cores)
+
+	if args.fam is not None:
+		inputFamFile = args.fam
+
+	if args.minAff is not None:
+		minAffecteds = int(args.minAff)
+
+	if args.prefix is not None:
+		outputPrefix = args.prefix
+
+	if args.vcf is not None:
+		inputVcfFile = args.vcf
+
+	if args.priorCaus is not None:
+		priorCaus = args.priorCaus
+
+	if args.priorNeut is not None:
+		priorNeut = args.priorNeut
+
+
 
 
 	# up recursion limit
@@ -788,6 +766,7 @@ def main(argv):
 	logging.info("Reading VCF file")
 
 
+
 	# get VCF file and variant/sample information
 	vcf = VCF(inputVcfFile, gts012=True)
 	nVariants = sum(1 for line in open(inputVcfFile) if not bool(re.match("^#", line)))
@@ -798,8 +777,7 @@ def main(argv):
 			ind = np.where(pedInfo.indID == vcf.samples[i])[0][0]
 		except:
 			msg = "Sample " + vcf.samples[i] + " is in VCF but not FAM."
-			logging.warning(msg)
-			sys.exit("Exiting ... ")
+			logging.error(msg)
 		else:
 			vcfSampleIndex.append(ind)
 
@@ -814,11 +792,32 @@ def main(argv):
 	varID = []
 
 
+	# get IDs of variants which recieved a prior
+	#prior_IDs = None
+	#with open(args.outputDir + args.prefix + '.priors.txt', 'rb') as f:
+	#	 prior_IDs = pd.read_csv(f, dtype=str, na_values = ['.'], sep = '\t')
+	#	 prior_IDs = prior_IDs.dropna(subset=['logPriorOC'])
+	#	 prior_IDs = prior_IDs["ID"]
+
+
 	# loop over all samples in VCF and get genotype
 	j = 0
+	CHROMS = set([ "chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7", "chr8", "chr9", "chr10", "chr11", "chr12", "chr13", "chr14", "chr15", "chr16", "chr17", "chr18", "chr19", "chr20", "chr21", "chr22" ])
+
 	for variant in vcf:
+		# remove variants not on autosomes
+		if len( set([variant.CHROM, "chr"+variant.CHROM]) & CHROMS ) == 0:
+			continue
+
 		# get the ID of the variant
-		varID.append(variant.CHROM + "_" + str(variant.start+1) + "_" + variant.REF + "_" + variant.ALT[0])
+		var_tmp = variant.CHROM + "_" + str(variant.start+1) + "_" + variant.REF + "_" + variant.ALT[0]
+		varID.append(var_tmp)
+
+		#if prior_IDs is not None:
+		#	if prior_IDs.str.contains(var_tmp).any():
+		#		varID.append(var_tmp)
+		#	else:
+		#		continue
 
 
 		# fill the known genotypes
@@ -838,6 +837,14 @@ def main(argv):
 			# set known genotype
 			genotypes[vcfSampleIndex[i]][j] = gt
 		j += 1
+
+	# ignore variants which haven't recieved a prior
+	#if prior_IDs is not None:
+	#	logging.info("Remove variants with no prior")
+	#	ind = np.in1d(varID, prior_IDs)
+	#	varID = varID[ind]
+	#	genotypes = genotypes[:][ind]
+
 
 	varString = np.apply_along_axis(genotypeString, 0, genotypes)
 
@@ -919,7 +926,9 @@ def main(argv):
 			BFs.append(calculateBF(pedInfo, allBF, [priorCaus, priorNeut], data[i]))
 	
 
-	results = [ '%.6f' % float(elem) for elem in BFs ]
+	#results = [ '%.6f' % float(elem) for elem in BFs ]
+
+	#print(float(results[1:10]))
 
 
 	################################################################################
@@ -929,21 +938,51 @@ def main(argv):
 	logging.info("Output")
 
 	
-	if outputFile is None:
+	if outputPrefix is None:
 		for i in range(len(varID)):
-			print(varID[i], "\t", results[i], "\t", varString[i], "\t", varString[i].count("."), "\t", allBF[varString[i]][3])
+			print(varID[i], "\t", BFs[i], "\t", varString[i], "\t", sep="")
 	else:
-		with open(outputFile, 'w') as f:
+		with open(args.outputDir + outputPrefix + ".BF.txt", 'w') as f:
+			print("ID\tBF\tlogBF\tSTRING", file=f)
 			for i in range(len(varID)):
-				print(varID[i], "\t", results[i], "\t", varString[i], "\t", varString[i].count("."), "\t", allBF[varString[i]][3], file=f)
+				print(varID[i], "\t", BFs[i], "\t", np.log10(float(BFs[i])), "\t", varString[i], file=f, sep="")
 		
 
+	# get the best co-segregation score
+	# note: set obligate carriers regardless of phenotype
+	perfectCoseg_vector = pedInfo.phenotypeActual
+
+	for i in range(pedInfo.nPeople):
+		if pedInfo.indID[i] not in vcf.samples:
+			perfectCoseg_vector[i] = -1
+			continue
+
+		if perfectCoseg_vector[i] == 0:
+			if pedInfo.hasParents[i] and ( perfectCoseg_vector[pedInfo.dadIndex[i]] + perfectCoseg_vector[pedInfo.mamIndex[i]] > 0 ):
+				c = sum([ perfectCoseg_vector[child] for child in pedInfo.children[i] ])
+				if c > 0:
+					perfectCoseg_vector[i] = 1
+
+	perfectCoseg_string = genotypeString(perfectCoseg_vector)
+
+	if perfectCoseg_string in allBF.keys():
+		with open(args.tempDir + outputPrefix + ".max_logBF.txt", 'w') as f:
+			print(np.log10(float(allBF[perfectCoseg_string][0])), file=f)
+
+	else:
+		l = multiprocessing.Lock()
+		lock_init(l)
+		BF = calculateBF(pedInfo, allBF, [priorCaus, priorNeut], (perfectCoseg_vector, perfectCoseg_string))
+		with open(args.tempDir + outputPrefix + ".max_logBF.txt", 'w') as f:
+			print(np.log10(BF), file=f)
+
+	
+	logging.info(" ")
+	logging.info("Done")
+	logging.info(" ")
+	logging.info("--------------------------------------------------")
+	logging.info(" ")
 
 
-
-
-
-if __name__ == "__main__":
-	main(sys.argv[1:])
 
 

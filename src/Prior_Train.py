@@ -1,32 +1,40 @@
-#!/usr/bin/python
+import cProfile
+import logging
+import math
+import os
+import pickle
+import pprint
+import re
+import sys
+import warnings
 
-
-
-
-import cProfile, getopt, logging, math, os, pickle, pprint, re, sys
 import numpy as np
 import pandas as pd
+import statsmodels.api as sm
 
+
+from cyvcf2 import VCF, Writer
+from joblib import dump, load
+from pathlib import Path
 from sklearn import metrics
 from sklearn.linear_model import LogisticRegression
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer, SimpleImputer
 from sklearn.metrics import confusion_matrix, matthews_corrcoef, classification_report, r2_score
 from sklearn.preprocessing import MinMaxScaler
-import statsmodels.api as sm
 
-from joblib import dump, load
 
-from cyvcf2 import VCF, Writer
 
-import warnings
 
 
 
 
 
 # main function
-def main(argv):
+def PT_main(args):
+
+	logging.info("PRIOR - TRAIN")
+	logging.info(" ")
 
 
 	# ignore warnings
@@ -36,85 +44,20 @@ def main(argv):
 
 
 	# command line arguments
-	nCores = 1
-	excludeFile = None
-	includeFile = None
 	clinVarFullVcfFile = None
 	clinVarAnnoVcfFile = None
-	outputPrefix = None
-	logLevel = None
-	benignFile = None
-	pathogenicFile = None
-	predictorsFile = None
 
-	try:
-		opts, args = getopt.getopt(argv, "c:e:i:l:n:o:p:v:", ["clinvar=", "exclude=", "include=", "log=", "benign=", "output=", "pathogenic=", "predictors=", "vcf="])
-	except getopt.GetoptError:
-		logging.error("getopt error")
-		sys.exit("Exiting ... ")
+	if args.clinvar is not None:
+		clinVarAnnoVcfFile = args.clinvar
 
-	for opt, arg in opts:
-		if opt in ("-c", "--clinvar"):
-			clinVarFullVcfFile = arg
-	
-		if opt in ("-e", "--exclude"):
-			excludeFile = arg
-	
-		if opt in ("-i", "--include"):
-			includeFile = arg
-	
-		if opt in ("-l", "--log"):
-			logLevel = arg.upper()
-			numericLevel = getattr(logging, arg.upper(), None)
-			if not isinstance(numericLevel, int):
-				raise ValueError('Invalid log level: %s' % arg)
-
-		if opt in ("-n", "--benign"):
-			benignFile = arg
-	
-		if opt in ("-o", "--output"):
-			outputPrefix = arg
-	
-		if opt in ("-p", "--pathogenic"):
-			pathogenicFile = arg
-	
-		if opt in ("--predictors"):
-			predictorsFile = arg
-	
-		if opt in ("-v", "--vcf"):
-			clinVarAnnoVcfFile = arg
-	
-
-
-	FORMAT = '# %(asctime)s [%(levelname)s] - %(message)s'
-	
-	if logLevel is None:
-		logging.basicConfig(format=FORMAT)
 	else:
-		numericLevel = getattr(logging, logLevel, None)
-		if not isinstance(numericLevel, int):
-			raise ValueError('Invalid log level: %s' % logLevel)
-		logging.basicConfig(format=FORMAT, level=logLevel)
-	
+		if args.clinvarPrefix is None:
+			clinVarAnnoVcfFile = args.scriptDir + "../data/clinvar_20231126." + args.build + ".PATH_BEN.single.strip.vep.vcf.gz"
+		else:
+			clinVarAnnoVcfFile = args.scriptDir + "../data/" + args.clinvarPrefix + "." + args.build + ".PATH_BEN.single.strip.vep.vcf.gz"
 
-
-	if outputPrefix is None:
-		outputPrefix = "output"
-
-
-	with open(outputPrefix + ".log", 'w') as f:
-		True
-
-
-
-	# add colours to the log name
-	logging.addLevelName(logging.NOTSET, "NOT  ")
-	logging.addLevelName(logging.DEBUG, "\u001b[36mDEBUG\u001b[0m")
-	logging.addLevelName(logging.INFO, "INFO ")
-	logging.addLevelName(logging.WARNING, "\u001b[33mWARN \u001b[0m")
-	logging.addLevelName(logging.ERROR, "\u001b[31mERROR\u001b[0m")
-	logging.addLevelName(logging.CRITICAL, "\u001b[35mCRIT \u001b[0m")
-
+	if args.clinvarFull is not None:
+		clinVarFullVcfFile = args.clinvarFull
 
 
 
@@ -160,8 +103,31 @@ def main(argv):
 	'intergenic_variant' : 39}
 
 
+	vepCSQRankCoding = {'transcript_ablation' : 1,
+	'splice_acceptor_variant' : 2,
+	'splice_donor_variant' : 3,
+	'stop_gained' : 4,
+	'frameshift_variant' : 5,
+	'stop_lost' : 6,
+	'start_lost' : 7,
+	'transcript_amplification' : 8,
+	'inframe_insertion' : 9,
+	'inframe_deletion' : 10,
+	'missense_variant' : 11,
+	'protein_altering_variant' : 12,
+	'splice_region_variant' : 13,
+	'start_retained_variant' : 14,
+	'stop_retained_variant' : 15,
+	'synonymous_variant' : 16,
+	'coding_sequence_variant' : 17,
+	'5_prime_UTR_variant' : 18,
+	'3_prime_UTR_variant' : 19}
 
 
+
+
+	# dictionary for flat prior
+	flatPriors = {}
 
 
 
@@ -175,65 +141,72 @@ def main(argv):
 	logging.info("Reading VCF file")
 
 
-	# get VCF file and variant/sample information
-	CV_full_vcf = VCF(clinVarFullVcfFile, gts012=True)
-
 
 	# generate the flat priors
-	logging.info("Generating the flat priors")
 
-	ALL_DATA = []
-	for variant in CV_full_vcf:
-		sig = variant.INFO.get('CLNSIG')
-		if sig is not None:
-			sig = sig.split(",", 1)[0]
+	if clinVarFullVcfFile is not None:
 
-		gene = variant.INFO.get('GENEINFO')
-		vc = variant.INFO.get('CLNVC')
-		mc = variant.INFO.get('MC')
+		CV_full_path = Path(clinVarFullVcfFile)
 
-		if not (vc == "single_nucleotide_variant" or vc == "Indel"):
-			continue
-		ALL_DATA.append([ sig, vc, gene, mc ])
-	
-	df_all = pd.DataFrame(ALL_DATA, columns=['sig', 'vc', 'gene', 'mc'])
-	df_all_path = df_all.dropna(subset=['sig'])
-	df_all_path = df_all_path[ df_all_path['sig'].str.contains("athogenic") ]
-	df_all_path = df_all_path[ df_all_path['sig'].str.contains("Conflicting") == False ]
+		if CV_full_path.is_file():
+			logging.info("Generating the flat priors")
 
+			CV_full_vcf = VCF(clinVarFullVcfFile, gts012=True)
+			ALL_DATA = []
+			for variant in CV_full_vcf:
+				sig = variant.INFO.get('CLNSIG')
+				if sig is not None:
+					sig = sig.split(",", 1)[0]
 
-	flatPrior_nonCoding =  df_all_path['gene'].isna().sum() / df_all['gene'].isna().sum()
+				gene = variant.INFO.get('GENEINFO')
+				vc = variant.INFO.get('CLNVC')
+				mc = variant.INFO.get('MC')
 
-
-	df_all = df_all.dropna(subset=['gene'])
-	df_all_path = df_all_path.dropna(subset=['gene'])
-
-	flatPrior_indel = len(df_all_path[ df_all_path['vc'] == "Indel" ].index) / len(df_all[ df_all['vc'] == "Indel" ].index)
+				if not (vc == "single_nucleotide_variant" or vc == "Indel"):
+					continue
+				ALL_DATA.append([ sig, vc, gene, mc ])
+			
+			df_all = pd.DataFrame(ALL_DATA, columns=['sig', 'vc', 'gene', 'mc'])
+			df_all_path = df_all.dropna(subset=['sig'])
+			df_all_path = df_all_path[ df_all_path['sig'].str.contains("athogenic") ]
+			df_all_path = df_all_path[ df_all_path['sig'].str.contains("Conflicting") == False ]
 
 
-	df_all = df_all.dropna(subset=['mc'])
-	df_all_path = df_all_path.dropna(subset=['mc'])
-
-	flatPrior_missense = len(df_all_path[ df_all_path['mc'].str.contains("missense") ].index) / len(df_all[ df_all['mc'].str.contains("missense") ].index)
-
-	df_all = df_all[ df_all['vc'] == "single_nucleotide_variant" ]
-	df_all_path = df_all_path[ df_all_path['vc'] == "single_nucleotide_variant" ]
-
-	flatPrior_nonMissenseSNV = len(df_all_path[ ~df_all_path['mc'].str.contains("missense") ].index) / len(df_all[ ~df_all['mc'].str.contains("missense") ].index)
+			flatPrior_nonCoding =  df_all_path['gene'].isna().sum() / df_all['gene'].isna().sum()
 
 
-	flatPriors = { 'nonCoding' : flatPrior_nonCoding, 'indel' : flatPrior_indel, 'missense' : flatPrior_missense, 'nonMissenseSNV' : flatPrior_nonMissenseSNV }
+			df_all = df_all.dropna(subset=['gene'])
+			df_all_path = df_all_path.dropna(subset=['gene'])
+
+			flatPrior_indel = len(df_all_path[ df_all_path['vc'] == "Indel" ].index) / len(df_all[ df_all['vc'] == "Indel" ].index)
+
+
+			df_all = df_all.dropna(subset=['mc'])
+			df_all_path = df_all_path.dropna(subset=['mc'])
+
+			flatPrior_missense = len(df_all_path[ df_all_path['mc'].str.contains("missense") ].index) / len(df_all[ df_all['mc'].str.contains("missense") ].index)
+
+			df_all = df_all[ df_all['vc'] == "single_nucleotide_variant" ]
+			df_all_path = df_all_path[ df_all_path['vc'] == "single_nucleotide_variant" ]
+
+			flatPrior_nonMissenseSNV = len(df_all_path[ ~df_all_path['mc'].str.contains("missense") ].index) / len(df_all[ ~df_all['mc'].str.contains("missense") ].index)
+
+
+			flatPriors = { 'nonCoding' : flatPrior_nonCoding, 'indel' : flatPrior_indel, 'missense' : flatPrior_missense, 'nonMissenseSNV' : flatPrior_nonMissenseSNV }
 
 
 
-	with open(outputPrefix+'.flatPriors.pkl', 'wb') as f:
-		pickle.dump(flatPriors, f)
+			with open(args.tempDir + args.prefix+'.flatPriors.pkl', 'wb') as f:
+				pickle.dump(flatPriors, f)
+		else:
+			msg = "Could not find the ClinVar file: " + clinVarFullVcfFile
+			logging.warning(msg)
+	else:
+		logging.info("Not generating flat priors for indels and non-coding variants")
 
 
 
-
-
-	# now, use annotated file 
+	# parse data from annotated ClinVar file 
 	logging.info("Parsing the annotation information")
 	CV_anno_vcf = VCF(clinVarAnnoVcfFile, gts012=True)
 
@@ -241,11 +214,11 @@ def main(argv):
 	keys = [ key.strip("\"") for key in keys ]
 
 
-	if predictorsFile is not None:
+	if args.predictors is not None:
 
 		d = {}
 
-		with open(predictorsFile, 'r') as f:
+		with open(args.predictors, 'r') as f:
 			for line in f:
 				(key, value)=line.split()
 				d[key] = value
@@ -266,7 +239,12 @@ def main(argv):
 
 	# save variants in list 
 	DATA = []
+	CHROMS = set([ "chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7", "chr8", "chr9", "chr10", "chr11", "chr12", "chr13", "chr14", "chr15", "chr16", "chr17", "chr18", "chr19", "chr20", "chr21", "chr22" ])
 	for variant in CV_anno_vcf:
+		# remove variants not on autosomes
+		if len( set([variant.CHROM, "chr"+variant.CHROM]) & CHROMS ) == 0:
+			continue
+
 		# get the ID of the variant
 		ID = variant.CHROM + "_" + str(variant.start+1) + "_" + variant.REF + "_" + variant.ALT[0] 
 		
@@ -299,8 +277,6 @@ def main(argv):
 		elif variant.INFO.get('CLNVC') == "Indel":
 			typeCV = "indel"
 		else:
-			#with open(outputPrefix + ".err", 'a') as f:
-			#	print(ID, "\t", setCV, "\tNA\tTYPE", file=f)
 			continue
 
 
@@ -308,8 +284,6 @@ def main(argv):
 		# get the clinvar gene list
 		tmp = variant.INFO.get('GENEINFO')
 		if (tmp is None) or ("|" in tmp):
-			#with open(outputPrefix + ".err", 'a') as f:
-			#	print(ID, "\t", setCV, "\tNA\tGENEINFO=", tmp, file=f)
 			continue
 		geneCV = re.sub(':.*?$', '', tmp)
 
@@ -318,14 +292,17 @@ def main(argv):
 		# get the variant clinvar consequence
 		tmp = variant.INFO.get('MC')	
 		if (tmp is None) or ("," in tmp):
-			#with open(outputPrefix + ".err", 'a') as f:
-			#	print(ID, "\t", setCV, "\tNA\tMC=", tmp, file=f)
 			continue
 		csqCV = re.sub('^.*?\|', '', tmp)
 
 
 		# change 'nonsense' to 'stop_gained'
 		csqCV = re.sub('nonsense', 'stop_gained', csqCV)
+
+
+		# remove non-coding variants
+		if csqCV not in vepCSQRankCoding.keys():
+			continue
 
 
 
@@ -429,9 +406,9 @@ def main(argv):
 
 
 		# otherwise print to error file
-		else:
-			with open(outputPrefix + ".err", 'a') as f:
-				print(ID, "\t", setCV, "\t", csqCV, file=f)
+		#else:
+		#	with open(args.prefix + ".err", 'a') as f:
+		#		print(ID, "\t", setCV, "\t", csqCV, file=f)
 
 	
 	for i in range(len(DATA)):
@@ -442,6 +419,14 @@ def main(argv):
 				DATA[i][j] = float(DATA[i][j])
 			
 
+	# get the IDs of the variants in the pedigree VCF file
+	ped_vcf = VCF(args.vcf, gts012=True)
+
+	ped_ID = []
+	for variant in ped_vcf:
+		ped_ID.append(variant.CHROM + "_" + str(variant.start+1) + "_" + variant.REF + "_" + variant.ALT[0])
+
+
 
 
 	################################################################################
@@ -451,25 +436,27 @@ def main(argv):
 
 	# read in the data
 	logging.debug("Converting to DataFrame")
-	#df = pd.DataFrame(DATA, columns = [ 'ID', 'setCV', 'geneCV', 'csqCV', 'typeCV', 'alleleID' ] + )
 	df = pd.DataFrame(DATA, columns = [ 'ID', 'setCV', 'geneCV', 'csqCV', 'typeCV', 'alleleID' ] + keysAscPred + keysDescPred )
 	df['alleleID'] = df.alleleID.astype(str).replace('\.0', '', regex=True)
 
-	df.to_csv("DATA.txt", index=False, sep='\t', na_rep='.')
+
+	# if there is overlap between the ClinVar and pedigree data,
+	# remove the variants from the Clinvar data prior to training. 
+	df = df[~df['ID'].isin(ped_ID)]
 
 
 
 	# if there are pathogenic/benign files, subset to these
-	if (pathogenicFile is not None) and (benignFile is not None):
+	if (args.pathogenic is not None) and (args.benign is not None):
 		logging.info("Setting the pathogenic/benign training elements from input file")
 
 		df['setCV'] = "."
 
-		with open(pathogenicFile, 'r') as f:
+		with open(args.pathogenic, 'r') as f:
 			pathogenicList = pd.read_csv(f, header=None, names = ['alleleID'], dtype=str)
 			df.loc[df.alleleID.isin(pathogenicList.alleleID), 'setCV'] = "PATHOGENIC"
 
-		with open(benignFile, 'r') as f:
+		with open(args.benign, 'r') as f:
 			benignList = pd.read_csv(f, header=None, names = ['alleleID'], dtype=str)
 			df.loc[df.alleleID.isin(benignList.alleleID), 'setCV'] = "BENIGN"
 
@@ -477,28 +464,28 @@ def main(argv):
 
 
 
-	if pathogenicFile is not None and benignFile is None:
+	if args.pathogenic is not None and args.benign is None:
 		logging.warning("Pathogenic file is not specified, ignoring benign file")
 	
 	
-	if pathogenicFile is None and benignFile is not None:
+	if args.pathogenic is None and args.benign is not None:
 		logging.warning("Benign file is not specified, ignoring pathogenic file")
 
 
 
 
 	# if there is an exclude file, remove them 
-	if excludeFile is not None:
+	if args.exclude is not None:
 		logging.info("Removing variants in exclude file")
-		with open(excludeFile, 'r') as f:
+		with open(args.exclude, 'r') as f:
 			excludeList = pd.read_csv(f, header=None, names = ['alleleID'], dtype=str)
 			df = df[~df.alleleID.isin(excludeList.alleleID)]
 
 
 	# if there is an include file, remove everything else 
-	if includeFile is not None:
+	if args.include is not None:
 		logging.info("Susbetting to variants in include file")
-		with open(includeFile, 'r') as f:
+		with open(args.include, 'r') as f:
 			includeList = pd.read_csv(f, header=None, names = ['alleleID'], dtype=str)
 			df = df[df.alleleID.isin(includeList.alleleID)]
 
@@ -506,7 +493,7 @@ def main(argv):
 	
 
 	
-	msg = "A total of " + str(len(df.index)) + " variants used (" + str((df.setCV.values == 'PATHOGENIC').sum()) + " PATH and " + str((df.setCV.values == 'BENIGN').sum()) + " BEN)"
+	msg = str(len(df.index)) + " training variants used (" + str((df.setCV.values == 'PATHOGENIC').sum()) + " PATH, " + str((df.setCV.values == 'BENIGN').sum()) + " BEN)"
 
 	logging.info(msg)
 
@@ -526,7 +513,7 @@ def main(argv):
 
 
 	## INDELS
-	logging.info("INDELS (CADD + AF + CSQ)")
+	logging.info("INDELS")
 	x_indel = x[ x['typeCV'] == 'indel' ]
 	ID_indel = x_indel['ID']
 	alleleID_indel = x_indel['alleleID']
@@ -552,7 +539,7 @@ def main(argv):
 		x_indel = x_indel.drop(['FATHMM_score', 'MPC_score', 'Polyphen2_HDIV_score', 'REVEL_score', 'SIFT_score', 'typeCV'], axis=1, errors='ignore')
 
 
-		msg = "A total of " + str(np.size(y_indel)) + " indels used (" + str(sum(y_indel == 'PATHOGENIC')) + " PATH and " + str(sum(y_indel == 'BENIGN')) + " BEN)"
+		msg = str(np.size(y_indel)) + " indels used (" + str(sum(y_indel == 'PATHOGENIC')) + " PATH, " + str(sum(y_indel == 'BENIGN')) + " BEN)"
 		logging.info(msg)
 	
 		# remove columns that are all NA
@@ -573,7 +560,7 @@ def main(argv):
 		imp_indel.feature_names = list(x_indel.columns.values)
 		x_indel_imp = imp_indel.transform(x_indel)
 
-		with open(outputPrefix+'.imp_indel.pkl', 'wb') as f:
+		with open(args.tempDir + args.prefix+'.imp_indel.pkl', 'wb') as f:
 			pickle.dump(imp_indel, f)
 
 		
@@ -585,7 +572,7 @@ def main(argv):
 		scal_indel.feature_names = list(x_indel.columns.values)
 		x_indel_imp_scal = scal_indel.transform(x_indel_imp)
 
-		with open(outputPrefix+'.scal_indel.pkl', 'wb') as f:
+		with open(args.tempDir + args.prefix+'.scal_indel.pkl', 'wb') as f:
 			pickle.dump(scal_indel, f)
 
 
@@ -597,27 +584,36 @@ def main(argv):
 
 		logReg_indel.feature_names = list(x_indel.columns.values)
 
-		with open(outputPrefix+'.logReg_indel.pkl', 'wb') as f:
+		with open(args.tempDir + args.prefix+'.logReg_indel.pkl', 'wb') as f:
 			pickle.dump(logReg_indel, f)
 
-		with open(outputPrefix+'.predictors_indel.npy', 'wb') as f:
+		with open(args.tempDir + args.prefix+'.predictors_indel.npy', 'wb') as f:
 			np.save(f, x_indel.columns)
 
 		results_indel = logReg_indel.predict_proba(x_indel_imp_scal)[:,1]
 		
-		pprint.pprint(list(zip(logReg_indel.feature_names, np.round(logReg_indel.coef_.flatten(), 6))))
-		print("Intercept: ", np.round(logReg_indel.intercept_, 6))
-	else:
-		msg = "Not enough indels in training data, using flat prior: " + str(np.round(flatPriors['indel'], 6))
-		logging.info(msg)
-		results_indel = np.full(len(x_indel.index), flatPriors['indel'])
+		with open(args.tempDir + args.prefix + ".indel_coef.txt", 'a') as f:
+			pprint.pprint(list(zip(logReg_indel.feature_names, np.round(logReg_indel.coef_.flatten(), 6))), f)
+			print("Intercept: ", np.round(logReg_indel.intercept_, 6), file=f)
 
+	else:
+		if 'indel' in flatPriors.keys():
+			msg = "Not enough indels in training data, using flat prior: " + str(np.round(flatPriors['indel'], 6))
+			results_indel = np.full(len(x_indel.index), flatPriors['indel'])
+
+		else:
+			msg = "Not enough indels in training data, all indels will be ignored"
+			results_indel = np.full(len(x_indel.index), np.nan)
+
+		logging.info(msg)
+
+	logging.info(" ")
 	logging.info(" ")
 
 
 
 	## MISSENSE SNV
-	logging.info("MISSENSE SNV (AF + 5_PRED)")
+	logging.info("MISSENSE VARIANTS")
 	x_missense = x[ (x['csqCV'] == 'missense_variant') & (x['typeCV'] == 'SNV') ]
 	x_missense_csq = x_missense['csqCV'] 
 	x_missense = x_missense.drop(['CADD_PHRED', 'typeCV', 'csqCV'], axis=1, errors='ignore')
@@ -640,7 +636,7 @@ def main(argv):
 	uniq, counts = np.unique(y_missense, return_counts = True)
 
 	if (len(x_missense.index) > 0) and (len(uniq) == 2) and (counts.min() > 15*len(x_missense.columns)):
-		msg = "A total of " + str(np.size(y_missense)) + " missense variants used (" + str(sum(y_missense == 'PATHOGENIC')) + " PATH and " + str(sum(y_missense == 'BENIGN')) + " BEN)"
+		msg = str(np.size(y_missense)) + " missense variants used (" + str(sum(y_missense == 'PATHOGENIC')) + " PATH, " + str(sum(y_missense == 'BENIGN')) + " BEN)"
 		logging.info(msg)
 		
 		# remove columns that are all NA
@@ -661,7 +657,7 @@ def main(argv):
 
 		x_missense_imp = imp_missense.transform(x_missense)
 
-		with open(outputPrefix+'.imp_missense.pkl', 'wb') as f:
+		with open(args.tempDir + args.prefix+'.imp_missense.pkl', 'wb') as f:
 			pickle.dump(imp_missense, f)
 
 
@@ -674,7 +670,7 @@ def main(argv):
 
 		x_missense_imp_scal = scal_missense.transform(x_missense_imp)
 
-		with open(outputPrefix+'.scal_missense.pkl', 'wb') as f:
+		with open(args.tempDir + args.prefix+'.scal_missense.pkl', 'wb') as f:
 			pickle.dump(scal_missense, f)
 
 
@@ -686,28 +682,38 @@ def main(argv):
 
 		logReg_missense.feature_names = list(x_missense.columns.values)
 
-		with open(outputPrefix+'.logReg_missense.pkl', 'wb') as f:
+		with open(args.tempDir + args.prefix+'.logReg_missense.pkl', 'wb') as f:
 			pickle.dump(logReg_missense, f)
 
-		with open(outputPrefix+'.predictors_missense.npy', 'wb') as f:
+		with open(args.tempDir + args.prefix+'.predictors_missense.npy', 'wb') as f:
 			np.save(f, x_missense.columns)
 
 		results_missense = logReg_missense.predict_proba(x_missense_imp_scal)[:,1]
 
-		pprint.pprint(list(zip(logReg_missense.feature_names, np.round(logReg_missense.coef_.flatten(), 6))))
-		print("Intercept: ", np.round(logReg_missense.intercept_, 6))
+		with open(args.tempDir + args.prefix + ".missense_coef.txt", 'a') as f:
+		 pprint.pprint(list(zip(logReg_missense.feature_names, np.round(logReg_missense.coef_.flatten(), 6))), f)
+		 print("Intercept: ", np.round(logReg_missense.intercept_, 6), file=f)
+	
 	else:
-		msg = "Not enough missense variants in training data, using flat prior: " + str(np.round(flatPriors['missense'], 6))
+		if 'missense' in flatPriors.keys():
+			msg = "Not enough missense variants in training data, using flat prior: " + str(np.round(flatPriors['missense'], 6))
+			results_missense = np.full(len(x_missense.index), flatPriors['missense'])
+
+		else:
+			msg = "Not enough missense variants in training data, all missense variants will be ignored"
+			results_missense = np.full(len(x_missense.index), np.nan)
+
 		logging.info(msg)
-		results_missense = np.full(len(x_missense.index), flatPriors['missense'])
 
 
+
+	logging.info(" ")
 	logging.info(" ")
 
 
 
 	## NON-MISSENSE SNV
-	logging.info("NON-MISSENSE SNV (CADD + AF + CSQ)")
+	logging.info("NON-MISSENSE SNV")
 	x_nonMissenseSNV = x[ (x['csqCV'] != 'missense_variant') & (x['typeCV'] == 'SNV') ]
 	x_nonMissenseSNV_csq = x_nonMissenseSNV['csqCV'] 
 
@@ -738,7 +744,7 @@ def main(argv):
 		x_nonMissenseSNV = x_nonMissenseSNV.drop(['FATHMM_score', 'MPC_score', 'Polyphen2_HDIV_score', 'REVEL_score', 'SIFT_score', 'typeCV'], axis=1, errors='ignore')
 
 
-		msg = "A total of " + str(np.size(y_nonMissenseSNV)) + " non-missense SNVs used (" + str(sum(y_nonMissenseSNV == 'PATHOGENIC')) + " PATH and " + str(sum(y_nonMissenseSNV == 'BENIGN')) + " BEN)"
+		msg = str(np.size(y_nonMissenseSNV)) + " non-missense SNVs used (" + str(sum(y_nonMissenseSNV == 'PATHOGENIC')) + " PATH, " + str(sum(y_nonMissenseSNV == 'BENIGN')) + " BEN)"
 		logging.info(msg)
 		
 		# remove columns that are all NA
@@ -760,7 +766,7 @@ def main(argv):
 
 		x_nonMissenseSNV_imp = imp_nonMissenseSNV.transform(x_nonMissenseSNV)
 
-		with open(outputPrefix+'.imp_nonMissenseSNV.pkl', 'wb') as f:
+		with open(args.tempDir + args.prefix+'.imp_nonMissenseSNV.pkl', 'wb') as f:
 			pickle.dump(imp_nonMissenseSNV, f)
 
 
@@ -773,7 +779,7 @@ def main(argv):
 
 		x_nonMissenseSNV_imp_scal = scal_nonMissenseSNV.transform(x_nonMissenseSNV_imp)
 
-		with open(outputPrefix+'.scal_nonMissenseSNV.pkl', 'wb') as f:
+		with open(args.tempDir + args.prefix+'.scal_nonMissenseSNV.pkl', 'wb') as f:
 			pickle.dump(scal_nonMissenseSNV, f)
 
 
@@ -785,20 +791,28 @@ def main(argv):
 
 		logReg_nonMissenseSNV.feature_names = list(x_nonMissenseSNV.columns.values)
 
-		with open(outputPrefix+'.logReg_nonMissenseSNV.pkl', 'wb') as f:
+		with open(args.tempDir + args.prefix+'.logReg_nonMissenseSNV.pkl', 'wb') as f:
 			pickle.dump(logReg_nonMissenseSNV, f)
 
-		with open(outputPrefix+'.predictors_nonMissenseSNV.npy', 'wb') as f:
+		with open(args.tempDir + args.prefix+'.predictors_nonMissenseSNV.npy', 'wb') as f:
 			np.save(f, x_nonMissenseSNV.columns)
 
 		results_nonMissenseSNV = logReg_nonMissenseSNV.predict_proba(x_nonMissenseSNV_imp_scal)[:,1]
 
-		pprint.pprint(list(zip(logReg_nonMissenseSNV.feature_names, np.round(logReg_nonMissenseSNV.coef_.flatten(), 6))))
-		print("Intercept: ", np.round(logReg_nonMissenseSNV.intercept_, 6))
+		with open(args.tempDir + args.prefix + ".nonMissenseSNV_coef.txt", 'a') as f:
+		 pprint.pprint(list(zip(logReg_nonMissenseSNV.feature_names, np.round(logReg_nonMissenseSNV.coef_.flatten(), 6))), f)
+		 print("Intercept: ", np.round(logReg_nonMissenseSNV.intercept_, 6), file=f)
+
 	else:
-		msg = "Not enough non-missense SNVs in training data, using flat prior: " + str(np.round(flatPriors['nonMissenseSNV'], 6))
+		if 'nonMissenseSNV' in flatPriors.keys():
+			msg = "Not enough non-missense SNVs in training data, using flat prior: " + str(np.round(flatPriors['nonMissenseSNV'], 6))
+			results_nonMissenseSNV = np.full(len(x_nonMissenseSNV.index), flatPriors['nonMissenseSNV'])
+
+		else:
+			msg = "Not enough non-missense SNVs in training data, all non-missense SNVs will be ignored"
+			results_nonMissenseSNV = np.full(len(x_nonMissenseSNV.index), np.nan)
+
 		logging.info(msg)
-		results_nonMissenseSNV = np.full(len(x_nonMissenseSNV.index), flatPriors['nonMissenseSNV'])
 
 
 	logging.info(" ")
@@ -806,16 +820,16 @@ def main(argv):
 
 
 	# gather the results
-	pred_prob = np.concatenate( (results_indel, results_missense, results_nonMissenseSNV) )
+	#pred_prob = np.concatenate( (results_indel, results_missense, results_nonMissenseSNV) )
 
 
 
-	prior_prob = pd.DataFrame()
-	prior_prob["alleleID"] = np.concatenate((alleleID_indel, alleleID_missense, alleleID_nonMissenseSNV))
-	prior_prob["Gene"] = np.concatenate((geneCV_indel, geneCV_missense, geneCV_nonMissenseSNV))
-	prior_prob["csqCV"] = np.concatenate((x_indel_csq, x_missense_csq, x_nonMissenseSNV_csq))
-	prior_prob["setCV"] = np.concatenate((y_indel, y_missense, y_nonMissenseSNV))
-	prior_prob["prior"] = pred_prob.flatten()
+	#prior_prob = pd.DataFrame()
+	#prior_prob["alleleID"] = np.concatenate((alleleID_indel, alleleID_missense, alleleID_nonMissenseSNV))
+	#prior_prob["Gene"] = np.concatenate((geneCV_indel, geneCV_missense, geneCV_nonMissenseSNV))
+	#prior_prob["csqCV"] = np.concatenate((x_indel_csq, x_missense_csq, x_nonMissenseSNV_csq))
+	#prior_prob["setCV"] = np.concatenate((y_indel, y_missense, y_nonMissenseSNV))
+	#prior_prob["prior"] = pred_prob.flatten()
 
 
 	#x_indel_imp_scal_df = pd.DataFrame(x_indel_imp_scal, index = x_indel_index, columns = x_indel.columns)
@@ -825,19 +839,20 @@ def main(argv):
 	#x_imp_scal_df = pd.concat([x_indel_imp_scal_df, x_missense_imp_scal_df, x_nonMissenseSNV_imp_scal_df], ignore_index=True, sort=False)
 
 	#combined = pd.concat([x_imp_scal_df, prior_prob], axis=1)
-	#combined.to_csv(outputPrefix+".priors.txt", index=False, sep='\t', na_rep='.')
+	#combined.to_csv(args.prefix+".priors.txt", index=False, sep='\t', na_rep='.')
 
 
 
 
+	logging.info(" ")
 	logging.info("Done")
+	logging.info(" ")
+	logging.info("--------------------------------------------------")
+	logging.info(" ")
 
 	
 
 
 
-
-if __name__ == "__main__":
-	main(sys.argv[1:])
 
 
