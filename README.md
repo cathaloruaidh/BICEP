@@ -18,7 +18,7 @@
 -->
 
 # BICEP
-A <u>B</u>ayesian <u>I</u>nference model for <u>C</u>ausality <u>E</u>valuation in <u>P</u>edigrees. 
+A <ins>B</ins>ayesian <ins>I</ins>nference model for <ins>C</ins>ausality <ins>E</ins>valuation in <ins>P</ins>edigrees. 
 
 
 
