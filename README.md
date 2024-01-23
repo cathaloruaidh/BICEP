@@ -20,8 +20,17 @@
 # BICEP
 A **B**ayesian **I**nference model for **C**ausality **E**valuation in **P**edigrees. 
 
-![BICEP overview](./doc/img/BICEP_Overview.png)
+BICEP uses a Bayesian inference model to evaluate if a variant is causal for a given phenotype based on protein-coding genomic variants. 
+An overview of the model is given in the figure below. 
+First, BICEP calulates a prior odds for causality (PriorOC) based on genomic annotation information such as allele frequency, deleteriousness, functional consequence, etc.
+Then BICEP calculates a Bayes factor (BF) which measures the likelihood of the pedigree data if the variant is causal for the phenotype versus if it is neutral. 
+These are combined (on the base 10 logarithmic scale) to get the final posterior odds of causality (logPostOC) which is used to rank the variants. 
+The logPostOC is a quantitative metric that is used to rank
+
+
+
 <img src="./doc/img/BICEP_Overview.png" alt="BICEP overview" width="80%" align="center">
+
 
 
 
