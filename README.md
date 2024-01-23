@@ -20,7 +20,7 @@
 # BICEP
 A <ins>B</ins>ayesian <ins>I</ins>nference model for <ins>C</ins>ausality <ins>E</ins>valuation in <ins>P</ins>edigrees. 
 
-<img src="./doc/img/BICEP_Overview.png" alt="BICEP overview" align="center">
+<img src="./doc/img/BICEP_Overview.png" alt="BICEP overview" align="center" width="80%">
 
 
 
