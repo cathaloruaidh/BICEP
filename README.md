@@ -21,6 +21,7 @@
 A **B**ayesian **I**nference model for **C**ausality **E**valuation in **P**edigrees. 
 
 ![BICEP overview](./doc/img/BICEP_Overview.png)
+<img src="./doc/img/BICEP_Overview.png" alt="BICEP overview" width="80%" align="center">
 
 
 
