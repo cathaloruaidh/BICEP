@@ -8,8 +8,8 @@
 ```
 ----------------------------------------
          _   ___   __   __   _
-		|_)   |   /    |_   |_)
-		|_)  _|_  \__  |__  |
+        |_)   |   /    |_   |_)
+        |_)  _|_  \__  |__  |
 
         Bayesian Inference for
    Causality Evaluation in Pedigrees
