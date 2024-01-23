@@ -18,9 +18,9 @@
 -->
 
 # BICEP
-A <ins>B</ins>ayesian <ins>I</ins>nference model for <ins>C</ins>ausality <ins>E</ins>valuation in <ins>P</ins>edigrees. 
+A **B**ayesian **I**nference model for **C**ausality **E**valuation in **P**edigrees. 
 
-<img src="./doc/img/BICEP_Overview.png" alt="BICEP overview" align="right" width="80%">
+![BICEP overview](./doc/img/BICEP_Overview.png)
 
 
 
