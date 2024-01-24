@@ -38,7 +38,6 @@ If you use BICEP, please credit this GitHub repository.
 
 
 ## Installation
-
 Clone the repostory:
 
 
@@ -49,10 +48,13 @@ git clone https://github.com/cathaloruaidh/BICEP.git
 Install the required python libraries:
 
 ```
-pip install -r requirements.txt
+pip install -r BICEP/requirements.txt
 ```
 
 
 
 
-
+## Test
+To test the installation, simulated data exists in the test/ directory. 
+The F1 pedigree (figure below) has a simulated phenotype spanning multiple generations that is ``caused'' by a deleterious missense mutation (MXRA8:p.Leu122Arg). 
+This 
