@@ -60,6 +60,22 @@ The F1 pedigree (figure below) has a simulated phenotype spanning three generati
 This variant is the only rare missense variant in the data that perfectly co-segregates with the phenotype, and as such should be highly ranked by BICEP.
 While the pedigree is simulated, the variants were taken from the gnomAD database, and the annotation metrics are all real. 
 
+<img src="./test/F1.pedigree.png" alt="The simulated F1 pedigree" width="80%" align="center">
+
+The following will run BICEP on the test pedigree: 
+
+
+```
+/path/to/BICEP/src/BICEP.py All \
+	--vcf /path/to/BICEP/test/F1.vep.vcf \
+	--fam /path/to/BICEP/test/F1.fam \
+	--prefix F1 \
+	--cores 1 \
+	--log INFO \
+	--build GRCh38 \
+	--highlight "chr1_1355461_A_C" \
+	--top 20
+```
 
 
 
