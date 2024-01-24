@@ -56,11 +56,11 @@ pip install -r BICEP/requirements.txt
 
 ## Test
 To test the installation, simulated genomic, phenotypic, and pedigree data are supplied in the test/ directory. 
-The F1 pedigree (figure below) has a simulated phenotype spanning three generations that is "caused" by a deleterious missense mutation (chr1_1355461_A_C, MXRA8:p.Leu122Arg) inherited from a single common ancestor. 
+The F1 pedigree (figure below) has a simulated phenotype spanning three generations that is "caused" by a deleterious missense mutation (chr1:1355461:A:C, MXRA8:p.Leu122Arg) inherited from a single common ancestor. 
 This variant is the only rare missense variant in the data that perfectly co-segregates with the phenotype, and as such should be highly ranked by BICEP.
 While the pedigree is simulated, the variants were taken from the gnomAD database, and the annotation metrics are all real. 
 
-<img src="./test/F1.pedigree.png" alt="The simulated F1 pedigree" width="80%" align="center">
+<img src="./test/F1.pedigree.png" alt="The simulated F1 pedigree" width="50%" align="center">
 
 The following will run BICEP on the test pedigree: 
 
@@ -71,11 +71,19 @@ The following will run BICEP on the test pedigree:
 	--fam /path/to/BICEP/test/F1.fam \
 	--prefix F1 \
 	--cores 1 \
-	--log INFO \
-	--build GRCh38 \
 	--highlight "chr1_1355461_A_C" \
 	--top 20
 ```
+
+The following image will be produced which displayes the output BICEP metrics for each variant. 
+Additional details are given in the output ".posteriors.txt" file. 
+The "causal" variant is highlighted and ranks first according to the logPostOC as expected. 
+We can see that three variants has perfect co-segregation with the phenotype (ranked 1, X, and X), however only the top ranked variant also had a positive logPriorOC
+
+<img src="./test/F1.BICEP.png" alt="The simulated F1 pedigree" width="80%" align="center">
+
+
+
 
 
 
