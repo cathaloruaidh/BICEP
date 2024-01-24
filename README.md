@@ -20,12 +20,15 @@
 # BICEP
 A **B**ayesian **I**nference model for **C**ausality **E**valuation in **P**edigrees. 
 
-BICEP uses a Bayesian inference model to evaluate if a variant is causal for a given phenotype based on protein-coding genomic variants. 
-An overview of the model is given in the figure below. 
+BICEP uses a Bayesian inference model to evaluate if a protein-coding genomic variant is causal for a phenotype in a pedigree. 
+An overview of the model is given in the figure below, and a full description is given in the wiki. 
 First, BICEP calulates a prior odds for causality (PriorOC) based on genomic annotation information such as allele frequency, deleteriousness, functional consequence, etc.
-Then BICEP calculates a Bayes factor (BF) which measures the likelihood of the pedigree data if the variant is causal for the phenotype versus if it is neutral. 
+Then BICEP calculates a Bayes factor (BF) which measures the likelihood of the pedigree data if the variant were causal for the phenotype versus if it were neutral. 
 These are combined (on the base 10 logarithmic scale) to get the final posterior odds of causality (logPostOC) which is used to rank the variants. 
-The logPostOC is a quantitative metric that is used to rank
+The logPostOC can be used an absolute measure of a variant's causality or to compare the evidence between variants (see example below). 
+
+
+If you use BICEP, please credit this GitHub repository. 
 
 
 
@@ -34,48 +37,22 @@ The logPostOC is a quantitative metric that is used to rank
 
 
 
-## Installing / Getting started
+## Installation
 
-A quick introduction of the minimal setup you need to get a hello world up &
-running.
+Clone the repostory:
+
 
 ```shell
-commands here
+git clone https://github.com/cathaloruaidh/BICEP.git
 ```
 
-Here you should say what actually happens when you execute the code above.
+Install the required python libraries:
 
-## Developing
-
-### Built With
-List main libraries, frameworks used including versions (React, Angular etc...)
-
-### Prerequisites
-What is needed to set up the dev environment. For instance, global dependencies or any other tools. include download links.
-
-
-### Setting up Dev
-
-Here's a brief intro about what a developer must do in order to start developing
-the project further:
-
-```shell
-git clone https://github.com/your/your-project.git
-cd your-project/
-packagemanager install
+```
+pip install -r requirements.txt
 ```
 
-And state what happens step-by-step. If there is any virtual environment, local server or database feeder needed, explain here.
 
-## Tests
 
-Describe and show how to run the tests with code examples.
-Explain what these tests test and why.
 
-```shell
-Give an example
-```
 
-## Licensing
-
-State what the license is and how to find the text version of the license.
