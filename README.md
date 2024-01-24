@@ -75,11 +75,11 @@ The following will run BICEP on the test pedigree:
 	--top 20
 ```
 
-The following image will be produced which displayes the output BICEP metrics for each variant. 
+The following image will be produced which displayes the output BICEP metrics for each variant scored by the tool. 
 Additional details are given in the output ".posteriors.txt" file. 
-The "causal" variant is highlighted and ranks first according to the logPostOC as expected. 
-We can see that three variants has perfect co-segregation with the phenotype (ranked 1st, 5th, and 7th), however only the top ranked variant also had a positive logPriorOC.
-Indeed, only the top two variants had positive logPostOC scores which indicate evidence for causality rather than against. 
+The "causal" variant is highlighted with the hatched pattern and ranks first according to the logPostOC as expected. 
+We can see that three variants has perfect co-segregation with the phenotype (ranked 1st, 5th, and 7th), however only the top ranked variant of these three also had a positive logPriorOC.
+Indeed, only the top two variants had positive logPostOC scores (which indicate evidence for causality). 
 
 <img src="./test/F1.BICEP.png" alt="The simulated F1 pedigree" width="80%" align="center">
 
