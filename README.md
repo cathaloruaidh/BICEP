@@ -55,6 +55,11 @@ pip install -r BICEP/requirements.txt
 
 
 ## Test
-To test the installation, simulated data exists in the test/ directory. 
-The F1 pedigree (figure below) has a simulated phenotype spanning multiple generations that is ``caused'' by a deleterious missense mutation (MXRA8:p.Leu122Arg). 
-This 
+To test the installation, simulated genomic, phenotypic, and pedigree data are supplied in the test/ directory. 
+The F1 pedigree (figure below) has a simulated phenotype spanning three generations that is "caused" by a deleterious missense mutation (chr1_1355461_A_C, MXRA8:p.Leu122Arg) inherited from a single common ancestor. 
+This variant is the only rare missense variant in the data that perfectly co-segregates with the phenotype, and as such should be highly ranked by BICEP.
+While the pedigree is simulated, the variants were taken from the gnomAD database, and the annotation metrics are all real. 
+
+
+
+
