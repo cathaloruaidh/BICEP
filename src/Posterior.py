@@ -77,6 +77,7 @@ def PO_main(args):
 	orderSecond = [ x for x in merged.columns.tolist() if x not in orderFirst ]
 
 	merged = merged[ orderFirst + orderSecond ]
+	merged = merged.sort_values("Rank")
 
 
 	with open(args.tempDir + args.prefix + '.max_logBF.txt', 'r') as f:
