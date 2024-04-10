@@ -74,7 +74,7 @@ def PO_main(args):
 	merged = merged.round(6)
 
 	orderFirst = [ "Rank", "ID", "Gene", "csq", "logPostOC", "logPriorOC", "logBF", "STRING" ]
-	orderSecond = [ x for x in merged.columns.tolist() and x not in orderFirst ]
+	orderSecond = [ x for x in merged.columns.tolist() if x not in orderFirst ]
 
 	merged = merged[ orderFirst + orderSecond ]
 
