@@ -71,7 +71,7 @@ def PO_main(args):
 
 	# get rid of unnecessary columns and reorder
 	merged = merged.drop(['prior', 'PriorOC', 'BF'], axis=1)
-	merged = merged.round(4)
+	merged = merged.round(3)
 
 	orderFirst = [ "Rank", "ID", "Gene", "csq", "logPostOC", "logPriorOC", "logBF", "STRING" ]
 	orderSecond = [ x for x in merged.columns.tolist() if x not in orderFirst ]
