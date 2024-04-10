@@ -41,7 +41,7 @@ def PO_main(args):
 	
 	logging.info("Reading in the Bayes factor file")
 	with open(args.outputDir + bfFile) as f:
-		bf = pd.read_csv(f, sep="\t", na_values=['.'], dtype = {"STRING" : "string"})
+		bf = pd.read_csv(f, sep="\t", na_values=['.'], dtype = {"ID" : str, "BF" : float, "logBF" : float, "STRING" : str})
 		bf.dropna(subset=['BF'], inplace=True)
 		bf = bf[bf["BF"] > 0]
 	
