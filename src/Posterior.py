@@ -69,6 +69,16 @@ def PO_main(args):
 	merged["Rank"] = merged["logPostOC"].rank(ascending=False, method='first')
 
 
+	# get rid of unnecessary columns and reorder
+	merged = merged.drop(['prior', 'PriorOC', 'BF'])
+	merged = merged.round(6)
+
+	order.first = [ "Rank", "ID", "Gene", "csq", "logPostOC", "logPriorOC", "logBF", "STRING" ]
+	order.second = [ x for x in merged.columns.tolist() and x not in order.first ]
+
+	merged = merged[ order.first + order.second ]
+
+
 	with open(args.tempDir + args.prefix + '.max_logBF.txt', 'r') as f:
 		tmp = f.readlines()
 		max_logBF = float(tmp[0])
