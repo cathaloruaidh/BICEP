@@ -73,10 +73,10 @@ def PO_main(args):
 	merged = merged.drop(['prior', 'PriorOC', 'BF'], axis=1)
 	merged = merged.round(6)
 
-	order.first = [ "Rank", "ID", "Gene", "csq", "logPostOC", "logPriorOC", "logBF", "STRING" ]
-	order.second = [ x for x in merged.columns.tolist() and x not in order.first ]
+	orderFirst = [ "Rank", "ID", "Gene", "csq", "logPostOC", "logPriorOC", "logBF", "STRING" ]
+	orderSecond = [ x for x in merged.columns.tolist() and x not in order.first ]
 
-	merged = merged[ order.first + order.second ]
+	merged = merged[ orderFirst + orderSecond ]
 
 
 	with open(args.tempDir + args.prefix + '.max_logBF.txt', 'r') as f:
