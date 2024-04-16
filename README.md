@@ -48,7 +48,7 @@ git clone https://github.com/cathaloruaidh/BICEP.git
 Install the required python libraries:
 
 ```
-python3 -m pip install -r BICEP/requirements.txt
+python3 -m pip install --user -r BICEP/requirements.txt
 ```
 
 
