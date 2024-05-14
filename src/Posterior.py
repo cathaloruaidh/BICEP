@@ -98,7 +98,7 @@ def PO_main(args):
 
 	# let the y_min be no larger than twice abs(y_max)
 	# in case there are low-prior variants taking over the plot
-	min_y = np.max(min_y, -2*abs(max_y))
+	min_y = np.max([min_y, -2*abs(max_y)])
 
 
 	fig, (ax1, ax2, ax3) = plt.subplots(nrows=3, ncols=1, sharex=True)
