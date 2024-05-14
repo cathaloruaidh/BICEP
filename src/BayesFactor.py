@@ -777,7 +777,7 @@ def BF_main(args):
 			ind = np.where(pedInfo.indID == vcf.samples[i])[0][0]
 		except:
 			msg = "Sample " + vcf.samples[i] + " is in VCF but not FAM."
-			logging.error(msg)
+			logging.critical(msg)
 		else:
 			vcfSampleIndex.append(ind)
 
@@ -786,6 +786,7 @@ def BF_main(args):
 
 	# set all genotypes to missing as input
 	genotypes = np.full((pedInfo.nPeople, nVariants), -1)
+	homozygous = np.full(nVariants, False)
 
 
 	# create list to hold unique variant ID
@@ -830,6 +831,7 @@ def BF_main(args):
 			# missing genotypes are set to -1
 			if gt == 2:
 				gt = 1
+				homozygous[j] = True
 
 			if gt == 3:
 				gt = -1
@@ -847,6 +849,12 @@ def BF_main(args):
 
 
 	varString = np.apply_along_axis(genotypeString, 0, genotypes)
+
+
+	# for the variants with a HOM_ALT carrier, change the
+	# variant string so that a BF won't be calculated
+	np.putmask(varString, homozygous, "HOM_ALT")
+
 
 	# transpose array for parallelisation
 	genotypes = np.transpose(genotypes.astype(np.int))
@@ -881,6 +889,8 @@ def BF_main(args):
 	allBF = manager.dict()
 
 
+	# set BF to zero for any variant with a HOM_ALT carrier
+	allBF["HOM_ALT"] = [ 0.0, 0.0, 0.0, 0 ]
 
 
 	if minAffecteds > 0:
