@@ -93,8 +93,12 @@ def PO_main(args):
 
 	# plot top variants
 	logging.info("Plotting the top " + str(args.top) +  " variants")
-	min_y = np.floor(np.min(np.concatenate((merged_sub['logPostOC'].values, merged_sub['logBF'].values, merged_sub['logPriorOC'].values, np.array([max_logBF])))))
 	max_y = np.ceil(np.max(np.concatenate((merged_sub['logPostOC'].values, merged_sub['logBF'].values, merged_sub['logPriorOC'].values, np.array([max_logBF])))))
+	min_y = np.floor(np.min(np.concatenate((merged_sub['logPostOC'].values, merged_sub['logBF'].values, merged_sub['logPriorOC'].values, np.array([max_logBF])))))
+
+	# let the y_min be no larger than twice abs(y_max)
+	# in case there are low-prior variants taking over the plot
+	min_y = np.max(min_y, -2*abs(max_y))
 
 
 	fig, (ax1, ax2, ax3) = plt.subplots(nrows=3, ncols=1, sharex=True)
