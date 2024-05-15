@@ -225,14 +225,6 @@ def main(argv):
 		#rootLogger.addHandler(consoleHandler)
 
 
-		# allele frequency predictor for prior 
-		if args.frequency is not None:
-			alleleFrequency = args.frequency
-		else:
-			alleleFrequency = "gnomAD_v2_exome_AF_popmax"
-
-
-
 		if args.command == "All":
 
 			if args.model is None:

@@ -214,6 +214,11 @@ def PT_main(args):
 	keys = [ key.strip("\"") for key in keys ]
 
 	
+	# allele frequency predictor for prior
+	if args.frequency is not None:
+		alleleFrequency = args.frequency
+	else:
+		alleleFrequency = "gnomAD_v2_exome_AF_popmax"
 
 
 	if args.predictors is not None:
