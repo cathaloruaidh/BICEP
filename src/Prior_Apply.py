@@ -170,6 +170,12 @@ def PA_main(args):
 	keys = [ key.strip("\"") for key in keys ]
 
 
+	# allele frequency predictor for prior
+	if args.frequency is not None:
+		alleleFrequency = args.frequency
+	else:
+		alleleFrequency = "gnomAD_v2_exome_AF_popmax"
+
 	if predictorsFile is not None:
 
 		d = {}
