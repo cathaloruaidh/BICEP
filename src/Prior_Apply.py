@@ -180,13 +180,14 @@ def PA_main(args):
 				d[key] = value
 
 		keysPredictors = sorted(list(d.keys()))
-		keysDescPred = sorted([ x for x in keysPredictors if d[x] == "-" ])
+		keysDescPred = sorted([ x for x in keysPredictors if d[x] == "-" ] + [alleleFrequency])
 		keysAscPred  = sorted([ x for x in keysPredictors if d[x] == "+" ])
+		keysPredictors = sorted(list(d.keys()) + [alleleFrequency])
 
 
 	else:
-		keysPredictors = sorted([ "CADD_PHRED", "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score", "gnomAD_v2_exome_AF_popmax" ])
-		keysDescPred = sorted([ "SIFT_score", "FATHMM_score", "gnomAD_v2_exome_AF_popmax" ])
+		keysPredictors = sorted([ "CADD_PHRED", "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score" ] + [alleleFrequency])
+		keysDescPred = sorted([ "SIFT_score", "FATHMM_score" ] + [alleleFrequency])
 		keysAscPred  = sorted([ x for x in keysPredictors if x not in keysDescPred ])
 	
 
@@ -325,7 +326,7 @@ def PA_main(args):
 
 
 	# set missing allele frequencies to zero
-	df["gnomAD_v2_exome_AF_popmax"] = df["gnomAD_v2_exome_AF_popmax"].fillna(0.0)
+	df[alleleFrequency] = df[alleleFrequency].fillna(0.0)
 
 
 	x = df.filter( ['csqVEP', 'typeVEP'] + keysAscPred + keysDescPred)

@@ -213,6 +213,8 @@ def PT_main(args):
 	keys = re.sub('^.*?: ', '', CV_anno_vcf.get_header_type('CSQ')['Description']).split("|")
 	keys = [ key.strip("\"") for key in keys ]
 
+	
+
 
 	if args.predictors is not None:
 
@@ -224,14 +226,16 @@ def PT_main(args):
 				d[key] = value
 
 
+		# manually add allele frequency to the predictors
 		keysPredictors = sorted(list(d.keys()))
-		keysDescPred = sorted([ x for x in keysPredictors if d[x] == "-" ])
+		keysDescPred = sorted([ x for x in keysPredictors if d[x] == "-" ] + [alleleFrequency])
 		keysAscPred  = sorted([ x for x in keysPredictors if d[x] == "+" ])
+		keysPredictors = sorted(list(d.keys()) + [alleleFrequency])
 
 
 	else:
-		keysPredictors = sorted([ "CADD_PHRED", "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score", "gnomAD_v2_exome_AF_popmax" ])
-		keysDescPred = sorted([ "FATHMM_score", "SIFT_score", "gnomAD_v2_exome_AF_popmax" ])
+		keysPredictors = sorted([ "CADD_PHRED", "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score" ] + [ alleleFrequency ] )
+		keysDescPred = sorted([ "FATHMM_score", "SIFT_score" ] + [ alleleFrequency ])
 		keysAscPred  = sorted([ x for x in keysPredictors if x not in keysDescPred ])
 
 
@@ -547,8 +551,8 @@ def PT_main(args):
 
 	
 		# set missing allele frequencies to zero
-		if "gnomAD_v2_exome_AF_popmax" in x_indel.columns:
-			x_indel["gnomAD_v2_exome_AF_popmax"] = x_indel["gnomAD_v2_exome_AF_popmax"].fillna(0.0)
+		if alleleFrequency in x_indel.columns:
+			x_indel[alleleFrequency] = x_indel[alleleFrequency].fillna(0.0)
 
 
 
@@ -644,8 +648,8 @@ def PT_main(args):
 
 	
 		# set missing allele frequencies to zero
-		if "gnomAD_v2_exome_AF_popmax" in x_missense.columns:
-			x_missense["gnomAD_v2_exome_AF_popmax"] = x_missense["gnomAD_v2_exome_AF_popmax"].fillna(0.0)
+		if alleleFrequency  in x_missense.columns:
+			x_missense[alleleFrequency] = x_missense[alleleFrequency].fillna(0.0)
 
 
 		# impute the missing data
@@ -752,8 +756,8 @@ def PT_main(args):
 
 	
 		# set missing allele frequencies to zero
-		if "gnomAD_v2_exome_AF_popmax" in x_nonMissenseSNV.columns:
-			x_nonMissenseSNV["gnomAD_v2_exome_AF_popmax"] = x_nonMissenseSNV["gnomAD_v2_exome_AF_popmax"].fillna(0.0)
+		if alleleFrequency in x_nonMissenseSNV.columns:
+			x_nonMissenseSNV[alleleFrequency] = x_nonMissenseSNV[alleleFrequency].fillna(0.0)
 
 
 
