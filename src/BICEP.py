@@ -74,6 +74,7 @@ def main(argv):
 	parser_parent.add_argument("-n", "--cores", nargs='?', default=1, type=int, help="Number of CPU cores available", metavar='N')
 	parser_parent.add_argument("--prefix", nargs='?', default="BICEP_output", help="Output prefix", metavar='C')
 	parser_parent.add_argument("--build", nargs='?', default='GRCh38', help="Reference genome build: GRCh37, GRCh38", choices=['GRCh37', 'GRCh38'], metavar='C')
+	parser_parent.add_argument("--frequency", nargs='?', default="gnomAD_v2_exome_AF_popmax", help="Allele frequency predictor", metavar='C')
 
 
 	# All sub-command
@@ -222,6 +223,15 @@ def main(argv):
 		#consoleHandler = logging.StreamHandler()
 		#consoleHandler.setFormatter(logFormatter)
 		#rootLogger.addHandler(consoleHandler)
+
+
+		# allele frequency predictor for prior 
+		if args.frequency is not None:
+			alleleFrequency = args.frequency
+		else:
+			alleleFrequency = "gnomAD_v2_exome_AF_popmax"
+
+
 
 		if args.command == "All":
 
