@@ -91,7 +91,8 @@ def main(argv):
 	parser_ALL.add_argument("-i", "--include", nargs='?', help="File of ClinVar IDs to include for training", metavar='C')
 	parser_ALL.add_argument("-b", "--benign", nargs='?', help="File of benign variant IDs for training", metavar='C')
 	parser_ALL.add_argument("-p", "--pathogenic", nargs='?', help="File of pathogenic variant IDs for training", metavar='C')
-	parser_ALL.add_argument("--boot", nargs='?', default=1, type=int, help="Number of bootstraps", metavar='N')
+	parser_ALL.add_argument("--eval", action='store_true', help="Evaluate the predictors and regression model for the prior")
+	parser_ALL.add_argument("--boot", nargs='?', default=1, type=int, help="Number of bootstraps for prior evaluation", metavar='N')
 	parser_ALL.add_argument("-m", "--model", nargs='?', help="Prefix for the regression model files", metavar='C')
 	parser_ALL.add_argument("-v", "--vcf", nargs='?', help="VCF file for variants", metavar='F', required = True)
 	parser_ALL.add_argument("-f", "--fam", nargs='?', help="FAM file describing the pedigree structure and phenotypes", metavar='F', required = True)
@@ -119,23 +120,13 @@ def main(argv):
 	parser_PT.add_argument("-i", "--include", nargs='?', help="File of ClinVar IDs to include for training", metavar='C')
 	parser_PT.add_argument("-b", "--benign", nargs='?', help="File of benign variant IDs for training", metavar='C')
 	parser_PT.add_argument("-p", "--pathogenic", nargs='?', help="File of pathogenic variant IDs for training", metavar='C')
+	parser_PT.add_argument("--eval", action='store_true', help="Evaluate the predictors and regression model for the prior")
+	parser_PT.add_argument("--boot", nargs='?', default=1, type=int, help="Number of bootstraps for prior evaluation", metavar='N')
 	
 
 
 	
 	
-	# PriorEvaluate sub-command
-	parser_PE = sub_parsers.add_parser("PriorEvaluate", help = "Evaluate the performance of the regression models", 
-	parents = [parser_parent], add_help=False, formatter_class=UltimateHelpFormatter, usage=SUPPRESS, 
-	description = BICEP_textwrap + textwrap.dedent('''\
-	
-	Evaluate the performance of the regression models'''))
-	parser_PE.add_argument("--predictors", nargs='?', help="File containing regression predictors", metavar='C')
-	parser_PE.add_argument("--boot", nargs='?', default=1, type=int, help="Number of bootstraps", metavar='N')
-	parser_PE.add_argument("--clinvar", nargs='?', help="ClinVar VCF file annotated with VEP", metavar='C')
-	
-
-
 	# PriorApply sub-command
 	parser_PA = sub_parsers.add_parser("PriorApply", help = "Apply the regression models to the pedigree data", 
 	parents = [parser_parent], add_help=False, formatter_class=UltimateHelpFormatter, usage=SUPPRESS, 
@@ -144,7 +135,7 @@ def main(argv):
 	Apply the regression models to the pedigree data'''))
 	parser_PA.add_argument("-v", "--vcf", nargs='?', help="VCF file for variants", metavar='F', required = True)
 	parser_PA.add_argument("-m", "--model", nargs='?', help="Prefix for the regression model files", metavar='C')
-	parser_PA.add_argument("--predictors", nargs='?', help="File containing regression predictors", metavar='C')
+	parser_PA.add_argument("--predictors", nargs='?', help="File containing regression predictors", metavar='F')
 	
 	
 	
@@ -234,7 +225,6 @@ def main(argv):
 			if args.clinvar is None:
 				args.clinvar = args.scriptDir + "../data/clinvar_20231126." + args.build +".PATH_BEN.single.strip.vep.vcf.gz"
 
-			#Prior_Evaluate.PE_main(args)
 			Prior_Apply.PA_main(args)
 			BayesFactor.BF_main(args)
 			Posterior.PO_main(args)
@@ -242,10 +232,6 @@ def main(argv):
 
 		if args.command == "PriorTrain":
 			Prior_Train.PT_main(args)
-
-		# not working currently!
-		if args.command == "PriorEvaluate":
-			Prior_Evaluate.PE_main(args)
 
 		if args.command == "PriorApply":
 			Prior_Apply.PA_main(args)
