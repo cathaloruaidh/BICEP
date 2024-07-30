@@ -236,10 +236,10 @@ def PT_main(args):
 			df_all = df_all[ df_all['vc'] == "single_nucleotide_variant" ]
 			df_all_path = df_all_path[ df_all_path['vc'] == "single_nucleotide_variant" ]
 
-			flatPrior_nonMissenseSNV = len(df_all_path[ ~df_all_path['mc'].str.contains("missense") ].index) / len(df_all[ ~df_all['mc'].str.contains("missense") ].index)
+			flatPrior_otherSNV = len(df_all_path[ ~df_all_path['mc'].str.contains("missense") ].index) / len(df_all[ ~df_all['mc'].str.contains("missense") ].index)
 
 
-			flatPriors = { 'nonCoding' : flatPrior_nonCoding, 'indel' : flatPrior_indel, 'missense' : flatPrior_missense, 'nonMissenseSNV' : flatPrior_nonMissenseSNV }
+			flatPriors = { 'nonCoding' : flatPrior_nonCoding, 'indel' : flatPrior_indel, 'missense' : flatPrior_missense, 'otherSNV' : flatPrior_otherSNV }
 
 
 
@@ -634,22 +634,25 @@ def PT_main(args):
 			logReg_indel.fit(x_indel_train_imp_scal, y_indel_train)
 
 			vif_data = pd.DataFrame()
-			vif_data["Model"] = "indel"
+			vif_data["Model"] =  [ "Indel" ] * len(x_indel_train.columns)
 			vif_data["feature"] = x_indel_train.columns
 			vif_data["VIF"] = [variance_inflation_factor(x_indel_train_imp_scal, i) for i in range(len(x_indel_train.columns))]
 			vif_data["Coefficient"] = logReg_indel.coef_.flatten()
-			print("Intercept: ", logReg_indel.intercept_)
+			vif_data.loc[len(vif_data)] = [ "Indel", "intercept", np.nan, round(logReg_indel.intercept_[0], 4) ]
+			print(vif_data)
 
 
 	
 			SENS_train_indel_boot = []
 			SPEC_train_indel_boot = []
 			PPV_train_indel_boot = []
+			NPV_train_indel_boot = []
 			MCC_train_indel_boot = []
 
 			SENS_test_indel_boot = []
 			SPEC_test_indel_boot = []
 			PPV_test_indel_boot = []
+			NPV_test_indel_boot = []
 			MCC_test_indel_boot = []
 
 
@@ -663,7 +666,9 @@ def PT_main(args):
 				SENS_train_indel_boot.append(tp / (tp + fn)) 
 				SPEC_train_indel_boot.append(tn / (tn + fp)) 
 				PPV_train_indel_boot.append(tp / (tp + fp)) 
+				NPV_train_indel_boot.append(tn / (tn + fn)) 
 				MCC_train_indel_boot.append(matthews_corrcoef(y_indel_boot, y_indel_pred))
+
 
 				ind_indel = np.random.randint(x_indel_test_imp_scal.shape[0], size=x_indel_test_imp_scal.shape[0])
 				x_indel_boot = x_indel_test_imp_scal[ind_indel]
@@ -674,25 +679,46 @@ def PT_main(args):
 				SENS_test_indel_boot.append(tp / (tp + fn)) 
 				SPEC_test_indel_boot.append(tn / (tn + fp)) 
 				PPV_test_indel_boot.append(tp / (tp + fp)) 
+				NPV_test_indel_boot.append(tn / (tn + fn)) 
 				MCC_test_indel_boot.append(matthews_corrcoef(y_indel_boot, y_indel_pred))
 
 
 			y_indel_train_pred = logReg_indel.predict(x_indel_train_imp_scal)
 			tn, fp, fn, tp = confusion_matrix(y_indel_train, y_indel_train_pred).ravel()
 	
-			print("\tSensitivity - ", tp / (tp + fn), " (", np.quantile(SENS_train_indel_boot, 0.025), ", ", np.quantile(SENS_train_indel_boot, 0.975), ")")
-			print("\tSpecificity - ", tn / (tn + fp), " (", np.quantile(SPEC_train_indel_boot, 0.025), ", ", np.quantile(SPEC_train_indel_boot, 0.975), ")")
-			print("\tPPV - ", tp / (tp + fp), " (", np.quantile(PPV_train_indel_boot, 0.025), ", ", np.quantile(PPV_train_indel_boot, 0.975), ")")
-			print("\tMCC - ", matthews_corrcoef(y_indel_train, y_indel_train_pred), " (", np.quantile(MCC_train_indel_boot, 0.025), ", ", np.quantile(MCC_train_indel_boot, 0.975), ")")
+			print("\tTraining data: ")
+
+			performance = pd.DataFrame()
+
+			performance["Model"] = ["Indel"]*5
+			performance["Data"] = ["Train"]*5
+			performance["Metric"] = ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"]
+			performance["Value"] = [ tp / (tp + fn), tn / (tn + fp), tp / (tp + fp), tn / (tn + fn), matthews_corrcoef(y_indel_train, y_indel_train_pred) ]
+			performance["Value"] = [ round(x, 6) for x in performance["Value"] ]
+			performance["L-CI-95"] = [ np.quantile(SENS_train_indel_boot, 0.025), np.quantile(SPEC_train_indel_boot, 0.025), np.quantile(PPV_train_indel_boot, 0.025), np.quantile(NPV_train_indel_boot, 0.025), np.quantile(MCC_train_indel_boot, 0.025)  ]
+			performance["L-CI-95"] = [ round(x, 6) for x in performance["L-CI-95"] ]
+			performance["U-CI-95"] = [ np.quantile(SENS_train_indel_boot, 0.975), np.quantile(SPEC_train_indel_boot, 0.975), np.quantile(PPV_train_indel_boot, 0.975), np.quantile(NPV_train_indel_boot, 0.975), np.quantile(MCC_train_indel_boot, 0.975)  ]
+			performance["U-CI-95"] = [ round(x, 6) for x in performance["U-CI-95"] ]
+
+
 
 			y_indel_test_pred = logReg_indel.predict(x_indel_test_imp_scal)
 			tn, fp, fn, tp = confusion_matrix(y_indel_test, y_indel_test_pred).ravel()
 	
-			print("\tSensitivity - ", tp / (tp + fn), " (", np.quantile(SENS_test_indel_boot, 0.025), ", ", np.quantile(SENS_test_indel_boot, 0.975), ")")
-			print("\tSpecificity - ", tn / (tn + fp), " (", np.quantile(SPEC_test_indel_boot, 0.025), ", ", np.quantile(SPEC_test_indel_boot, 0.975), ")")
-			print("\tPPV - ", tp / (tp + fp), " (", np.quantile(PPV_test_indel_boot, 0.025), ", ", np.quantile(PPV_test_indel_boot, 0.975), ")")
-			print("\tMCC - ", matthews_corrcoef(y_indel_test, y_indel_test_pred), " (", np.quantile(MCC_test_indel_boot, 0.025), ", ", np.quantile(MCC_test_indel_boot, 0.975), ")")
+			print("\n\tTesting data: ")
+			performance_tmp = pd.DataFrame()
 
+			performance_tmp["Model"] = ["indel"]*5
+			performance_tmp["Data"] = ["Test"]*5
+			performance_tmp["Metric"] = ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"]
+			performance_tmp["Value"] = [ tp / (tp + fn), tn / (tn + fp), tp / (tp + fp), tn / (tn + fn), matthews_corrcoef(y_indel_test, y_indel_test_pred) ]
+			performance_tmp["Value"] = [ round(x, 6) for x in performance_tmp["Value"] ]
+			performance_tmp["L-CI-95"] = [ np.quantile(SENS_test_indel_boot, 0.025), np.quantile(SPEC_test_indel_boot, 0.025), np.quantile(PPV_test_indel_boot, 0.025), np.quantile(NPV_test_indel_boot, 0.025), np.quantile(MCC_test_indel_boot, 0.025)  ]
+			performance_tmp["L-CI-95"] = [ round(x, 6) for x in performance_tmp["L-CI-95"] ]
+			performance_tmp["U-CI-95"] = [ np.quantile(SENS_test_indel_boot, 0.975), np.quantile(SPEC_test_indel_boot, 0.975), np.quantile(PPV_test_indel_boot, 0.975), np.quantile(NPV_test_indel_boot, 0.975), np.quantile(MCC_test_indel_boot, 0.975)  ]
+			performance_tmp["U-CI-95"] = [ round(x, 6) for x in performance_tmp["U-CI-95"] ]
+			performance = pd.concat([performance, performance_tmp], ignore_index = True)
+			print(performance)
 
 
 
@@ -795,47 +821,51 @@ def PT_main(args):
 
 		# evaluate the prior
 		if args.eval is True:
-
-
-
 			x_missense_train, x_missense_test, y_missense_train, y_missense_test = train_test_split(x_missense, y_missense, test_size = 0.2, random_state = 123)
 
-			imp_missense = SimpleImputer(strategy = 'median')
+
+			logging.debug("Impute the training data (missense)")
+
+			imp_misseise = SimpleImputer(strategy = 'median', verbose = 100)
 			imp_missense.fit(x_missense_train)
 			x_missense_train_imp = imp_missense.transform(x_missense_train)
 			x_missense_test_imp = imp_missense.transform(x_missense_test)
 
+			logging.debug("Scaling trainind data to [0,1] (missense)")
 			scal_missense = MinMaxScaler(clip = 'true')
 			scal_missense.fit(x_missense_train_imp)
 			x_missense_train_imp_scal = scal_missense.transform(x_missense_train_imp)
 			x_missense_test_imp_scal = scal_missense.transform(x_missense_test_imp)
 
-			logging.info("Run logistic regression")
 
+			logging.debug("Regression and VIF (missense)")
 			logReg_missense = LogisticRegression(penalty = 'none')
 			logReg_missense.fit(x_missense_train_imp_scal, y_missense_train)
 
 			vif_data = pd.DataFrame()
+			vif_data["Model"] =  [ "Missense" ] * len(x_missense_train.columns)
 			vif_data["feature"] = x_missense_train.columns
 			vif_data["VIF"] = [variance_inflation_factor(x_missense_train_imp_scal, i) for i in range(len(x_missense_train.columns))]
 			vif_data["Coefficient"] = logReg_missense.coef_.flatten()
+			vif_data.loc[len(vif_data)] = [ "Missense", "intercept", np.nan, round(logReg_missense.intercept_[0], 4) ]
 			print(vif_data)
-			print("Intercept: ", logReg_missense.intercept_)
 
 
+	
 			SENS_train_missense_boot = []
 			SPEC_train_missense_boot = []
 			PPV_train_missense_boot = []
+			NPV_train_missense_boot = []
 			MCC_train_missense_boot = []
 
 			SENS_test_missense_boot = []
 			SPEC_test_missense_boot = []
 			PPV_test_missense_boot = []
+			NPV_test_missense_boot = []
 			MCC_test_missense_boot = []
 
 
 			for i in range(args.boot):
-				# missense
 				ind_missense = np.random.randint(x_missense_train_imp_scal.shape[0], size=x_missense_train_imp_scal.shape[0])
 				x_missense_boot = x_missense_train_imp_scal[ind_missense]
 				y_missense_boot = y_missense_train[ind_missense]
@@ -845,8 +875,8 @@ def PT_main(args):
 				SENS_train_missense_boot.append(tp / (tp + fn)) 
 				SPEC_train_missense_boot.append(tn / (tn + fp)) 
 				PPV_train_missense_boot.append(tp / (tp + fp)) 
+				NPV_train_missense_boot.append(tn / (tn + fn)) 
 				MCC_train_missense_boot.append(matthews_corrcoef(y_missense_boot, y_missense_pred))
-
 
 
 				ind_missense = np.random.randint(x_missense_test_imp_scal.shape[0], size=x_missense_test_imp_scal.shape[0])
@@ -858,31 +888,46 @@ def PT_main(args):
 				SENS_test_missense_boot.append(tp / (tp + fn)) 
 				SPEC_test_missense_boot.append(tn / (tn + fp)) 
 				PPV_test_missense_boot.append(tp / (tp + fp)) 
+				NPV_test_missense_boot.append(tn / (tn + fn)) 
 				MCC_test_missense_boot.append(matthews_corrcoef(y_missense_boot, y_missense_pred))
 
-			# missense
-			logging.info("Results: missense")
+
 			y_missense_train_pred = logReg_missense.predict(x_missense_train_imp_scal)
 			tn, fp, fn, tp = confusion_matrix(y_missense_train, y_missense_train_pred).ravel()
 	
-			print("\tSensitivity - ", tp / (tp + fn), " (", np.quantile(SENS_train_missense_boot, 0.025), ", ", np.quantile(SENS_train_missense_boot, 0.975), ")")
-			print("\tSpecificity - ", tn / (tn + fp), " (", np.quantile(SPEC_train_missense_boot, 0.025), ", ", np.quantile(SPEC_train_missense_boot, 0.975), ")")
-			print("\tPPV - ", tp / (tp + fp), " (", np.quantile(PPV_train_missense_boot, 0.025), ", ", np.quantile(PPV_train_missense_boot, 0.975), ")")
-			print("\tMCC - ", matthews_corrcoef(y_missense_train, y_missense_train_pred), " (", np.quantile(MCC_train_missense_boot, 0.025), ", ", np.quantile(MCC_train_missense_boot, 0.975), ")")
-			logging.info(" ")
+			print("\tTraining data: ")
 
-	
+			performance = pd.DataFrame()
 
-			# missense
-			logging.info("Results: missense")
+			performance["Model"] = ["Missense"]*5
+			performance["Data"] = ["Train"]*5
+			performance["Metric"] = ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"]
+			performance["Value"] = [ tp / (tp + fn), tn / (tn + fp), tp / (tp + fp), tn / (tn + fn), matthews_corrcoef(y_missense_train, y_missense_train_pred) ]
+			performance["Value"] = [ round(x, 6) for x in performance["Value"] ]
+			performance["L-CI-95"] = [ np.quantile(SENS_train_missense_boot, 0.025), np.quantile(SPEC_train_missense_boot, 0.025), np.quantile(PPV_train_missense_boot, 0.025), np.quantile(NPV_train_missense_boot, 0.025), np.quantile(MCC_train_missense_boot, 0.025)  ]
+			performance["L-CI-95"] = [ round(x, 6) for x in performance["L-CI-95"] ]
+			performance["U-CI-95"] = [ np.quantile(SENS_train_missense_boot, 0.975), np.quantile(SPEC_train_missense_boot, 0.975), np.quantile(PPV_train_missense_boot, 0.975), np.quantile(NPV_train_missense_boot, 0.975), np.quantile(MCC_train_missense_boot, 0.975)  ]
+			performance["U-CI-95"] = [ round(x, 6) for x in performance["U-CI-95"] ]
+
+
+
 			y_missense_test_pred = logReg_missense.predict(x_missense_test_imp_scal)
 			tn, fp, fn, tp = confusion_matrix(y_missense_test, y_missense_test_pred).ravel()
 	
-			print("\tSensitivity - ", tp / (tp + fn), " (", np.quantile(SENS_test_missense_boot, 0.025), ", ", np.quantile(SENS_test_missense_boot, 0.975), ")")
-			print("\tSpecificity - ", tn / (tn + fp), " (", np.quantile(SPEC_test_missense_boot, 0.025), ", ", np.quantile(SPEC_test_missense_boot, 0.975), ")")
-			print("\tPPV - ", tp / (tp + fp), " (", np.quantile(PPV_test_missense_boot, 0.025), ", ", np.quantile(PPV_test_missense_boot, 0.975), ")")
-			print("\tMCC - ", matthews_corrcoef(y_missense_test, y_missense_test_pred), " (", np.quantile(MCC_test_missense_boot, 0.025), ", ", np.quantile(MCC_test_missense_boot, 0.975), ")")
-			logging.info(" ")
+			print("\n\tTesting data: ")
+			performance_tmp = pd.DataFrame()
+
+			performance_tmp["Model"] = ["Missense"]*5
+			performance_tmp["Data"] = ["Test"]*5
+			performance_tmp["Metric"] = ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"]
+			performance_tmp["Value"] = [ tp / (tp + fn), tn / (tn + fp), tp / (tp + fp), tn / (tn + fn), matthews_corrcoef(y_missense_test, y_missense_test_pred) ]
+			performance_tmp["Value"] = [ round(x, 6) for x in performance_tmp["Value"] ]
+			performance_tmp["L-CI-95"] = [ np.quantile(SENS_test_missense_boot, 0.025), np.quantile(SPEC_test_missense_boot, 0.025), np.quantile(PPV_test_missense_boot, 0.025), np.quantile(NPV_test_missense_boot, 0.025), np.quantile(MCC_test_missense_boot, 0.025)  ]
+			performance_tmp["L-CI-95"] = [ round(x, 6) for x in performance_tmp["L-CI-95"] ]
+			performance_tmp["U-CI-95"] = [ np.quantile(SENS_test_missense_boot, 0.975), np.quantile(SPEC_test_missense_boot, 0.975), np.quantile(PPV_test_missense_boot, 0.975), np.quantile(NPV_test_missense_boot, 0.975), np.quantile(MCC_test_missense_boot, 0.975)  ]
+			performance_tmp["U-CI-95"] = [ round(x, 6) for x in performance_tmp["U-CI-95"] ]
+			performance = pd.concat([performance, performance_tmp], ignore_index = True)
+			print(performance)
 
 
 
@@ -952,193 +997,215 @@ def PT_main(args):
 
 	## NON-MISSENSE SNV
 	logging.info("NON-MISSENSE SNV")
-	x_nonMissenseSNV = x[ (x['csqCV'] != 'missense_variant') & (x['typeCV'] == 'SNV') ]
-	x_nonMissenseSNV_csq = x_nonMissenseSNV['csqCV'] 
+	x_otherSNV = x[ (x['csqCV'] != 'missense_variant') & (x['typeCV'] == 'SNV') ]
+	x_otherSNV_csq = x_otherSNV['csqCV'] 
 
 
-	y_nonMissenseSNV = y[ (y['csqCV'] != 'missense_variant') & (y['typeCV'] == 'SNV') ]
-	y_nonMissenseSNV = y_nonMissenseSNV.drop(['csqCV', 'typeCV'], axis=1)
-	y_nonMissenseSNV = y_nonMissenseSNV.values.reshape(-1,1)
+	y_otherSNV = y[ (y['csqCV'] != 'missense_variant') & (y['typeCV'] == 'SNV') ]
+	y_otherSNV = y_otherSNV.drop(['csqCV', 'typeCV'], axis=1)
+	y_otherSNV = y_otherSNV.values.reshape(-1,1)
 
 
 	# get IDs
-	ID_nonMissenseSNV = x_nonMissenseSNV['ID']
-	alleleID_nonMissenseSNV = x_nonMissenseSNV['alleleID']
-	geneCV_nonMissenseSNV = x_nonMissenseSNV['geneCV']
-	x_nonMissenseSNV = x_nonMissenseSNV.drop(['ID', 'alleleID', 'geneCV', 'impactCV'], axis=1)
-	x_nonMissenseSNV_index = x_nonMissenseSNV.index
+	ID_otherSNV = x_otherSNV['ID']
+	alleleID_otherSNV = x_otherSNV['alleleID']
+	geneCV_otherSNV = x_otherSNV['geneCV']
+	x_otherSNV = x_otherSNV.drop(['ID', 'alleleID', 'geneCV', 'impactCV'], axis=1)
+	x_otherSNV_index = x_otherSNV.index
 
-	x_nonMissenseSNV['csqCV'] = pd.Categorical(x_nonMissenseSNV['csqCV'], categories = sorted(x_nonMissenseSNV['csqCV'].unique()))
-	csqCV_nonMissenseSNV = [ x for x in x_nonMissenseSNV['csqCV'] if x in vepCSQRank.keys() ]
-	d_nonMissenseSNV = dict((k, vepCSQRank[k]) for k in csqCV_nonMissenseSNV)
-
-
-
-	uniq, counts = np.unique(y_nonMissenseSNV, return_counts = True)
-
-	if (len(x_nonMissenseSNV.index) > 0) and (len(uniq) == 2) and (counts.min() > 15*len(x_nonMissenseSNV.columns)):
-		drop_nonMissenseSNV = "csqCV_" + max(d_nonMissenseSNV, key=d_nonMissenseSNV.get)
-		x_nonMissenseSNV = pd.get_dummies(x_nonMissenseSNV, columns = ['csqCV']).drop(drop_nonMissenseSNV, axis=1)
-		x_nonMissenseSNV = x_nonMissenseSNV.drop(['FATHMM_score', 'MPC_score', 'Polyphen2_HDIV_score', 'REVEL_score', 'SIFT_score', 'typeCV'], axis=1, errors='ignore')
+	x_otherSNV['csqCV'] = pd.Categorical(x_otherSNV['csqCV'], categories = sorted(x_otherSNV['csqCV'].unique()))
+	csqCV_otherSNV = [ x for x in x_otherSNV['csqCV'] if x in vepCSQRank.keys() ]
+	d_otherSNV = dict((k, vepCSQRank[k]) for k in csqCV_otherSNV)
 
 
-		msg = str(np.size(y_nonMissenseSNV)) + " non-missense SNVs used (" + str(sum(y_nonMissenseSNV == 'PATHOGENIC')) + " PATH, " + str(sum(y_nonMissenseSNV == 'BENIGN')) + " BEN)"
+
+	uniq, counts = np.unique(y_otherSNV, return_counts = True)
+
+	if (len(x_otherSNV.index) > 0) and (len(uniq) == 2) and (counts.min() > 15*len(x_otherSNV.columns)):
+		drop_otherSNV = "csqCV_" + max(d_otherSNV, key=d_otherSNV.get)
+		x_otherSNV = pd.get_dummies(x_otherSNV, columns = ['csqCV']).drop(drop_otherSNV, axis=1)
+		x_otherSNV = x_otherSNV.drop(['FATHMM_score', 'MPC_score', 'Polyphen2_HDIV_score', 'REVEL_score', 'SIFT_score', 'typeCV'], axis=1, errors='ignore')
+
+
+		msg = str(np.size(y_otherSNV)) + " non-missense SNVs used (" + str(sum(y_otherSNV == 'PATHOGENIC')) + " PATH, " + str(sum(y_otherSNV == 'BENIGN')) + " BEN)"
 		logging.info(msg)
 		
 		# remove columns that are all NA
-		x_nonMissenseSNV = x_nonMissenseSNV.dropna(axis=1, how='all')
+		x_otherSNV = x_otherSNV.dropna(axis=1, how='all')
 
 	
 		# set missing allele frequencies to zero
-		if alleleFrequency in x_nonMissenseSNV.columns:
-			x_nonMissenseSNV[alleleFrequency] = x_nonMissenseSNV[alleleFrequency].fillna(0.0)
+		if alleleFrequency in x_otherSNV.columns:
+			x_otherSNV[alleleFrequency] = x_otherSNV[alleleFrequency].fillna(0.0)
 
 		
 		# evaluate the prior
 		if args.eval is True:
-
-			x_nonMissenseSNV_train, x_nonMissenseSNV_test, y_nonMissenseSNV_train, y_nonMissenseSNV_test = train_test_split(x_nonMissenseSNV, y_nonMissenseSNV, test_size = 0.2, random_state = 123)
-
-
-			imp_nonMissenseSNV = SimpleImputer(strategy = 'median', verbose = 100)
-			imp_nonMissenseSNV.fit(x_nonMissenseSNV_train)
-			x_nonMissenseSNV_train_imp = imp_nonMissenseSNV.transform(x_nonMissenseSNV_train)
-			x_nonMissenseSNV_test_imp = imp_nonMissenseSNV.transform(x_nonMissenseSNV_test)
+			x_otherSNV_train, x_otherSNV_test, y_otherSNV_train, y_otherSNV_test = train_test_split(x_otherSNV, y_otherSNV, test_size = 0.2, random_state = 123)
 
 
+			logging.debug("Impute the training data (other SNV)")
 
-			scal_nonMissenseSNV = MinMaxScaler(clip = 'true')
-			scal_nonMissenseSNV.fit(x_nonMissenseSNV_train_imp)
-			x_nonMissenseSNV_train_imp_scal = scal_nonMissenseSNV.transform(x_nonMissenseSNV_train_imp)
-			x_nonMissenseSNV_test_imp_scal = scal_nonMissenseSNV.transform(x_nonMissenseSNV_test_imp)
+			imp_otherSNV = SimpleImputer(strategy = 'median', verbose = 100)
+			imp_otherSNV.fit(x_otherSNV_train)
+			x_otherSNV_train_imp = imp_otherSNV.transform(x_otherSNV_train)
+			x_otherSNV_test_imp = imp_otherSNV.transform(x_otherSNV_test)
+
+			logging.debug("Scaling trainind data to [0,1] (other SNV)")
+			scal_otherSNV = MinMaxScaler(clip = 'true')
+			scal_otherSNV.fit(x_otherSNV_train_imp)
+			x_otherSNV_train_imp_scal = scal_otherSNV.transform(x_otherSNV_train_imp)
+			x_otherSNV_test_imp_scal = scal_otherSNV.transform(x_otherSNV_test_imp)
 
 
-			logReg_nonMissenseSNV = LogisticRegression(penalty = 'none')
-			logReg_nonMissenseSNV.fit(x_nonMissenseSNV_train_imp_scal, y_nonMissenseSNV_train)
+			logging.debug("Regression and VIF (other SNV)")
+			logReg_otherSNV = LogisticRegression(penalty = 'none')
+			logReg_otherSNV.fit(x_otherSNV_train_imp_scal, y_otherSNV_train)
 
-			print("\n\nNon-Missense SNV")
 			vif_data = pd.DataFrame()
-			vif_data["feature"] = x_nonMissenseSNV_train.columns
-			vif_data["VIF"] = [variance_inflation_factor(x_nonMissenseSNV_train_imp_scal, i) for i in range(len(x_nonMissenseSNV_train.columns))]
-			vif_data["Coefficient"] = logReg_nonMissenseSNV.coef_.flatten()
+			vif_data["Model"] =  [ "OtherSNV" ] * len(x_otherSNV_train.columns)
+			vif_data["feature"] = x_otherSNV_train.columns
+			vif_data["VIF"] = [variance_inflation_factor(x_otherSNV_train_imp_scal, i) for i in range(len(x_otherSNV_train.columns))]
+			vif_data["Coefficient"] = logReg_otherSNV.coef_.flatten()
+			vif_data.loc[len(vif_data)] = [ "OtherSNV", "intercept", np.nan, round(logReg_otherSNV.intercept_[0], 4) ]
 			print(vif_data)
-			print("Intercept: ", logReg_nonMissenseSNV.intercept_)
 
-			SENS_train_nonMissenseSNV_boot = []
-			SPEC_train_nonMissenseSNV_boot = []
-			PPV_train_nonMissenseSNV_boot = []
-			MCC_train_nonMissenseSNV_boot = []
 
-			SENS_test_nonMissenseSNV_boot = []
-			SPEC_test_nonMissenseSNV_boot = []
-			PPV_test_nonMissenseSNV_boot = []
-			MCC_test_nonMissenseSNV_boot = []
+	
+			SENS_train_otherSNV_boot = []
+			SPEC_train_otherSNV_boot = []
+			PPV_train_otherSNV_boot = []
+			NPV_train_otherSNV_boot = []
+			MCC_train_otherSNV_boot = []
 
-			
+			SENS_test_otherSNV_boot = []
+			SPEC_test_otherSNV_boot = []
+			PPV_test_otherSNV_boot = []
+			NPV_test_otherSNV_boot = []
+			MCC_test_otherSNV_boot = []
+
+
 			for i in range(args.boot):
-				# nonMissenseSNV
-				ind_nonMissenseSNV = np.random.randint(x_nonMissenseSNV_train_imp_scal.shape[0], size=x_nonMissenseSNV_train_imp_scal.shape[0])
-				x_nonMissenseSNV_boot = x_nonMissenseSNV_train_imp_scal[ind_nonMissenseSNV]
-				y_nonMissenseSNV_boot = y_nonMissenseSNV_train[ind_nonMissenseSNV]
+				ind_otherSNV = np.random.randint(x_otherSNV_train_imp_scal.shape[0], size=x_otherSNV_train_imp_scal.shape[0])
+				x_otherSNV_boot = x_otherSNV_train_imp_scal[ind_otherSNV]
+				y_otherSNV_boot = y_otherSNV_train[ind_otherSNV]
 
-				y_nonMissenseSNV_pred = logReg_nonMissenseSNV.predict(x_nonMissenseSNV_boot)
-				tn, fp, fn, tp = confusion_matrix(y_nonMissenseSNV_boot, y_nonMissenseSNV_pred).ravel()
-				SENS_train_nonMissenseSNV_boot.append(tp / (tp + fn)) 
-				SPEC_train_nonMissenseSNV_boot.append(tn / (tn + fp)) 
-				PPV_train_nonMissenseSNV_boot.append(tp / (tp + fp)) 
-				MCC_train_nonMissenseSNV_boot.append(matthews_corrcoef(y_nonMissenseSNV_boot, y_nonMissenseSNV_pred))
+				y_otherSNV_pred = logReg_otherSNV.predict(x_otherSNV_boot)
+				tn, fp, fn, tp = confusion_matrix(y_otherSNV_boot, y_otherSNV_pred).ravel()
+				SENS_train_otherSNV_boot.append(tp / (tp + fn)) 
+				SPEC_train_otherSNV_boot.append(tn / (tn + fp)) 
+				PPV_train_otherSNV_boot.append(tp / (tp + fp)) 
+				NPV_train_otherSNV_boot.append(tn / (tn + fn)) 
+				MCC_train_otherSNV_boot.append(matthews_corrcoef(y_otherSNV_boot, y_otherSNV_pred))
 
-				# nonMissenseSNV
-				ind_nonMissenseSNV = np.random.randint(x_nonMissenseSNV_test_imp_scal.shape[0], size=x_nonMissenseSNV_test_imp_scal.shape[0])
-				x_nonMissenseSNV_boot = x_nonMissenseSNV_test_imp_scal[ind_nonMissenseSNV]
-				y_nonMissenseSNV_boot = y_nonMissenseSNV_test[ind_nonMissenseSNV]
 
-				y_nonMissenseSNV_pred = logReg_nonMissenseSNV.predict(x_nonMissenseSNV_boot)
-				tn, fp, fn, tp = confusion_matrix(y_nonMissenseSNV_boot, y_nonMissenseSNV_pred).ravel()
-				SENS_test_nonMissenseSNV_boot.append(tp / (tp + fn)) 
-				SPEC_test_nonMissenseSNV_boot.append(tn / (tn + fp)) 
-				PPV_test_nonMissenseSNV_boot.append(tp / (tp + fp)) 
-				MCC_test_nonMissenseSNV_boot.append(matthews_corrcoef(y_nonMissenseSNV_boot, y_nonMissenseSNV_pred))
+				ind_otherSNV = np.random.randint(x_otherSNV_test_imp_scal.shape[0], size=x_otherSNV_test_imp_scal.shape[0])
+				x_otherSNV_boot = x_otherSNV_test_imp_scal[ind_otherSNV]
+				y_otherSNV_boot = y_otherSNV_test[ind_otherSNV]
 
-		
-			logging.info("Results: nonMissenseSNV")
-			y_nonMissenseSNV_train_pred = logReg_nonMissenseSNV.predict(x_nonMissenseSNV_train_imp_scal)
-			tn, fp, fn, tp = confusion_matrix(y_nonMissenseSNV_train, y_nonMissenseSNV_train_pred).ravel()
-			
-			print("\tSensitivity - ", tp / (tp + fn), " (", np.quantile(SENS_train_nonMissenseSNV_boot, 0.025), ", ", np.quantile(SENS_train_nonMissenseSNV_boot, 0.975), ")")
-			print("\tSpecificity - ", tn / (tn + fp), " (", np.quantile(SPEC_train_nonMissenseSNV_boot, 0.025), ", ", np.quantile(SPEC_train_nonMissenseSNV_boot, 0.975), ")")
-			print("\tPPV - ", tp / (tp + fp), " (", np.quantile(PPV_train_nonMissenseSNV_boot, 0.025), ", ", np.quantile(PPV_train_nonMissenseSNV_boot, 0.975), ")")
-			print("\tMCC - ", matthews_corrcoef(y_nonMissenseSNV_train, y_nonMissenseSNV_train_pred), " (", np.quantile(MCC_train_nonMissenseSNV_boot, 0.025), ", ", np.quantile(MCC_train_nonMissenseSNV_boot, 0.975), ")")
-			logging.info(" ")
-		
-		
-			logging.info("Results: nonMissenseSNV")
-			y_nonMissenseSNV_test_pred = logReg_nonMissenseSNV.predict(x_nonMissenseSNV_test_imp_scal)
-			tn, fp, fn, tp = confusion_matrix(y_nonMissenseSNV_test, y_nonMissenseSNV_test_pred).ravel()
-			
-			print("\tSensitivity - ", tp / (tp + fn), " (", np.quantile(SENS_test_nonMissenseSNV_boot, 0.025), ", ", np.quantile(SENS_test_nonMissenseSNV_boot, 0.975), ")")
-			print("\tSpecificity - ", tn / (tn + fp), " (", np.quantile(SPEC_test_nonMissenseSNV_boot, 0.025), ", ", np.quantile(SPEC_test_nonMissenseSNV_boot, 0.975), ")")
-			print("\tPPV - ", tp / (tp + fp), " (", np.quantile(PPV_test_nonMissenseSNV_boot, 0.025), ", ", np.quantile(PPV_test_nonMissenseSNV_boot, 0.975), ")")
-			print("\tMCC - ", matthews_corrcoef(y_nonMissenseSNV_test, y_nonMissenseSNV_test_pred), " (", np.quantile(MCC_test_nonMissenseSNV_boot, 0.025), ", ", np.quantile(MCC_test_nonMissenseSNV_boot, 0.975), ")")
-			logging.info(" ")
+				y_otherSNV_pred = logReg_otherSNV.predict(x_otherSNV_boot)
+				tn, fp, fn, tp = confusion_matrix(y_otherSNV_boot, y_otherSNV_pred).ravel()
+				SENS_test_otherSNV_boot.append(tp / (tp + fn)) 
+				SPEC_test_otherSNV_boot.append(tn / (tn + fp)) 
+				PPV_test_otherSNV_boot.append(tp / (tp + fp)) 
+				NPV_test_otherSNV_boot.append(tn / (tn + fn)) 
+				MCC_test_otherSNV_boot.append(matthews_corrcoef(y_otherSNV_boot, y_otherSNV_pred))
+
+
+			y_otherSNV_train_pred = logReg_otherSNV.predict(x_otherSNV_train_imp_scal)
+			tn, fp, fn, tp = confusion_matrix(y_otherSNV_train, y_otherSNV_train_pred).ravel()
+	
+			print("\tTraining data: ")
+
+			performance = pd.DataFrame()
+
+			performance["Model"] = ["OtherSNV"]*5
+			performance["Data"] = ["Train"]*5
+			performance["Metric"] = ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"]
+			performance["Value"] = [ tp / (tp + fn), tn / (tn + fp), tp / (tp + fp), tn / (tn + fn), matthews_corrcoef(y_otherSNV_train, y_otherSNV_train_pred) ]
+			performance["Value"] = [ round(x, 6) for x in performance["Value"] ]
+			performance["L-CI-95"] = [ np.quantile(SENS_train_otherSNV_boot, 0.025), np.quantile(SPEC_train_otherSNV_boot, 0.025), np.quantile(PPV_train_otherSNV_boot, 0.025), np.quantile(NPV_train_otherSNV_boot, 0.025), np.quantile(MCC_train_otherSNV_boot, 0.025)  ]
+			performance["L-CI-95"] = [ round(x, 6) for x in performance["L-CI-95"] ]
+			performance["U-CI-95"] = [ np.quantile(SENS_train_otherSNV_boot, 0.975), np.quantile(SPEC_train_otherSNV_boot, 0.975), np.quantile(PPV_train_otherSNV_boot, 0.975), np.quantile(NPV_train_otherSNV_boot, 0.975), np.quantile(MCC_train_otherSNV_boot, 0.975)  ]
+			performance["U-CI-95"] = [ round(x, 6) for x in performance["U-CI-95"] ]
+
+
+
+			y_otherSNV_test_pred = logReg_otherSNV.predict(x_otherSNV_test_imp_scal)
+			tn, fp, fn, tp = confusion_matrix(y_otherSNV_test, y_otherSNV_test_pred).ravel()
+	
+			print("\n\tTesting data: ")
+			performance_tmp = pd.DataFrame()
+
+			performance_tmp["Model"] = ["OtherSNV"]*5
+			performance_tmp["Data"] = ["Test"]*5
+			performance_tmp["Metric"] = ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"]
+			performance_tmp["Value"] = [ tp / (tp + fn), tn / (tn + fp), tp / (tp + fp), tn / (tn + fn), matthews_corrcoef(y_otherSNV_test, y_otherSNV_test_pred) ]
+			performance_tmp["Value"] = [ round(x, 6) for x in performance_tmp["Value"] ]
+			performance_tmp["L-CI-95"] = [ np.quantile(SENS_test_otherSNV_boot, 0.025), np.quantile(SPEC_test_otherSNV_boot, 0.025), np.quantile(PPV_test_otherSNV_boot, 0.025), np.quantile(NPV_test_otherSNV_boot, 0.025), np.quantile(MCC_test_otherSNV_boot, 0.025)  ]
+			performance_tmp["L-CI-95"] = [ round(x, 6) for x in performance_tmp["L-CI-95"] ]
+			performance_tmp["U-CI-95"] = [ np.quantile(SENS_test_otherSNV_boot, 0.975), np.quantile(SPEC_test_otherSNV_boot, 0.975), np.quantile(PPV_test_otherSNV_boot, 0.975), np.quantile(NPV_test_otherSNV_boot, 0.975), np.quantile(MCC_test_otherSNV_boot, 0.975)  ]
+			performance_tmp["U-CI-95"] = [ round(x, 6) for x in performance_tmp["U-CI-95"] ]
+			performance = pd.concat([performance, performance_tmp], ignore_index = True)
+			print(performance)
 		
 
 
 
 		# impute the missing data
 		logging.info("Impute the data")
-		imp_nonMissenseSNV = SimpleImputer(strategy = 'median')
-		imp_nonMissenseSNV.fit(x_nonMissenseSNV)
+		imp_otherSNV = SimpleImputer(strategy = 'median')
+		imp_otherSNV.fit(x_otherSNV)
 
-		imp_nonMissenseSNV.feature_names = list(x_nonMissenseSNV.columns.values)
+		imp_otherSNV.feature_names = list(x_otherSNV.columns.values)
 
-		x_nonMissenseSNV_imp = imp_nonMissenseSNV.transform(x_nonMissenseSNV)
+		x_otherSNV_imp = imp_otherSNV.transform(x_otherSNV)
 
-		with open(args.tempDir + args.prefix+'.imp_nonMissenseSNV.pkl', 'wb') as f:
-			pickle.dump(imp_nonMissenseSNV, f)
+		with open(args.tempDir + args.prefix+'.imp_otherSNV.pkl', 'wb') as f:
+			pickle.dump(imp_otherSNV, f)
 
 
 		# scale the data
 		logging.info("Scaling to [0,1]")
-		scal_nonMissenseSNV = MinMaxScaler(clip = 'true')
-		scal_nonMissenseSNV.fit(x_nonMissenseSNV_imp)
+		scal_otherSNV = MinMaxScaler(clip = 'true')
+		scal_otherSNV.fit(x_otherSNV_imp)
 
-		scal_nonMissenseSNV.feature_names = list(x_nonMissenseSNV.columns.values)
+		scal_otherSNV.feature_names = list(x_otherSNV.columns.values)
 
-		x_nonMissenseSNV_imp_scal = scal_nonMissenseSNV.transform(x_nonMissenseSNV_imp)
+		x_otherSNV_imp_scal = scal_otherSNV.transform(x_otherSNV_imp)
 
-		with open(args.tempDir + args.prefix+'.scal_nonMissenseSNV.pkl', 'wb') as f:
-			pickle.dump(scal_nonMissenseSNV, f)
+		with open(args.tempDir + args.prefix+'.scal_otherSNV.pkl', 'wb') as f:
+			pickle.dump(scal_otherSNV, f)
 
 
 
 		# run logistic regression
 		logging.info("Run logistic regression")
-		logReg_nonMissenseSNV = LogisticRegression(penalty = 'none')
-		logReg_nonMissenseSNV.fit(x_nonMissenseSNV_imp_scal, y_nonMissenseSNV)
+		logReg_otherSNV = LogisticRegression(penalty = 'none')
+		logReg_otherSNV.fit(x_otherSNV_imp_scal, y_otherSNV)
 
-		logReg_nonMissenseSNV.feature_names = list(x_nonMissenseSNV.columns.values)
+		logReg_otherSNV.feature_names = list(x_otherSNV.columns.values)
 
-		with open(args.tempDir + args.prefix+'.logReg_nonMissenseSNV.pkl', 'wb') as f:
-			pickle.dump(logReg_nonMissenseSNV, f)
+		with open(args.tempDir + args.prefix+'.logReg_otherSNV.pkl', 'wb') as f:
+			pickle.dump(logReg_otherSNV, f)
 
-		with open(args.tempDir + args.prefix+'.predictors_nonMissenseSNV.npy', 'wb') as f:
-			np.save(f, x_nonMissenseSNV.columns)
+		with open(args.tempDir + args.prefix+'.predictors_otherSNV.npy', 'wb') as f:
+			np.save(f, x_otherSNV.columns)
 
-		results_nonMissenseSNV = logReg_nonMissenseSNV.predict_proba(x_nonMissenseSNV_imp_scal)[:,1]
+		results_otherSNV = logReg_otherSNV.predict_proba(x_otherSNV_imp_scal)[:,1]
 
-		with open(args.tempDir + args.prefix + ".nonMissenseSNV_coef.txt", 'a') as f:
-		 pprint.pprint(list(zip(logReg_nonMissenseSNV.feature_names, np.round(logReg_nonMissenseSNV.coef_.flatten(), 6))), f)
-		 print("Intercept: ", np.round(logReg_nonMissenseSNV.intercept_, 6), file=f)
+		with open(args.tempDir + args.prefix + ".otherSNV_coef.txt", 'a') as f:
+		 pprint.pprint(list(zip(logReg_otherSNV.feature_names, np.round(logReg_otherSNV.coef_.flatten(), 6))), f)
+		 print("Intercept: ", np.round(logReg_otherSNV.intercept_, 6), file=f)
 
 	else:
-		if 'nonMissenseSNV' in flatPriors.keys():
-			msg = "Not enough non-missense SNVs in training data, using flat prior: " + str(np.round(flatPriors['nonMissenseSNV'], 6))
-			results_nonMissenseSNV = np.full(len(x_nonMissenseSNV.index), flatPriors['nonMissenseSNV'])
+		if 'otherSNV' in flatPriors.keys():
+			msg = "Not enough non-missense SNVs in training data, using flat prior: " + str(np.round(flatPriors['otherSNV'], 6))
+			results_otherSNV = np.full(len(x_otherSNV.index), flatPriors['otherSNV'])
 
 		else:
 			msg = "Not enough non-missense SNVs in training data, all non-missense SNVs will be ignored"
-			results_nonMissenseSNV = np.full(len(x_nonMissenseSNV.index), np.nan)
+			results_otherSNV = np.full(len(x_otherSNV.index), np.nan)
 
 		logging.info(msg)
 
