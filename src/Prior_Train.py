@@ -125,6 +125,51 @@ def PT_main(args):
 	'5_prime_UTR_variant' : 18,
 	'3_prime_UTR_variant' : 19}
 
+	vepIMPACTRank = {'HIGH' : 1,
+	'MODERATE' : 2,
+	'LOW' : 3,
+	'MODIFIER' : 4}
+
+
+	vepCSQImpact = {'transcript_ablation' : 'HIGH',
+	'splice_acceptor_variant' : 'HIGH',
+	'splice_donor_variant' : 'HIGH',
+	'stop_gained' : 'HIGH',
+	'frameshift_variant' : 'HIGH',
+	'stop_lost' : 'HIGH',
+	'start_lost' : 'HIGH',
+	'transcript_amplification' : 'HIGH',
+	'inframe_insertion' : 'MODERATE',
+	'inframe_deletion' : 'MODERATE',
+	'missense_variant' : 'MODERATE',
+	'protein_altering_variant' : 'MODERATE',
+	'splice_region_variant' : 'LOW',
+	'splice_donor_5th_base_variant' : 'LOW',
+	'splice_donor_region_variant' : 'LOW',
+	'splice_polypyrimidine_tract_variant' : 'LOW',
+	'incomplete_terminal_codon_variant' : 'LOW',
+	'start_retained_variant' : 'LOW',
+	'stop_retained_variant' : 'LOW',
+	'synonymous_variant' : 'LOW',
+	'coding_sequence_variant' : 'MODIFIER',
+	'mature_miRNA_variant' : 'MODIFIER',
+	'5_prime_UTR_variant' : 'MODIFIER',
+	'3_prime_UTR_variant' : 'MODIFIER',
+	'non_coding_transcript_exon_variant' : 'MODIFIER',
+	'intron_variant' : 'MODIFIER',
+	'NMD_transcript_variant' : 'MODIFIER',
+	'non_coding_transcript_variant' : 'MODIFIER',
+	'upstream_gene_variant' : 'MODIFIER',
+	'downstream_gene_variant' : 'MODIFIER',
+	'TFBS_ablation' : 'MODIFIER',
+	'TFBS_amplification' : 'MODIFIER',
+	'TF_binding_site_variant' : 'MODIFIER',
+	'regulatory_region_ablation' : 'MODIFIER',
+	'regulatory_region_amplification' : 'MODIFIER',
+	'feature_elongation' : 'MODIFIER',
+	'regulatory_region_variant' : 'MODIFIER',
+	'feature_truncation' : 'MODIFIER',
+	'intergenic_variant' : 'MODIFIER'}
 
 
 
@@ -385,7 +430,7 @@ def PT_main(args):
 
 		# summarize scores across all transcripts
 		if len(csqVEP) > 0:
-			l = [ ID, setCV, geneCV, csqCV, typeCV, alleleID ]
+			l = [ ID, setCV, geneCV, csqCV, vepCSQImpact[ csqCV ], typeCV, alleleID ]
 
 	
 			for key in keysAscPred:
@@ -423,7 +468,7 @@ def PT_main(args):
 
 	
 	for i in range(len(DATA)):
-		for j in range(5, len(DATA[i])):
+		for j in range(6, len(DATA[i])):
 			if DATA[i][j] == "." or DATA[i][j] == "":
 				DATA[i][j] = np.nan
 			else:
@@ -447,7 +492,7 @@ def PT_main(args):
 
 	# read in the data
 	logging.debug("Converting to DataFrame")
-	df = pd.DataFrame(DATA, columns = [ 'ID', 'setCV', 'geneCV', 'csqCV', 'typeCV', 'alleleID' ] + keysAscPred + keysDescPred )
+	df = pd.DataFrame(DATA, columns = [ 'ID', 'setCV', 'geneCV', 'csqCV', 'impactCV', 'typeCV', 'alleleID' ] + keysAscPred + keysDescPred )
 	df['alleleID'] = df.alleleID.astype(str).replace('\.0', '', regex=True)
 
 
@@ -514,7 +559,7 @@ def PT_main(args):
 
 	# subset to variables being used
 	#x = df.filter(['ID', 'alleleID', 'geneCV'] + keysPredictors + ['csqCV', 'typeCV'])
-	x = df.filter([ 'ID', 'geneCV', 'csqCV', 'typeCV', 'alleleID' ] + keysAscPred + keysDescPred)
+	x = df.filter([ 'ID', 'geneCV', 'csqCV', 'impactCV', 'typeCV', 'alleleID' ] + keysAscPred + keysDescPred)
 
 
 	y = df.filter(['setCV', 'csqCV', 'typeCV'])
@@ -530,27 +575,26 @@ def PT_main(args):
 	ID_indel = x_indel['ID']
 	alleleID_indel = x_indel['alleleID']
 	geneCV_indel = x_indel['geneCV']
-	x_indel = x_indel.drop(['ID', 'alleleID', 'geneCV'], axis=1, errors='ignore')
+	x_indel = x_indel.drop(['ID', 'alleleID', 'csqCV', 'geneCV'], axis=1, errors='ignore')
 
 	x_indel_index = x_indel.index
-	x_indel_csq = x_indel['csqCV'] 
-	x_indel['csqCV'] = pd.Categorical(x_indel['csqCV'], categories = sorted(x_indel['csqCV'].unique()))
+	x_indel['impactCV'] = pd.Categorical(x_indel['impactCV'], categories = sorted(x_indel['impactCV'].unique()))
 	
-	csqCV_indel = [ x for x in x_indel['csqCV'] if x in vepCSQRank.keys() ]
-	d_indel = dict((k, vepCSQRank[k]) for k in csqCV_indel)
-	drop_indel = "csqCV_" + max(d_indel, key=d_indel.get)
+	impactCV_indel = [ x for x in x_indel['impactCV'] if x in vepIMPACTRank.keys() ]
+	d_indel = dict((k, vepIMPACTRank[k]) for k in impactCV_indel)
+	drop_indel = "impactCV_" + max(d_indel, key=d_indel.get)
 	
-	x_indel = pd.get_dummies(x_indel, columns = ['csqCV']).drop(drop_indel, axis=1)
+	x_indel = pd.get_dummies(x_indel, columns = ['impactCV']).drop(drop_indel, axis=1)
 
 
 	y_indel = y[ y['typeCV'] == 'indel' ]
-	y_indel = y_indel.drop(['csqCV', 'typeCV'], axis=1, errors='ignore')
+	y_indel = y_indel.drop(['csqCV', 'impactCV', 'typeCV'], axis=1, errors='ignore')
 	y_indel = y_indel.values.reshape(-1,1)
 
 
 	uniq, counts = np.unique(y_indel, return_counts = True)
 
-	if (len(x_indel.index) > 0) and (len(uniq) == 2) and (counts.min() > 15*len(x_indel.columns)):
+	if (len(x_indel.index) > 0) and (len(uniq) == 2) and (counts.min() > 10*len(x_indel.columns)):
 		x_indel = x_indel.drop(['FATHMM_score', 'MPC_score', 'Polyphen2_HDIV_score', 'REVEL_score', 'SIFT_score', 'typeCV'], axis=1, errors='ignore')
 
 
@@ -716,7 +760,7 @@ def PT_main(args):
 	logging.info("MISSENSE VARIANTS")
 	x_missense = x[ (x['csqCV'] == 'missense_variant') & (x['typeCV'] == 'SNV') ]
 	x_missense_csq = x_missense['csqCV'] 
-	x_missense = x_missense.drop(['CADD_PHRED', 'typeCV', 'csqCV'], axis=1, errors='ignore')
+	x_missense = x_missense.drop(['CADD_PHRED', 'typeCV', 'csqCV', 'impactCV'], axis=1, errors='ignore')
 
 
 
@@ -921,20 +965,20 @@ def PT_main(args):
 	ID_nonMissenseSNV = x_nonMissenseSNV['ID']
 	alleleID_nonMissenseSNV = x_nonMissenseSNV['alleleID']
 	geneCV_nonMissenseSNV = x_nonMissenseSNV['geneCV']
-	x_nonMissenseSNV = x_nonMissenseSNV.drop(['ID', 'alleleID', 'geneCV'], axis=1)
+	x_nonMissenseSNV = x_nonMissenseSNV.drop(['ID', 'alleleID', 'geneCV', 'impactCV'], axis=1)
 	x_nonMissenseSNV_index = x_nonMissenseSNV.index
 
 	x_nonMissenseSNV['csqCV'] = pd.Categorical(x_nonMissenseSNV['csqCV'], categories = sorted(x_nonMissenseSNV['csqCV'].unique()))
 	csqCV_nonMissenseSNV = [ x for x in x_nonMissenseSNV['csqCV'] if x in vepCSQRank.keys() ]
 	d_nonMissenseSNV = dict((k, vepCSQRank[k]) for k in csqCV_nonMissenseSNV)
-	drop_nonMissenseSNV = "csqCV_" + max(d_nonMissenseSNV, key=d_nonMissenseSNV.get)
-	x_nonMissenseSNV = pd.get_dummies(x_nonMissenseSNV, columns = ['csqCV']).drop(drop_nonMissenseSNV, axis=1)
 
 
 
 	uniq, counts = np.unique(y_nonMissenseSNV, return_counts = True)
 
 	if (len(x_nonMissenseSNV.index) > 0) and (len(uniq) == 2) and (counts.min() > 15*len(x_nonMissenseSNV.columns)):
+		drop_nonMissenseSNV = "csqCV_" + max(d_nonMissenseSNV, key=d_nonMissenseSNV.get)
+		x_nonMissenseSNV = pd.get_dummies(x_nonMissenseSNV, columns = ['csqCV']).drop(drop_nonMissenseSNV, axis=1)
 		x_nonMissenseSNV = x_nonMissenseSNV.drop(['FATHMM_score', 'MPC_score', 'Polyphen2_HDIV_score', 'REVEL_score', 'SIFT_score', 'typeCV'], axis=1, errors='ignore')
 
 

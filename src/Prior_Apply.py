@@ -13,6 +13,7 @@ import pandas as pd
 import statsmodels.api as sm
 
 from cyvcf2 import VCF, Writer
+from itertools import zip_longest
 from joblib import dump, load
 from multiprocessing import cpu_count
 from sklearn import metrics
@@ -143,6 +144,53 @@ def PA_main(args):
 	'3_prime_UTR_variant' : 19}
 
 
+	vepIMPACTRank = { 'HIGH' : 1,
+	'MODERATE' : 2,
+	'LOW' : 3,
+	'MODIFIER' : 4}
+
+
+	vepCSQImpact = {'transcript_ablation' : 'HIGH',
+	'splice_acceptor_variant' : 'HIGH',
+	'splice_donor_variant' : 'HIGH',
+	'stop_gained' : 'HIGH',
+	'frameshift_variant' : 'HIGH',
+	'stop_lost' : 'HIGH',
+	'start_lost' : 'HIGH',
+	'transcript_amplification' : 'HIGH',
+	'inframe_insertion' : 'MODERATE',
+	'inframe_deletion' : 'MODERATE',
+	'missense_variant' : 'MODERATE',
+	'protein_altering_variant' : 'MODERATE',
+	'splice_region_variant' : 'LOW',
+	'splice_donor_5th_base_variant' : 'LOW',
+	'splice_donor_region_variant' : 'LOW',
+	'splice_polypyrimidine_tract_variant' : 'LOW',
+	'incomplete_terminal_codon_variant' : 'LOW',
+	'start_retained_variant' : 'LOW',
+	'stop_retained_variant' : 'LOW',
+	'synonymous_variant' : 'LOW',
+	'coding_sequence_variant' : 'MODIFIER',
+	'mature_miRNA_variant' : 'MODIFIER',
+	'5_prime_UTR_variant' : 'MODIFIER',
+	'3_prime_UTR_variant' : 'MODIFIER',
+	'non_coding_transcript_exon_variant' : 'MODIFIER',
+	'intron_variant' : 'MODIFIER',
+	'NMD_transcript_variant' : 'MODIFIER',
+	'non_coding_transcript_variant' : 'MODIFIER',
+	'upstream_gene_variant' : 'MODIFIER',
+	'downstream_gene_variant' : 'MODIFIER',
+	'TFBS_ablation' : 'MODIFIER',
+	'TFBS_amplification' : 'MODIFIER',
+	'TF_binding_site_variant' : 'MODIFIER',
+	'regulatory_region_ablation' : 'MODIFIER',
+	'regulatory_region_amplification' : 'MODIFIER',
+	'feature_elongation' : 'MODIFIER',
+	'regulatory_region_variant' : 'MODIFIER',
+	'feature_truncation' : 'MODIFIER',
+	'intergenic_variant' : 'MODIFIER'}
+
+
 
 
 	# get flat priors from training data	
@@ -237,7 +285,7 @@ def PA_main(args):
 		for i in range(len(CSQ)):
 			add = True
 			tmp = np.array(CSQ[i].split("|"))
-			dictVEP = dict(zip(keys, tmp.T))
+			dictVEP = dict(zip_longest(keys, tmp.T, fillvalue="."))
 
 
 			# split VEP consequences if multiple
@@ -296,7 +344,7 @@ def PA_main(args):
 		# summarize scores across all transcripts
 		if len(csqVEP) > 0:
 			for i in range(len(csqVEP)):
-				l = [ ID, csqVEP[i]["SYMBOL"], typeVEP, csqVEP[i]["Consequence_select"] ]
+				l = [ ID, csqVEP[i]["SYMBOL"], typeVEP, csqVEP[i]["Consequence_select"], csqVEP[i]["IMPACT"] ]
 
 				for key in keysAscPred + keysDescPred:
 					l.append(csqVEP[i][key])
@@ -324,10 +372,11 @@ def PA_main(args):
 	pd.set_option('display.max_colwidth', 100)
 
 	# read in the data
-	df = pd.DataFrame(DATA, columns = ['ID', 'Gene', 'typeVEP', 'csqVEP'] + keysAscPred + keysDescPred )
+	df = pd.DataFrame(DATA, columns = ['ID', 'Gene', 'typeVEP', 'csqVEP', 'impactVEP'] + keysAscPred + keysDescPred )
 
 
 	df['csqVEP'] = pd.Categorical(df['csqVEP'], categories = sorted(vepCSQRank.keys()))
+	df['impactVEP'] = pd.Categorical(df['impactVEP'], categories = sorted(vepIMPACTRank.keys()))
 	df['typeVEP'] = pd.Categorical(df['typeVEP'], categories = ['indel', 'SNV'])
 
 
@@ -335,7 +384,7 @@ def PA_main(args):
 	df[alleleFrequency] = df[alleleFrequency].fillna(0.0)
 
 
-	x = df.filter( ['csqVEP', 'typeVEP'] + keysAscPred + keysDescPred)
+	x = df.filter( ['csqVEP', 'impactVEP', 'typeVEP'] + keysAscPred + keysDescPred)
 	
 
 
@@ -344,7 +393,8 @@ def PA_main(args):
 
 	x_indel = x[ x['typeVEP'] == 'indel' ]
 	x_indel_csq = x_indel['csqVEP']
-	x_indel = pd.get_dummies(x_indel, columns = ['csqVEP'])
+	x_indel_impact = x_indel['impactVEP']
+	x_indel = pd.get_dummies(x_indel, columns = ['impactVEP'])
 	x_indel_index = x_indel.index
 
 	y_indel = df[ df['typeVEP'] == 'indel' ]
@@ -409,6 +459,7 @@ def PA_main(args):
 
 	x_missense = x[ x['csqVEP'] == 'missense_variant' ]
 	x_missense_csq = x_missense['csqVEP']
+	x_missense_impact = x_missense['impactVEP']
 	x_missense_index = x_missense.index
 
 
@@ -471,6 +522,7 @@ def PA_main(args):
 
 	x_nonMissenseSNV = x[ (x['csqVEP'] != 'missense_variant') & (x['typeVEP'] == 'SNV') ]
 	x_nonMissenseSNV_csq = x_nonMissenseSNV['csqVEP']
+	x_nonMissenseSNV_impact = x_nonMissenseSNV['impactVEP']
 	x_nonMissenseSNV = pd.get_dummies(x_nonMissenseSNV, columns = ['csqVEP'])
 	x_nonMissenseSNV_index = x_nonMissenseSNV.index
 
@@ -538,6 +590,7 @@ def PA_main(args):
 	prior_prob = pd.DataFrame()
 	prior_prob["ID"] = np.concatenate((y_indel["ID"], y_missense["ID"], y_nonMissenseSNV["ID"]))
 	prior_prob["csq"] = np.concatenate((x_indel_csq, x_missense_csq, x_nonMissenseSNV_csq))
+	prior_prob["impact"] = np.concatenate((x_indel_impact, x_missense_impact, x_nonMissenseSNV_impact))
 	prior_prob["Gene"] = np.concatenate((y_indel["Gene"], y_missense["Gene"], y_nonMissenseSNV["Gene"]))
 	prior_prob["prior"] = np.concatenate((y_indel_pred, y_missense_pred, y_nonMissenseSNV_pred))
 
@@ -587,6 +640,7 @@ def PA_main(args):
 	
 	merged = merged[merged.columns.drop(list(merged.filter(regex='csqVEP_')))]
 	merged = merged[merged.columns.drop(list(merged.filter(regex='typeVEP_')))]
+	merged = merged[merged.columns.drop(list(merged.filter(regex='impactVEP_')))]
 
 
 	merged.to_csv(args.outputDir + outputPrefix+".priors.txt", index=False, sep='\t', na_rep='.')
