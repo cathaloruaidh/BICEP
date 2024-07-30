@@ -520,62 +520,62 @@ def PA_main(args):
 	## NON-MISSENSE SNV
 	logging.info("NON-MISSENSE SNV")
 
-	x_nonMissenseSNV = x[ (x['csqVEP'] != 'missense_variant') & (x['typeVEP'] == 'SNV') ]
-	x_nonMissenseSNV_csq = x_nonMissenseSNV['csqVEP']
-	x_nonMissenseSNV_impact = x_nonMissenseSNV['impactVEP']
-	x_nonMissenseSNV = pd.get_dummies(x_nonMissenseSNV, columns = ['csqVEP'])
-	x_nonMissenseSNV_index = x_nonMissenseSNV.index
+	x_otherSNV = x[ (x['csqVEP'] != 'missense_variant') & (x['typeVEP'] == 'SNV') ]
+	x_otherSNV_csq = x_otherSNV['csqVEP']
+	x_otherSNV_impact = x_otherSNV['impactVEP']
+	x_otherSNV = pd.get_dummies(x_otherSNV, columns = ['csqVEP'])
+	x_otherSNV_index = x_otherSNV.index
 
-	y_nonMissenseSNV = df[ (df['csqVEP'] != 'missense_variant') & (df['typeVEP'] == 'SNV') ]
+	y_otherSNV = df[ (df['csqVEP'] != 'missense_variant') & (df['typeVEP'] == 'SNV') ]
 
 		
-	if os.path.isfile(modelPrefix + '.predictors_nonMissenseSNV.npy'):
+	if os.path.isfile(modelPrefix + '.predictors_otherSNV.npy'):
 
 		# load in the predictor IDs for the models
-		with open(modelPrefix + '.predictors_nonMissenseSNV.npy', 'rb') as f:
-			predictors_nonMissenseSNV = np.load(f, allow_pickle = True)
-			predictors_nonMissenseSNV = [ s.replace('CV', 'VEP') for s in predictors_nonMissenseSNV ]
+		with open(modelPrefix + '.predictors_otherSNV.npy', 'rb') as f:
+			predictors_otherSNV = np.load(f, allow_pickle = True)
+			predictors_otherSNV = [ s.replace('CV', 'VEP') for s in predictors_otherSNV ]
 
-		x_nonMissenseSNV = x_nonMissenseSNV[predictors_nonMissenseSNV]
+		x_otherSNV = x_otherSNV[predictors_otherSNV]
 
 
 		# impute the missing data
 		logging.info("Impute the data")
 
-		with open(modelPrefix + '.imp_nonMissenseSNV.pkl', 'rb') as f:
-			imp_nonMissenseSNV = pickle.load(f)
+		with open(modelPrefix + '.imp_otherSNV.pkl', 'rb') as f:
+			imp_otherSNV = pickle.load(f)
 		
-		x_nonMissenseSNV_imp = imp_nonMissenseSNV.transform(x_nonMissenseSNV)
+		x_otherSNV_imp = imp_otherSNV.transform(x_otherSNV)
 
 
 
 		# scale the data
 		logging.info("Scaling to [0,1]")
 
-		with open(modelPrefix + '.scal_nonMissenseSNV.pkl', 'rb') as f:
-			scal_nonMissenseSNV = pickle.load(f)
+		with open(modelPrefix + '.scal_otherSNV.pkl', 'rb') as f:
+			scal_otherSNV = pickle.load(f)
 
-		x_nonMissenseSNV_imp_scal = scal_nonMissenseSNV.transform(x_nonMissenseSNV_imp)
+		x_otherSNV_imp_scal = scal_otherSNV.transform(x_otherSNV_imp)
 
 
 
 		# run logistic regression
 		logging.info("Apply logistic regression")
 
-		with open(modelPrefix + '.logReg_nonMissenseSNV.pkl', 'rb') as f:
-			logReg_nonMissenseSNV = pickle.load(f)
+		with open(modelPrefix + '.logReg_otherSNV.pkl', 'rb') as f:
+			logReg_otherSNV = pickle.load(f)
 
 
-		y_nonMissenseSNV_pred = logReg_nonMissenseSNV.predict_proba(x_nonMissenseSNV_imp_scal)[:,1]
+		y_otherSNV_pred = logReg_otherSNV.predict_proba(x_otherSNV_imp_scal)[:,1]
 
 
 	else:
-		if 'nonMissenseSNV' in flatPriors:
+		if 'otherSNV' in flatPriors:
 			logging.info("Using flat priors for non-missense SNVs")
-			y_nonMissenseSNV_pred = np.full(len(x_nonMissenseSNV), flatPriors['nonMissenseSNV'])
+			y_otherSNV_pred = np.full(len(x_otherSNV), flatPriors['otherSNV'])
 		else:
 			logging.info("Ignoring all non-missense SNVs")
-			y_nonMissenseSNV_pred = np.full(len(x_nonMissenseSNV), np.nan)
+			y_otherSNV_pred = np.full(len(x_otherSNV), np.nan)
 
 
 	logging.info(" ")
@@ -588,16 +588,16 @@ def PA_main(args):
 	logging.info("Outputting the priors to file")
 
 	prior_prob = pd.DataFrame()
-	prior_prob["ID"] = np.concatenate((y_indel["ID"], y_missense["ID"], y_nonMissenseSNV["ID"]))
-	prior_prob["csq"] = np.concatenate((x_indel_csq, x_missense_csq, x_nonMissenseSNV_csq))
-	prior_prob["impact"] = np.concatenate((x_indel_impact, x_missense_impact, x_nonMissenseSNV_impact))
-	prior_prob["Gene"] = np.concatenate((y_indel["Gene"], y_missense["Gene"], y_nonMissenseSNV["Gene"]))
-	prior_prob["prior"] = np.concatenate((y_indel_pred, y_missense_pred, y_nonMissenseSNV_pred))
+	prior_prob["ID"] = np.concatenate((y_indel["ID"], y_missense["ID"], y_otherSNV["ID"]))
+	prior_prob["csq"] = np.concatenate((x_indel_csq, x_missense_csq, x_otherSNV_csq))
+	prior_prob["impact"] = np.concatenate((x_indel_impact, x_missense_impact, x_otherSNV_impact))
+	prior_prob["Gene"] = np.concatenate((y_indel["Gene"], y_missense["Gene"], y_otherSNV["Gene"]))
+	prior_prob["prior"] = np.concatenate((y_indel_pred, y_missense_pred, y_otherSNV_pred))
 
 
 	x_indel_data = pd.DataFrame()		
 	x_missense_data = pd.DataFrame()		
-	x_nonMissenseSNV_data = pd.DataFrame()		
+	x_otherSNV_data = pd.DataFrame()		
 
 
 	# get the regression input data if available
@@ -621,17 +621,17 @@ def PA_main(args):
 	
 
 
-	if os.path.isfile(modelPrefix + '.predictors_nonMissenseSNV.npy'):
-		#x_nonMissenseSNV_data = pd.DataFrame(x_nonMissenseSNV_imp_scal, index = x_nonMissenseSNV_index, columns = x_nonMissenseSNV.columns)
-		x_nonMissenseSNV_data = pd.DataFrame(x_nonMissenseSNV, index = x_nonMissenseSNV_index, columns = x_nonMissenseSNV.columns)
+	if os.path.isfile(modelPrefix + '.predictors_otherSNV.npy'):
+		#x_otherSNV_data = pd.DataFrame(x_otherSNV_imp_scal, index = x_otherSNV_index, columns = x_otherSNV.columns)
+		x_otherSNV_data = pd.DataFrame(x_otherSNV, index = x_otherSNV_index, columns = x_otherSNV.columns)
 	
 	else:
-		if len(x_nonMissenseSNV_index) > 0:
-			x_nonMissenseSNV_data = pd.DataFrame(np.nan, index=range(len(x_nonMissenseSNV_index)), columns = x_nonMissenseSNV.columns)
+		if len(x_otherSNV_index) > 0:
+			x_otherSNV_data = pd.DataFrame(np.nan, index=range(len(x_otherSNV_index)), columns = x_otherSNV.columns)
 
 
 
-	x_data = pd.concat([x_indel_data, x_missense_data, x_nonMissenseSNV_data], ignore_index=True, sort=False)
+	x_data = pd.concat([x_indel_data, x_missense_data, x_otherSNV_data], ignore_index=True, sort=False)
 	combined = pd.concat([x_data, prior_prob], axis=1)
 	df_flat = pd.DataFrame(flat_DATA, columns = ['ID', 'prior'])
 	merged = pd.concat([combined, df_flat], sort = False)
@@ -641,6 +641,10 @@ def PA_main(args):
 	merged = merged[merged.columns.drop(list(merged.filter(regex='csqVEP_')))]
 	merged = merged[merged.columns.drop(list(merged.filter(regex='typeVEP_')))]
 	merged = merged[merged.columns.drop(list(merged.filter(regex='impactVEP_')))]
+
+	orderFirst = [ "ID", "Gene", "csq", "impact", "prior", "PriorOC", "logPriorOC" ]
+	orderSecond = [ x for x in merged.columns.tolist() if x not in orderFirst ]
+	merged = merged[ orderFirst + orderSecond ]
 
 
 	merged.to_csv(args.outputDir + outputPrefix+".priors.txt", index=False, sep='\t', na_rep='.')
