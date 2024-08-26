@@ -8,13 +8,14 @@ import re
 import sys
 import warnings
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
 
-
 from cyvcf2 import VCF, Writer
 from joblib import dump, load
+from matplotlib.transforms import Affine2D
 from pathlib import Path
 from sklearn import metrics
 from sklearn.linear_model import LogisticRegression
@@ -634,7 +635,7 @@ def PT_main(args):
 			logReg_indel.fit(x_indel_train_imp_scal, y_indel_train)
 
 			vif_data = pd.DataFrame()
-			vif_data["Model"] =  [ "Indel" ] * len(x_indel_train.columns)
+			vif_data["Model"] =  [ "IND" ] * len(x_indel_train.columns)
 			vif_data["feature"] = x_indel_train.columns
 			vif_data["VIF"] = [variance_inflation_factor(x_indel_train_imp_scal, i) for i in range(len(x_indel_train.columns))]
 			vif_data["Coefficient"] = logReg_indel.coef_.flatten()
@@ -686,11 +687,10 @@ def PT_main(args):
 			y_indel_train_pred = logReg_indel.predict(x_indel_train_imp_scal)
 			tn, fp, fn, tp = confusion_matrix(y_indel_train, y_indel_train_pred).ravel()
 	
-			print("\tTraining data: ")
 
 			performance = pd.DataFrame()
 
-			performance["Model"] = ["Indel"]*5
+			performance["Model"] = ["IND"]*5
 			performance["Data"] = ["Train"]*5
 			performance["Metric"] = ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"]
 			performance["Value"] = [ tp / (tp + fn), tn / (tn + fp), tp / (tp + fp), tn / (tn + fn), matthews_corrcoef(y_indel_train, y_indel_train_pred) ]
@@ -705,20 +705,18 @@ def PT_main(args):
 			y_indel_test_pred = logReg_indel.predict(x_indel_test_imp_scal)
 			tn, fp, fn, tp = confusion_matrix(y_indel_test, y_indel_test_pred).ravel()
 	
-			print("\n\tTesting data: ")
-			performance_tmp = pd.DataFrame()
+			p_tmp = pd.DataFrame()
 
-			performance_tmp["Model"] = ["indel"]*5
-			performance_tmp["Data"] = ["Test"]*5
-			performance_tmp["Metric"] = ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"]
-			performance_tmp["Value"] = [ tp / (tp + fn), tn / (tn + fp), tp / (tp + fp), tn / (tn + fn), matthews_corrcoef(y_indel_test, y_indel_test_pred) ]
-			performance_tmp["Value"] = [ round(x, 6) for x in performance_tmp["Value"] ]
-			performance_tmp["L-CI-95"] = [ np.quantile(SENS_test_indel_boot, 0.025), np.quantile(SPEC_test_indel_boot, 0.025), np.quantile(PPV_test_indel_boot, 0.025), np.quantile(NPV_test_indel_boot, 0.025), np.quantile(MCC_test_indel_boot, 0.025)  ]
-			performance_tmp["L-CI-95"] = [ round(x, 6) for x in performance_tmp["L-CI-95"] ]
-			performance_tmp["U-CI-95"] = [ np.quantile(SENS_test_indel_boot, 0.975), np.quantile(SPEC_test_indel_boot, 0.975), np.quantile(PPV_test_indel_boot, 0.975), np.quantile(NPV_test_indel_boot, 0.975), np.quantile(MCC_test_indel_boot, 0.975)  ]
-			performance_tmp["U-CI-95"] = [ round(x, 6) for x in performance_tmp["U-CI-95"] ]
-			performance = pd.concat([performance, performance_tmp], ignore_index = True)
-			print(performance)
+			p_tmp["Model"] = ["IND"]*5
+			p_tmp["Data"] = ["Test"]*5
+			p_tmp["Metric"] = ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"]
+			p_tmp["Value"] = [ tp / (tp + fn), tn / (tn + fp), tp / (tp + fp), tn / (tn + fn), matthews_corrcoef(y_indel_test, y_indel_test_pred) ]
+			p_tmp["Value"] = [ round(x, 6) for x in p_tmp["Value"] ]
+			p_tmp["L-CI-95"] = [ np.quantile(SENS_test_indel_boot, 0.025), np.quantile(SPEC_test_indel_boot, 0.025), np.quantile(PPV_test_indel_boot, 0.025), np.quantile(NPV_test_indel_boot, 0.025), np.quantile(MCC_test_indel_boot, 0.025)  ]
+			p_tmp["L-CI-95"] = [ round(x, 6) for x in p_tmp["L-CI-95"] ]
+			p_tmp["U-CI-95"] = [ np.quantile(SENS_test_indel_boot, 0.975), np.quantile(SPEC_test_indel_boot, 0.975), np.quantile(PPV_test_indel_boot, 0.975), np.quantile(NPV_test_indel_boot, 0.975), np.quantile(MCC_test_indel_boot, 0.975)  ]
+			p_tmp["U-CI-95"] = [ round(x, 6) for x in p_tmp["U-CI-95"] ]
+			performance = pd.concat([performance, p_tmp], ignore_index = True)
 
 
 
@@ -777,6 +775,19 @@ def PT_main(args):
 
 		logging.info(msg)
 
+		if args.eval:
+			performance = pd.DataFrame()
+
+			performance["Model"] = ["IND"]*10
+			performance["Data"] = [ ["Train"]*5 , ["Test"]*5 ] 
+			performance["Metric"] = ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"]*2
+			performance["Value"] = [ np.nan ]*10
+			performance["L-CI-95"] = [ np.nan ]*10
+			performance["U-CI-95"] = [ np.nan ]*10
+
+
+
+
 	logging.info(" ")
 	logging.info(" ")
 
@@ -826,7 +837,7 @@ def PT_main(args):
 
 			logging.debug("Impute the training data (missense)")
 
-			imp_misseise = SimpleImputer(strategy = 'median', verbose = 100)
+			imp_missense = SimpleImputer(strategy = 'median', verbose = 100)
 			imp_missense.fit(x_missense_train)
 			x_missense_train_imp = imp_missense.transform(x_missense_train)
 			x_missense_test_imp = imp_missense.transform(x_missense_test)
@@ -843,7 +854,7 @@ def PT_main(args):
 			logReg_missense.fit(x_missense_train_imp_scal, y_missense_train)
 
 			vif_data = pd.DataFrame()
-			vif_data["Model"] =  [ "Missense" ] * len(x_missense_train.columns)
+			vif_data["Model"] =  [ "MIS" ] * len(x_missense_train.columns)
 			vif_data["feature"] = x_missense_train.columns
 			vif_data["VIF"] = [variance_inflation_factor(x_missense_train_imp_scal, i) for i in range(len(x_missense_train.columns))]
 			vif_data["Coefficient"] = logReg_missense.coef_.flatten()
@@ -895,39 +906,38 @@ def PT_main(args):
 			y_missense_train_pred = logReg_missense.predict(x_missense_train_imp_scal)
 			tn, fp, fn, tp = confusion_matrix(y_missense_train, y_missense_train_pred).ravel()
 	
-			print("\tTraining data: ")
 
-			performance = pd.DataFrame()
+			p_tmp = pd.DataFrame()
 
-			performance["Model"] = ["Missense"]*5
-			performance["Data"] = ["Train"]*5
-			performance["Metric"] = ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"]
-			performance["Value"] = [ tp / (tp + fn), tn / (tn + fp), tp / (tp + fp), tn / (tn + fn), matthews_corrcoef(y_missense_train, y_missense_train_pred) ]
-			performance["Value"] = [ round(x, 6) for x in performance["Value"] ]
-			performance["L-CI-95"] = [ np.quantile(SENS_train_missense_boot, 0.025), np.quantile(SPEC_train_missense_boot, 0.025), np.quantile(PPV_train_missense_boot, 0.025), np.quantile(NPV_train_missense_boot, 0.025), np.quantile(MCC_train_missense_boot, 0.025)  ]
-			performance["L-CI-95"] = [ round(x, 6) for x in performance["L-CI-95"] ]
-			performance["U-CI-95"] = [ np.quantile(SENS_train_missense_boot, 0.975), np.quantile(SPEC_train_missense_boot, 0.975), np.quantile(PPV_train_missense_boot, 0.975), np.quantile(NPV_train_missense_boot, 0.975), np.quantile(MCC_train_missense_boot, 0.975)  ]
-			performance["U-CI-95"] = [ round(x, 6) for x in performance["U-CI-95"] ]
+			p_tmp["Model"] = ["MIS"]*5
+			p_tmp["Data"] = ["Train"]*5
+			p_tmp["Metric"] = ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"]
+			p_tmp["Value"] = [ tp / (tp + fn), tn / (tn + fp), tp / (tp + fp), tn / (tn + fn), matthews_corrcoef(y_missense_train, y_missense_train_pred) ]
+			p_tmp["Value"] = [ round(x, 6) for x in p_tmp["Value"] ]
+			p_tmp["L-CI-95"] = [ np.quantile(SENS_train_missense_boot, 0.025), np.quantile(SPEC_train_missense_boot, 0.025), np.quantile(PPV_train_missense_boot, 0.025), np.quantile(NPV_train_missense_boot, 0.025), np.quantile(MCC_train_missense_boot, 0.025)  ]
+			p_tmp["L-CI-95"] = [ round(x, 6) for x in p_tmp["L-CI-95"] ]
+			p_tmp["U-CI-95"] = [ np.quantile(SENS_train_missense_boot, 0.975), np.quantile(SPEC_train_missense_boot, 0.975), np.quantile(PPV_train_missense_boot, 0.975), np.quantile(NPV_train_missense_boot, 0.975), np.quantile(MCC_train_missense_boot, 0.975)  ]
+			p_tmp["U-CI-95"] = [ round(x, 6) for x in p_tmp["U-CI-95"] ]
+
+			performance = pd.concat([performance, p_tmp], ignore_index = True)
 
 
 
 			y_missense_test_pred = logReg_missense.predict(x_missense_test_imp_scal)
 			tn, fp, fn, tp = confusion_matrix(y_missense_test, y_missense_test_pred).ravel()
 	
-			print("\n\tTesting data: ")
-			performance_tmp = pd.DataFrame()
+			p_tmp = pd.DataFrame()
 
-			performance_tmp["Model"] = ["Missense"]*5
-			performance_tmp["Data"] = ["Test"]*5
-			performance_tmp["Metric"] = ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"]
-			performance_tmp["Value"] = [ tp / (tp + fn), tn / (tn + fp), tp / (tp + fp), tn / (tn + fn), matthews_corrcoef(y_missense_test, y_missense_test_pred) ]
-			performance_tmp["Value"] = [ round(x, 6) for x in performance_tmp["Value"] ]
-			performance_tmp["L-CI-95"] = [ np.quantile(SENS_test_missense_boot, 0.025), np.quantile(SPEC_test_missense_boot, 0.025), np.quantile(PPV_test_missense_boot, 0.025), np.quantile(NPV_test_missense_boot, 0.025), np.quantile(MCC_test_missense_boot, 0.025)  ]
-			performance_tmp["L-CI-95"] = [ round(x, 6) for x in performance_tmp["L-CI-95"] ]
-			performance_tmp["U-CI-95"] = [ np.quantile(SENS_test_missense_boot, 0.975), np.quantile(SPEC_test_missense_boot, 0.975), np.quantile(PPV_test_missense_boot, 0.975), np.quantile(NPV_test_missense_boot, 0.975), np.quantile(MCC_test_missense_boot, 0.975)  ]
-			performance_tmp["U-CI-95"] = [ round(x, 6) for x in performance_tmp["U-CI-95"] ]
-			performance = pd.concat([performance, performance_tmp], ignore_index = True)
-			print(performance)
+			p_tmp["Model"] = ["MIS"]*5
+			p_tmp["Data"] = ["Test"]*5
+			p_tmp["Metric"] = ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"]
+			p_tmp["Value"] = [ tp / (tp + fn), tn / (tn + fp), tp / (tp + fp), tn / (tn + fn), matthews_corrcoef(y_missense_test, y_missense_test_pred) ]
+			p_tmp["Value"] = [ round(x, 6) for x in p_tmp["Value"] ]
+			p_tmp["L-CI-95"] = [ np.quantile(SENS_test_missense_boot, 0.025), np.quantile(SPEC_test_missense_boot, 0.025), np.quantile(PPV_test_missense_boot, 0.025), np.quantile(NPV_test_missense_boot, 0.025), np.quantile(MCC_test_missense_boot, 0.025)  ]
+			p_tmp["L-CI-95"] = [ round(x, 6) for x in p_tmp["L-CI-95"] ]
+			p_tmp["U-CI-95"] = [ np.quantile(SENS_test_missense_boot, 0.975), np.quantile(SPEC_test_missense_boot, 0.975), np.quantile(PPV_test_missense_boot, 0.975), np.quantile(NPV_test_missense_boot, 0.975), np.quantile(MCC_test_missense_boot, 0.975)  ]
+			p_tmp["U-CI-95"] = [ round(x, 6) for x in p_tmp["U-CI-95"] ]
+			performance = pd.concat([performance, p_tmp], ignore_index = True)
 
 
 
@@ -987,6 +997,19 @@ def PT_main(args):
 			results_missense = np.full(len(x_missense.index), np.nan)
 
 		logging.info(msg)
+
+		if args.eval:
+			p_tmp = pd.DataFrame()
+
+			p_tmp["Model"] = ["MIS"]*10
+			p_tmp["Data"] = ["Train"]*5 + ["Test"]*5  
+			p_tmp["Metric"] = ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"]*2
+			p_tmp["Value"] = [ np.nan ]*10
+			p_tmp["L-CI-95"] = [ np.nan ]*10
+			p_tmp["U-CI-95"] = [ np.nan ]*10
+
+			performance = pd.concat([ performance, p_tmp ], ignore_index = True)
+
 
 
 
@@ -1063,7 +1086,7 @@ def PT_main(args):
 			logReg_otherSNV.fit(x_otherSNV_train_imp_scal, y_otherSNV_train)
 
 			vif_data = pd.DataFrame()
-			vif_data["Model"] =  [ "OtherSNV" ] * len(x_otherSNV_train.columns)
+			vif_data["Model"] =  [ "OTH" ] * len(x_otherSNV_train.columns)
 			vif_data["feature"] = x_otherSNV_train.columns
 			vif_data["VIF"] = [variance_inflation_factor(x_otherSNV_train_imp_scal, i) for i in range(len(x_otherSNV_train.columns))]
 			vif_data["Coefficient"] = logReg_otherSNV.coef_.flatten()
@@ -1115,39 +1138,38 @@ def PT_main(args):
 			y_otherSNV_train_pred = logReg_otherSNV.predict(x_otherSNV_train_imp_scal)
 			tn, fp, fn, tp = confusion_matrix(y_otherSNV_train, y_otherSNV_train_pred).ravel()
 	
-			print("\tTraining data: ")
 
-			performance = pd.DataFrame()
+			p_tmp = pd.DataFrame()
 
-			performance["Model"] = ["OtherSNV"]*5
-			performance["Data"] = ["Train"]*5
-			performance["Metric"] = ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"]
-			performance["Value"] = [ tp / (tp + fn), tn / (tn + fp), tp / (tp + fp), tn / (tn + fn), matthews_corrcoef(y_otherSNV_train, y_otherSNV_train_pred) ]
-			performance["Value"] = [ round(x, 6) for x in performance["Value"] ]
-			performance["L-CI-95"] = [ np.quantile(SENS_train_otherSNV_boot, 0.025), np.quantile(SPEC_train_otherSNV_boot, 0.025), np.quantile(PPV_train_otherSNV_boot, 0.025), np.quantile(NPV_train_otherSNV_boot, 0.025), np.quantile(MCC_train_otherSNV_boot, 0.025)  ]
-			performance["L-CI-95"] = [ round(x, 6) for x in performance["L-CI-95"] ]
-			performance["U-CI-95"] = [ np.quantile(SENS_train_otherSNV_boot, 0.975), np.quantile(SPEC_train_otherSNV_boot, 0.975), np.quantile(PPV_train_otherSNV_boot, 0.975), np.quantile(NPV_train_otherSNV_boot, 0.975), np.quantile(MCC_train_otherSNV_boot, 0.975)  ]
-			performance["U-CI-95"] = [ round(x, 6) for x in performance["U-CI-95"] ]
+			p_tmp["Model"] = ["OTH"]*5
+			p_tmp["Data"] = ["Train"]*5
+			p_tmp["Metric"] = ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"]
+			p_tmp["Value"] = [ tp / (tp + fn), tn / (tn + fp), tp / (tp + fp), tn / (tn + fn), matthews_corrcoef(y_otherSNV_train, y_otherSNV_train_pred) ]
+			p_tmp["Value"] = [ round(x, 6) for x in p_tmp["Value"] ]
+			p_tmp["L-CI-95"] = [ np.quantile(SENS_train_otherSNV_boot, 0.025), np.quantile(SPEC_train_otherSNV_boot, 0.025), np.quantile(PPV_train_otherSNV_boot, 0.025), np.quantile(NPV_train_otherSNV_boot, 0.025), np.quantile(MCC_train_otherSNV_boot, 0.025)  ]
+			p_tmp["L-CI-95"] = [ round(x, 6) for x in p_tmp["L-CI-95"] ]
+			p_tmp["U-CI-95"] = [ np.quantile(SENS_train_otherSNV_boot, 0.975), np.quantile(SPEC_train_otherSNV_boot, 0.975), np.quantile(PPV_train_otherSNV_boot, 0.975), np.quantile(NPV_train_otherSNV_boot, 0.975), np.quantile(MCC_train_otherSNV_boot, 0.975)  ]
+			p_tmp["U-CI-95"] = [ round(x, 6) for x in p_tmp["U-CI-95"] ]
 
+			performance = pd.concat([performance, p_tmp], ignore_index = True)
 
 
 			y_otherSNV_test_pred = logReg_otherSNV.predict(x_otherSNV_test_imp_scal)
 			tn, fp, fn, tp = confusion_matrix(y_otherSNV_test, y_otherSNV_test_pred).ravel()
 	
-			print("\n\tTesting data: ")
-			performance_tmp = pd.DataFrame()
+			p_tmp = pd.DataFrame()
 
-			performance_tmp["Model"] = ["OtherSNV"]*5
-			performance_tmp["Data"] = ["Test"]*5
-			performance_tmp["Metric"] = ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"]
-			performance_tmp["Value"] = [ tp / (tp + fn), tn / (tn + fp), tp / (tp + fp), tn / (tn + fn), matthews_corrcoef(y_otherSNV_test, y_otherSNV_test_pred) ]
-			performance_tmp["Value"] = [ round(x, 6) for x in performance_tmp["Value"] ]
-			performance_tmp["L-CI-95"] = [ np.quantile(SENS_test_otherSNV_boot, 0.025), np.quantile(SPEC_test_otherSNV_boot, 0.025), np.quantile(PPV_test_otherSNV_boot, 0.025), np.quantile(NPV_test_otherSNV_boot, 0.025), np.quantile(MCC_test_otherSNV_boot, 0.025)  ]
-			performance_tmp["L-CI-95"] = [ round(x, 6) for x in performance_tmp["L-CI-95"] ]
-			performance_tmp["U-CI-95"] = [ np.quantile(SENS_test_otherSNV_boot, 0.975), np.quantile(SPEC_test_otherSNV_boot, 0.975), np.quantile(PPV_test_otherSNV_boot, 0.975), np.quantile(NPV_test_otherSNV_boot, 0.975), np.quantile(MCC_test_otherSNV_boot, 0.975)  ]
-			performance_tmp["U-CI-95"] = [ round(x, 6) for x in performance_tmp["U-CI-95"] ]
-			performance = pd.concat([performance, performance_tmp], ignore_index = True)
-			print(performance)
+			p_tmp["Model"] = ["OTH"]*5
+			p_tmp["Data"] = ["Test"]*5
+			p_tmp["Metric"] = ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"]
+			p_tmp["Value"] = [ tp / (tp + fn), tn / (tn + fp), tp / (tp + fp), tn / (tn + fn), matthews_corrcoef(y_otherSNV_test, y_otherSNV_test_pred) ]
+			p_tmp["Value"] = [ round(x, 6) for x in p_tmp["Value"] ]
+			p_tmp["L-CI-95"] = [ np.quantile(SENS_test_otherSNV_boot, 0.025), np.quantile(SPEC_test_otherSNV_boot, 0.025), np.quantile(PPV_test_otherSNV_boot, 0.025), np.quantile(NPV_test_otherSNV_boot, 0.025), np.quantile(MCC_test_otherSNV_boot, 0.025)  ]
+			p_tmp["L-CI-95"] = [ round(x, 6) for x in p_tmp["L-CI-95"] ]
+			p_tmp["U-CI-95"] = [ np.quantile(SENS_test_otherSNV_boot, 0.975), np.quantile(SPEC_test_otherSNV_boot, 0.975), np.quantile(PPV_test_otherSNV_boot, 0.975), np.quantile(NPV_test_otherSNV_boot, 0.975), np.quantile(MCC_test_otherSNV_boot, 0.975)  ]
+			p_tmp["U-CI-95"] = [ round(x, 6) for x in p_tmp["U-CI-95"] ]
+
+			performance = pd.concat([performance, p_tmp], ignore_index = True)
 		
 
 
@@ -1209,9 +1231,118 @@ def PT_main(args):
 
 		logging.info(msg)
 
+		if args.eval:
+			p_tmp = pd.DataFrame()
+
+			p_tmp["Model"] = ["OTH"]*10
+			p_tmp["Data"] = ["Train"]*5 + ["Test"]*5 
+			p_tmp["Metric"] = ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"]*2
+			p_tmp["Value"] = [ np.nan ]*10
+			p_tmp["L-CI-95"] = [ np.nan ]*10
+			p_tmp["U-CI-95"] = [ np.nan ]*10
+
+			performance = pd.concat([ performance, p_tmp ], ignore_index = True)
 
 
-		
+
+
+	#  plot the evaluation metrics for the prior 
+	if args.eval:
+		fig, axs = plt.subplots(1, 5, sharey = True, figsize=(10,3))
+		x = ["IND", "MIS", "OTH"]
+
+		performance["L_Err"] = performance["Value"] - performance["L-CI-95"]
+		performance["U_Err"] = performance["U-CI-95"] - performance["Value"]
+
+		p_train_null = performance[ (performance["Metric"] == "Sensitivity") & (performance["Data"] == "Train") & (performance["Value"].isnull()) ]
+		p_train_ok = performance[ (performance["Metric"] == "Sensitivity") & (performance["Data"] == "Train") & (performance["Value"].notnull()) ]
+		p_test_null = performance[ (performance["Metric"] == "Sensitivity") & (performance["Data"] == "Test") & (performance["Value"].isnull()) ]
+		p_test_ok = performance[ (performance["Metric"] == "Sensitivity") & (performance["Data"] == "Test") & (performance["Value"].notnull()) ]
+
+		trans1 = Affine2D().translate(-0.15, 0.0) + axs[0].transData
+		trans2 = Affine2D().translate(+0.15, 0.0) + axs[0].transData
+
+		axs[0].errorbar(x, [1,1,1], color="white", label="_tmp_")
+		axs[0].errorbar(p_train_ok["Model"], p_train_ok["Value"], yerr=[ p_train_ok["L_Err"].values.tolist(), p_train_ok["U_Err"].values.tolist()  ], marker="o", linestyle="none", transform=trans1, capsize=4, label="Train")
+		axs[0].errorbar(p_test_ok["Model"], p_test_ok["Value"], yerr=[ p_test_ok["L_Err"].values.tolist(), p_test_ok["U_Err"].values.tolist()  ], marker="^", linestyle="none", transform=trans2, capsize=4, label="Test")
+		axs[0].errorbar(p_train_null["Model"], [1]*p_train_null["Value"].isnull().sum(), yerr=0, marker="x", linestyle="none", transform=trans1, color="#7f7f7f", label="NA")
+		axs[0].errorbar(p_test_null["Model"], [1]*p_test_null["Value"].isnull().sum(), yerr=0, marker="x", linestyle="none", transform=trans2, color="#7f7f7f", label="NA")
+		axs[0].set_title('Sensitivity')
+
+
+
+		p_train_null = performance[ (performance["Metric"] == "Specificity") & (performance["Data"] == "Train") & (performance["Value"].isnull()) ]
+		p_train_ok = performance[ (performance["Metric"] == "Specificity") & (performance["Data"] == "Train") & (performance["Value"].notnull()) ]
+		p_test_null = performance[ (performance["Metric"] == "Specificity") & (performance["Data"] == "Test") & (performance["Value"].isnull()) ]
+		p_test_ok = performance[ (performance["Metric"] == "Specificity") & (performance["Data"] == "Test") & (performance["Value"].notnull()) ]
+
+
+
+		trans1 = Affine2D().translate(-0.15, 0.0) + axs[1].transData
+		trans2 = Affine2D().translate(+0.15, 0.0) + axs[1].transData
+
+		axs[1].errorbar(x, [1,1,1], color="white", label="_tmp")
+		axs[1].errorbar(p_train_ok["Model"], p_train_ok["Value"], yerr=[ p_train_ok["L_Err"].values.tolist(), p_train_ok["U_Err"].values.tolist()  ], marker="o", linestyle="none", transform=trans1, capsize=4)
+		axs[1].errorbar(p_test_ok["Model"], p_test_ok["Value"], yerr=[ p_test_ok["L_Err"].values.tolist(), p_test_ok["U_Err"].values.tolist()  ], marker="^", linestyle="none", transform=trans2, capsize=4)
+		axs[1].errorbar(p_train_null["Model"], [1]*p_train_null["Value"].isnull().sum(), yerr=0, marker="x", linestyle="none", transform=trans1, color="#7f7f7f")
+		axs[1].errorbar(p_test_null["Model"], [1]*p_test_null["Value"].isnull().sum(), yerr=0, marker="x", linestyle="none", transform=trans2, color="#7f7f7f")
+		axs[1].set_title('Specificity')
+
+
+
+		p_train_null = performance[ (performance["Metric"] == "PPV") & (performance["Data"] == "Train") & (performance["Value"].isnull()) ]
+		p_train_ok = performance[ (performance["Metric"] == "PPV") & (performance["Data"] == "Train") & (performance["Value"].notnull()) ]
+		p_test_null = performance[ (performance["Metric"] == "PPV") & (performance["Data"] == "Test") & (performance["Value"].isnull()) ]
+		p_test_ok = performance[ (performance["Metric"] == "PPV") & (performance["Data"] == "Test") & (performance["Value"].notnull()) ]
+
+		trans1 = Affine2D().translate(-0.15, 0.0) + axs[2].transData
+		trans2 = Affine2D().translate(+0.15, 0.0) + axs[2].transData
+
+		axs[2].errorbar(x, [1,1,1], color="white", label="_tmp")
+		axs[2].errorbar(p_train_ok["Model"], p_train_ok["Value"], yerr=[ p_train_ok["L_Err"].values.tolist(), p_train_ok["U_Err"].values.tolist()  ], marker="o", linestyle="none", transform=trans1, capsize=4)
+		axs[2].errorbar(p_test_ok["Model"], p_test_ok["Value"], yerr=[ p_test_ok["L_Err"].values.tolist(), p_test_ok["U_Err"].values.tolist()  ], marker="^", linestyle="none", transform=trans2, capsize=4)
+		axs[2].errorbar(p_train_null["Model"], [1]*p_train_null["Value"].isnull().sum(), yerr=0, marker="x", linestyle="none", transform=trans1, color="#7f7f7f")
+		axs[2].errorbar(p_test_null["Model"], [1]*p_test_null["Value"].isnull().sum(), yerr=0, marker="x", linestyle="none", transform=trans2, color="#7f7f7f")
+		axs[2].set_title('PPV')
+
+
+
+		p_train_null = performance[ (performance["Metric"] == "NPV") & (performance["Data"] == "Train") & (performance["Value"].isnull()) ]
+		p_train_ok = performance[ (performance["Metric"] == "NPV") & (performance["Data"] == "Train") & (performance["Value"].notnull()) ]
+		p_test_null = performance[ (performance["Metric"] == "NPV") & (performance["Data"] == "Test") & (performance["Value"].isnull()) ]
+		p_test_ok = performance[ (performance["Metric"] == "NPV") & (performance["Data"] == "Test") & (performance["Value"].notnull()) ]
+
+		trans1 = Affine2D().translate(-0.15, 0.0) + axs[3].transData
+		trans2 = Affine2D().translate(+0.15, 0.0) + axs[3].transData
+
+		axs[3].errorbar(x, [1,1,1], color="white", label="_tmp")
+		axs[3].errorbar(p_train_ok["Model"], p_train_ok["Value"], yerr=[ p_train_ok["L_Err"].values.tolist(), p_train_ok["U_Err"].values.tolist()  ], marker="o", linestyle="none", transform=trans1, capsize=4)
+		axs[3].errorbar(p_test_ok["Model"], p_test_ok["Value"], yerr=[ p_test_ok["L_Err"].values.tolist(), p_test_ok["U_Err"].values.tolist()  ], marker="^", linestyle="none", transform=trans2, capsize=4)
+		axs[3].errorbar(p_train_null["Model"], [1]*p_train_null["Value"].isnull().sum(), yerr=0, marker="x", linestyle="none", transform=trans1, color="#7f7f7f")
+		axs[3].errorbar(p_test_null["Model"], [1]*p_test_null["Value"].isnull().sum(), yerr=0, marker="x", linestyle="none", transform=trans2, color="#7f7f7f")
+		axs[3].set_title('NPV')
+
+
+
+		p_train_null = performance[ (performance["Metric"] == "MCC") & (performance["Data"] == "Train") & (performance["Value"].isnull()) ]
+		p_train_ok = performance[ (performance["Metric"] == "MCC") & (performance["Data"] == "Train") & (performance["Value"].notnull()) ]
+		p_test_null = performance[ (performance["Metric"] == "MCC") & (performance["Data"] == "Test") & (performance["Value"].isnull()) ]
+		p_test_ok = performance[ (performance["Metric"] == "MCC") & (performance["Data"] == "Test") & (performance["Value"].notnull()) ]
+
+		trans1 = Affine2D().translate(-0.15, 0.0) + axs[4].transData
+		trans2 = Affine2D().translate(+0.15, 0.0) + axs[4].transData
+
+		axs[4].errorbar(x, [1,1,1], color="white", label="_tmp")
+		axs[4].errorbar(p_train_ok["Model"], p_train_ok["Value"], yerr=[ p_train_ok["L_Err"].values.tolist(), p_train_ok["U_Err"].values.tolist()  ], marker="o", linestyle="none", transform=trans1, capsize=4)
+		axs[4].errorbar(p_test_ok["Model"], p_test_ok["Value"], yerr=[ p_test_ok["L_Err"].values.tolist(), p_test_ok["U_Err"].values.tolist()  ], marker="^", linestyle="none", transform=trans2, capsize=4)
+		axs[4].errorbar(p_train_null["Model"], [1]*p_train_null["Value"].isnull().sum(), yerr=0, marker="x", linestyle="none", transform=trans1, color="#7f7f7f")
+		axs[4].errorbar(p_test_null["Model"], [1]*p_test_null["Value"].isnull().sum(), yerr=0, marker="x", linestyle="none", transform=trans2, color="#7f7f7f")
+		axs[4].set_title('MCC')
+
+
+		handles, labels = axs[0].get_legend_handles_labels()
+		fig.legend(handles[1:3], labels[0:3])
+		plt.savefig(args.outputDir + args.prefix + ".metrics_prior.png", dpi=300)
 
 
 
