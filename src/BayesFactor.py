@@ -1,6 +1,7 @@
 import cProfile
 import csv
 import getopt
+import gzip
 import logging
 import math
 import multiprocessing
@@ -769,7 +770,17 @@ def BF_main(args):
 
 	# get VCF file and variant/sample information
 	vcf = VCF(inputVcfFile, gts012=True)
-	nVariants = sum(1 for line in open(inputVcfFile) if not bool(re.match("^#", line)))
+	
+	
+	# check if file is binary
+	with open(inputVcfFile, 'rb') as test_f:
+		if test_f.read(2) == b'\x1f\x8b':
+			nVariants = sum(1 for line in gzip.open(inputVcfFile, mode='r') if not bool(re.match("^#", line.decode('utf-8'))))
+		else:
+			nVariants = sum(1 for line in open(inputVcfFile) if not bool(re.match("^#", line)))
+	
+	
+
 	vcfSampleIndex = []
 
 	for i in range(len(vcf.samples)):
