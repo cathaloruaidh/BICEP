@@ -153,6 +153,35 @@ def genotypeString(vector):
 
 
 
+# return how many aff/unaff carriers/non-carriers for a given
+# genotype string and the phenotypes
+def phenoCarriers(genotype, pedInfo, samples):
+
+	for i in range(pedInfo.nPeople):
+		if pedInfo.indID[i] not in samples:
+			genotype[i] = -1
+
+	k1 = k2 = l1 = l2 = m = 0
+	for x in range(pedInfo.nPeople):
+		if pedInfo.phenotypeActual[x] == 1:
+			if genotype[x] == 1:
+				k1 += 1
+			else:
+				l1 += 1
+		else:
+			if genotype[x] == 1:
+				k2 += 1
+			else:
+				l2 += 1
+		
+		if genotype[x] == -1:
+			m += 1
+	
+	return k1, l1, k2, l2, m - ( pedInfo.nPeople - len(samples) )
+
+
+
+
 
 # given the founder vector, calculate the number of genotype states
 # that will be generated
@@ -964,9 +993,10 @@ def BF_main(args):
 			print(varID[i], "\t", BFs[i], "\t", varString[i], "\t", sep="")
 	else:
 		with open(args.outputDir + outputPrefix + ".BF.txt", 'w') as f:
-			print("ID\tBF\tlogBF\tSTRING", file=f)
+			print("ID\tBF\tlogBF\tSTRING\tAFF_CARR\tAFF_NON-CARR\tUNAFF_CARR\tUNAFF_NON-CARR\tMISS", file=f)
 			for i in range(len(varID)):
-				print(varID[i], "\t", BFs[i], "\t", np.log10(float(BFs[i])), "\t", varString[i], file=f, sep="")
+				aff_c, aff_nc, un_c, un_nc, miss = phenoCarriers(genotypes[i], pedInfo, vcf.samples)
+				print(varID[i], "\t", BFs[i], "\t", np.log10(float(BFs[i])), "\t", varString[i], "\t", aff_c, "\t", aff_nc, "\t", un_c, "\t", un_nc, "\t", miss, file=f, sep="")
 		
 
 	# get the best co-segregation score

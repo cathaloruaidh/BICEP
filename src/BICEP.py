@@ -163,6 +163,7 @@ def main(argv):
 	parser_PO.add_argument("--bf", nargs='?', help="Prefix for the Bayes factor input", metavar='C')
 	parser_PO.add_argument("--top", nargs='?', default=50, type=int, help="Number of top ranking variants to plot", metavar='N')
 	parser_PO.add_argument("--highlight", nargs='?', help="ID of variant to highlight in plot", metavar='C')
+	parser_PO.add_argument("--predictors", nargs='?', help="File containing regression predictors", metavar='C')
 	
 
 	args = parser.parse_args()
@@ -215,6 +216,8 @@ def main(argv):
 		#consoleHandler.setFormatter(logFormatter)
 		#rootLogger.addHandler(consoleHandler)
 
+		#if args.model is None:
+		#	args.model = args.tempDir + args.prefix
 
 		if args.command == "All":
 

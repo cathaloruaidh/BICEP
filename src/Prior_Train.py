@@ -31,6 +31,185 @@ from statsmodels.stats.outliers_influence import variance_inflation_factor
 
 
 
+def generate_prior(x, y, label, args):
+
+
+	msg = str(np.size(y)) + " " + label + " used (" + str(sum(y == 'PATHOGENIC')) + " PATH, " + str(sum(y == 'BENIGN')) + " BEN)"
+	logging.info(msg)
+
+	# set missing allele frequencies to zero
+	assert(args.frequency in x.columns), "Allele frequency missing for " + label
+	x[args.frequency] = x[args.frequency].fillna(0.0)
+
+
+
+	# remove columns that are all NA
+	x = x.dropna(axis=1, how='all')
+
+
+	# evaluate the prior
+	if args.eval:
+		x_train, x_test, y_train, y_test = train_test_split(x, y, test_size = 0.2, random_state = 123)
+
+
+		msg = "Impute the training data (" + label + ")"
+		logging.debug(msg)
+
+		imp = SimpleImputer(strategy = 'median', verbose = 100)
+		imp.fit(x_train)
+		x_train_imp = imp.transform(x_train)
+		x_test_imp = imp.transform(x_test)
+
+		msg = "Scaling training data to [0,1] (" + label + ")"
+		logging.debug(msg)
+		scal = MinMaxScaler(clip = 'true')
+		scal.fit(x_train_imp)
+		x_train_imp_scal = scal.transform(x_train_imp)
+		x_test_imp_scal = scal.transform(x_test_imp)
+
+
+		msg = "Regression and VIF (" + label + ")"
+		logging.debug(msg)
+		logReg = LogisticRegression(penalty = 'none')
+		logReg.fit(x_train_imp_scal, y_train)
+
+		vif_data = pd.DataFrame()
+		vif_data["Model"] =  [ label ] * len(x_train.columns)
+		vif_data["Feature"] = x_train.columns
+		vif_data["VIF"] = [variance_inflation_factor(x_train_imp_scal, i) for i in range(len(x_train.columns))]
+		vif_data["Coefficient"] = logReg.coef_.flatten()
+		vif_data.loc[len(vif_data)] = [ label, "intercept", np.nan, round(logReg.intercept_[0], 4) ]
+		print(vif_data)
+
+
+
+		SENS_train_boot = []
+		SPEC_train_boot = []
+		PPV_train_boot = []
+		NPV_train_boot = []
+		MCC_train_boot = []
+
+		SENS_test_boot = []
+		SPEC_test_boot = []
+		PPV_test_boot = []
+		NPV_test_boot = []
+		MCC_test_boot = []
+
+
+		for i in range(args.boot):
+			ind = np.random.randint(x_train_imp_scal.shape[0], size=x_train_imp_scal.shape[0])
+			x_boot = x_train_imp_scal[ind]
+			y_boot = y_train[ind]
+
+			y_pred = logReg.predict(x_boot)
+			tn, fp, fn, tp = confusion_matrix(y_boot, y_pred).ravel()
+			SENS_train_boot.append(tp / (tp + fn)) 
+			SPEC_train_boot.append(tn / (tn + fp)) 
+			PPV_train_boot.append(tp / (tp + fp)) 
+			NPV_train_boot.append(tn / (tn + fn)) 
+			MCC_train_boot.append(matthews_corrcoef(y_boot, y_pred))
+
+
+			ind = np.random.randint(x_test_imp_scal.shape[0], size=x_test_imp_scal.shape[0])
+			x_boot = x_test_imp_scal[ind]
+			y_boot = y_test[ind]
+
+			y_pred = logReg.predict(x_boot)
+			tn, fp, fn, tp = confusion_matrix(y_boot, y_pred).ravel()
+			SENS_test_boot.append(tp / (tp + fn)) 
+			SPEC_test_boot.append(tn / (tn + fp)) 
+			PPV_test_boot.append(tp / (tp + fp)) 
+			NPV_test_boot.append(tn / (tn + fn)) 
+			MCC_test_boot.append(matthews_corrcoef(y_boot, y_pred))
+
+
+		y_train_pred = logReg.predict(x_train_imp_scal)
+		tn, fp, fn, tp = confusion_matrix(y_train, y_train_pred).ravel()
+
+
+		performance = pd.DataFrame()
+
+		performance["Model"] = [label]*5
+		performance["Data"] = ["Train"]*5
+		performance["Metric"] = ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"]
+		performance["Value"] = [ tp / (tp + fn), tn / (tn + fp), tp / (tp + fp), tn / (tn + fn), matthews_corrcoef(y_train, y_train_pred) ]
+		performance["Value"] = [ round(x, 6) for x in performance["Value"] ]
+		performance["L-CI-95"] = [ np.quantile(SENS_train_boot, 0.025), np.quantile(SPEC_train_boot, 0.025), np.quantile(PPV_train_boot, 0.025), np.quantile(NPV_train_boot, 0.025), np.quantile(MCC_train_boot, 0.025)  ]
+		performance["L-CI-95"] = [ round(x, 6) for x in performance["L-CI-95"] ]
+		performance["U-CI-95"] = [ np.quantile(SENS_train_boot, 0.975), np.quantile(SPEC_train_boot, 0.975), np.quantile(PPV_train_boot, 0.975), np.quantile(NPV_train_boot, 0.975), np.quantile(MCC_train_boot, 0.975)  ]
+		performance["U-CI-95"] = [ round(x, 6) for x in performance["U-CI-95"] ]
+
+
+
+		y_test_pred = logReg.predict(x_test_imp_scal)
+		tn, fp, fn, tp = confusion_matrix(y_test, y_test_pred).ravel()
+
+		p_tmp = pd.DataFrame()
+
+		p_tmp["Model"] = [label]*5
+		p_tmp["Data"] = ["Test"]*5
+		p_tmp["Metric"] = ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"]
+		p_tmp["Value"] = [ tp / (tp + fn), tn / (tn + fp), tp / (tp + fp), tn / (tn + fn), matthews_corrcoef(y_test, y_test_pred) ]
+		p_tmp["Value"] = [ round(x, 6) for x in p_tmp["Value"] ]
+		p_tmp["L-CI-95"] = [ np.quantile(SENS_test_boot, 0.025), np.quantile(SPEC_test_boot, 0.025), np.quantile(PPV_test_boot, 0.025), np.quantile(NPV_test_boot, 0.025), np.quantile(MCC_test_boot, 0.025)  ]
+		p_tmp["L-CI-95"] = [ round(x, 6) for x in p_tmp["L-CI-95"] ]
+		p_tmp["U-CI-95"] = [ np.quantile(SENS_test_boot, 0.975), np.quantile(SPEC_test_boot, 0.975), np.quantile(PPV_test_boot, 0.975), np.quantile(NPV_test_boot, 0.975), np.quantile(MCC_test_boot, 0.975)  ]
+		p_tmp["U-CI-95"] = [ round(x, 6) for x in p_tmp["U-CI-95"] ]
+		performance = pd.concat([performance, p_tmp], ignore_index = True)
+
+
+
+	# impute the missing data
+	logging.info("Impute the data")
+	imp = SimpleImputer(strategy = 'median')
+	imp.fit(x)
+
+	imp.feature_names = list(x.columns.values)
+	x_imp = imp.transform(x)
+
+	with open(args.tempDir + args.prefix + "." + label + '_imp.pkl', 'wb') as f:
+		pickle.dump(imp, f)
+
+	
+	# scale the data
+	logging.info("Scaling to [0,1]")
+	scal = MinMaxScaler(clip = 'true')
+	scal.fit(x_imp)
+
+	scal.feature_names = list(x.columns.values)
+	x_imp_scal = scal.transform(x_imp)
+
+	with open(args.tempDir + args.prefix + "." + label + '_scal.pkl', 'wb') as f:
+		pickle.dump(scal, f)
+
+
+
+	# run logistic regression
+	logging.info("Run logistic regression")
+	logReg = LogisticRegression(penalty = 'none')
+	logReg.fit(x_imp_scal, y)
+
+	logReg.feature_names = list(x.columns.values)
+
+	with open(args.tempDir + args.prefix + "." + label + '_logReg.pkl', 'wb') as f:
+		pickle.dump(logReg, f)
+
+	with open(args.tempDir + args.prefix + "." + label + '_predictors.npy', 'wb') as f:
+		np.save(f, x.columns)
+
+	
+	with open(args.tempDir + args.prefix + "." + label + "_coef.txt", 'a') as f:
+		pprint.pprint(list(zip(logReg.feature_names, np.round(logReg.coef_.flatten(), 6))), f)
+		print("Intercept: ", np.round(logReg.intercept_, 6), file=f)
+
+
+	if args.eval:
+		return performance, vif_data
+
+
+
+
+
 
 
 # main function
@@ -220,27 +399,27 @@ def PT_main(args):
 			df_all_path = df_all_path[ df_all_path['sig'].str.contains("Conflicting") == False ]
 
 
-			flatPrior_nonCoding =  df_all_path['gene'].isna().sum() / df_all['gene'].isna().sum()
+			flatPrior_NON =  df_all_path['gene'].isna().sum() / df_all['gene'].isna().sum()
 
 
 			df_all = df_all.dropna(subset=['gene'])
 			df_all_path = df_all_path.dropna(subset=['gene'])
 
-			flatPrior_indel = len(df_all_path[ df_all_path['vc'] == "Indel" ].index) / len(df_all[ df_all['vc'] == "Indel" ].index)
+			flatPrior_IND = len(df_all_path[ df_all_path['vc'] == "Indel" ].index) / len(df_all[ df_all['vc'] == "Indel" ].index)
 
 
 			df_all = df_all.dropna(subset=['mc'])
 			df_all_path = df_all_path.dropna(subset=['mc'])
 
-			flatPrior_missense = len(df_all_path[ df_all_path['mc'].str.contains("missense") ].index) / len(df_all[ df_all['mc'].str.contains("missense") ].index)
+			flatPrior_MIS = len(df_all_path[ df_all_path['mc'].str.contains("missense") ].index) / len(df_all[ df_all['mc'].str.contains("missense") ].index)
 
 			df_all = df_all[ df_all['vc'] == "single_nucleotide_variant" ]
 			df_all_path = df_all_path[ df_all_path['vc'] == "single_nucleotide_variant" ]
 
-			flatPrior_otherSNV = len(df_all_path[ ~df_all_path['mc'].str.contains("missense") ].index) / len(df_all[ ~df_all['mc'].str.contains("missense") ].index)
+			flatPrior_MIS = len(df_all_path[ ~df_all_path['mc'].str.contains("missense") ].index) / len(df_all[ ~df_all['mc'].str.contains("missense") ].index)
 
 
-			flatPriors = { 'nonCoding' : flatPrior_nonCoding, 'indel' : flatPrior_indel, 'missense' : flatPrior_missense, 'otherSNV' : flatPrior_otherSNV }
+			flatPriors = { 'NON' : flatPrior_nonCoding, 'IND' : flatPrior_IND, 'MIS' : flatPrior_MIS, 'OTH' : flatPrior_OTH }
 
 
 
@@ -250,7 +429,7 @@ def PT_main(args):
 			msg = "Could not find the ClinVar file: " + clinVarFullVcfFile
 			logging.warning(msg)
 	else:
-		logging.info("Not generating flat priors for indels and non-coding variants")
+		logging.info("Not generating flat priors for non-coding variants")
 
 
 
@@ -263,10 +442,8 @@ def PT_main(args):
 
 	
 	# allele frequency predictor for prior
-	if args.frequency is not None:
-		alleleFrequency = args.frequency
-	else:
-		alleleFrequency = "gnomAD_v2_exome_AF_popmax"
+	if args.frequency is None:
+		args.requency = "gnomAD_v2_exome_AF_popmax"
 
 
 	if args.predictors is not None:
@@ -275,21 +452,30 @@ def PT_main(args):
 
 		with open(args.predictors, 'r') as f:
 			for line in f:
-				(key, value)=line.split()
-				d[key] = value
+				(model, key, value)=line.split()
+				d[model, key] = value
 
 
 		# manually add allele frequency to the predictors
-		keysPredictors = sorted(list(d.keys()))
-		keysDescPred = sorted([ x for x in keysPredictors if d[x] == "-" ] + [alleleFrequency])
-		keysAscPred  = sorted([ x for x in keysPredictors if d[x] == "+" ])
-		keysPredictors = sorted(list(d.keys()) + [alleleFrequency])
+		keysPredictors = sorted([ x[1] for x in d.keys()])
+		keysDescPred = sorted([ f for m,f in d.keys() if d[m,f] == "L" ] + [args.frequency])
+		keysAscPred = sorted([ f for m,f in d.keys() if d[m,f] == "H" ])
+		keysPredictors = sorted([ keysDescPred + keysAscPred ])
+
+		keysPredictors_IND = [ f for m,f in d.keys() if m == "IND" ]
+		keysPredictors_MIS = [ f for m,f in d.keys() if m == "MIS" ]
+		keysPredictors_OTH = [ f for m,f in d.keys() if m == "OTH" ]
 
 
 	else:
-		keysPredictors = sorted([ "CADD_PHRED", "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score" ] + [ alleleFrequency ] )
-		keysDescPred = sorted([ "FATHMM_score", "SIFT_score" ] + [ alleleFrequency ])
+		keysPredictors = sorted([ "CADD_PHRED", "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score" ] + [ args.frequency ] )
+		keysDescPred = sorted([ "FATHMM_score", "SIFT_score" ] + [ args.frequency ])
 		keysAscPred  = sorted([ x for x in keysPredictors if x not in keysDescPred ])
+
+
+		keysPredictors_IND = [ args.frequency ]
+		keysPredictors_MIS = sorted([ "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score" ] + [ args.frequency ])
+		keysPredictors_OTH = [ args.frequency ]
 
 
 
@@ -570,220 +756,65 @@ def PT_main(args):
 
 
 	## INDELS
-	logging.info("INDELS")
+	logging.info("IND")
 	
-	x_indel = x[ x['typeCV'] == 'indel' ]
-	ID_indel = x_indel['ID']
-	alleleID_indel = x_indel['alleleID']
-	geneCV_indel = x_indel['geneCV']
-	x_indel = x_indel.drop(['ID', 'alleleID', 'csqCV', 'geneCV'], axis=1, errors='ignore')
+	x_IND = x[ x['typeCV'] == 'indel' ]
+	ID_IND = x_IND['ID']
+	alleleID_IND = x_IND['alleleID']
+	geneCV_IND = x_IND['geneCV']
+	x_IND = x_IND.drop(['ID', 'alleleID', 'csqCV', 'geneCV', 'typeCV'], axis=1, errors='ignore')
 
-	x_indel_index = x_indel.index
-	x_indel['impactCV'] = pd.Categorical(x_indel['impactCV'], categories = sorted(x_indel['impactCV'].unique()))
+	x_IND_index = x_IND.index
+	x_IND['impactCV'] = pd.Categorical(x_IND['impactCV'], categories = sorted(x_IND['impactCV'].unique()))
 	
-	impactCV_indel = [ x for x in x_indel['impactCV'] if x in vepIMPACTRank.keys() ]
-	d_indel = dict((k, vepIMPACTRank[k]) for k in impactCV_indel)
-	drop_indel = "impactCV_" + max(d_indel, key=d_indel.get)
+	impactCV_IND = [ x for x in x_IND['impactCV'] if x in vepIMPACTRank.keys() ]
+	d_IND = dict((k, vepIMPACTRank[k]) for k in impactCV_IND)
+	drop_IND = "impactCV_" + max(d_IND, key=d_IND.get)
 	
-	x_indel = pd.get_dummies(x_indel, columns = ['impactCV']).drop(drop_indel, axis=1)
+	x_IND = pd.get_dummies(x_IND, columns = ['impactCV']).drop(drop_IND, axis=1)
 
 
-	y_indel = y[ y['typeCV'] == 'indel' ]
-	y_indel = y_indel.drop(['csqCV', 'impactCV', 'typeCV'], axis=1, errors='ignore')
-	y_indel = y_indel.values.reshape(-1,1)
+	y_IND = y[ y['typeCV'] == 'indel' ]
+	y_IND = y_IND.drop(['csqCV', 'impactCV', 'typeCV'], axis=1, errors='ignore')
+	y_IND = y_IND.values.reshape(-1,1)
 
 
-	uniq, counts = np.unique(y_indel, return_counts = True)
+	uniq, counts = np.unique(y_IND, return_counts = True)
 
-	if (len(x_indel.index) > 0) and (len(uniq) == 2) and (counts.min() > 10*len(x_indel.columns)):
-		x_indel = x_indel.drop(['FATHMM_score', 'MPC_score', 'Polyphen2_HDIV_score', 'REVEL_score', 'SIFT_score', 'typeCV'], axis=1, errors='ignore')
-
-
-		msg = str(np.size(y_indel)) + " indels used (" + str(sum(y_indel == 'PATHOGENIC')) + " PATH, " + str(sum(y_indel == 'BENIGN')) + " BEN)"
-		logging.info(msg)
-	
-		# remove columns that are all NA
-		x_indel = x_indel.dropna(axis=1, how='all')
-
-	
-		# set missing allele frequencies to zero
-		if alleleFrequency in x_indel.columns:
-			x_indel[alleleFrequency] = x_indel[alleleFrequency].fillna(0.0)
-
-
-		# evaluate the prior
-		if args.eval is True:
-			x_indel_train, x_indel_test, y_indel_train, y_indel_test = train_test_split(x_indel, y_indel, test_size = 0.2, random_state = 123)
-
-
-			logging.debug("Impute the training data (indels)")
-
-			imp_indel = SimpleImputer(strategy = 'median', verbose = 100)
-			imp_indel.fit(x_indel_train)
-			x_indel_train_imp = imp_indel.transform(x_indel_train)
-			x_indel_test_imp = imp_indel.transform(x_indel_test)
-
-			logging.debug("Scaling trainind data to [0,1] (indels)")
-			scal_indel = MinMaxScaler(clip = 'true')
-			scal_indel.fit(x_indel_train_imp)
-			x_indel_train_imp_scal = scal_indel.transform(x_indel_train_imp)
-			x_indel_test_imp_scal = scal_indel.transform(x_indel_test_imp)
-
-
-			logging.debug("Regression and VIF (indels)")
-			logReg_indel = LogisticRegression(penalty = 'none')
-			logReg_indel.fit(x_indel_train_imp_scal, y_indel_train)
-
-			vif_data = pd.DataFrame()
-			vif_data["Model"] =  [ "IND" ] * len(x_indel_train.columns)
-			vif_data["feature"] = x_indel_train.columns
-			vif_data["VIF"] = [variance_inflation_factor(x_indel_train_imp_scal, i) for i in range(len(x_indel_train.columns))]
-			vif_data["Coefficient"] = logReg_indel.coef_.flatten()
-			vif_data.loc[len(vif_data)] = [ "Indel", "intercept", np.nan, round(logReg_indel.intercept_[0], 4) ]
-			print(vif_data)
-
-
-	
-			SENS_train_indel_boot = []
-			SPEC_train_indel_boot = []
-			PPV_train_indel_boot = []
-			NPV_train_indel_boot = []
-			MCC_train_indel_boot = []
-
-			SENS_test_indel_boot = []
-			SPEC_test_indel_boot = []
-			PPV_test_indel_boot = []
-			NPV_test_indel_boot = []
-			MCC_test_indel_boot = []
-
-
-			for i in range(args.boot):
-				ind_indel = np.random.randint(x_indel_train_imp_scal.shape[0], size=x_indel_train_imp_scal.shape[0])
-				x_indel_boot = x_indel_train_imp_scal[ind_indel]
-				y_indel_boot = y_indel_train[ind_indel]
-
-				y_indel_pred = logReg_indel.predict(x_indel_boot)
-				tn, fp, fn, tp = confusion_matrix(y_indel_boot, y_indel_pred).ravel()
-				SENS_train_indel_boot.append(tp / (tp + fn)) 
-				SPEC_train_indel_boot.append(tn / (tn + fp)) 
-				PPV_train_indel_boot.append(tp / (tp + fp)) 
-				NPV_train_indel_boot.append(tn / (tn + fn)) 
-				MCC_train_indel_boot.append(matthews_corrcoef(y_indel_boot, y_indel_pred))
-
-
-				ind_indel = np.random.randint(x_indel_test_imp_scal.shape[0], size=x_indel_test_imp_scal.shape[0])
-				x_indel_boot = x_indel_test_imp_scal[ind_indel]
-				y_indel_boot = y_indel_test[ind_indel]
-
-				y_indel_pred = logReg_indel.predict(x_indel_boot)
-				tn, fp, fn, tp = confusion_matrix(y_indel_boot, y_indel_pred).ravel()
-				SENS_test_indel_boot.append(tp / (tp + fn)) 
-				SPEC_test_indel_boot.append(tn / (tn + fp)) 
-				PPV_test_indel_boot.append(tp / (tp + fp)) 
-				NPV_test_indel_boot.append(tn / (tn + fn)) 
-				MCC_test_indel_boot.append(matthews_corrcoef(y_indel_boot, y_indel_pred))
-
-
-			y_indel_train_pred = logReg_indel.predict(x_indel_train_imp_scal)
-			tn, fp, fn, tp = confusion_matrix(y_indel_train, y_indel_train_pred).ravel()
-	
-
-			performance = pd.DataFrame()
-
-			performance["Model"] = ["IND"]*5
-			performance["Data"] = ["Train"]*5
-			performance["Metric"] = ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"]
-			performance["Value"] = [ tp / (tp + fn), tn / (tn + fp), tp / (tp + fp), tn / (tn + fn), matthews_corrcoef(y_indel_train, y_indel_train_pred) ]
-			performance["Value"] = [ round(x, 6) for x in performance["Value"] ]
-			performance["L-CI-95"] = [ np.quantile(SENS_train_indel_boot, 0.025), np.quantile(SPEC_train_indel_boot, 0.025), np.quantile(PPV_train_indel_boot, 0.025), np.quantile(NPV_train_indel_boot, 0.025), np.quantile(MCC_train_indel_boot, 0.025)  ]
-			performance["L-CI-95"] = [ round(x, 6) for x in performance["L-CI-95"] ]
-			performance["U-CI-95"] = [ np.quantile(SENS_train_indel_boot, 0.975), np.quantile(SPEC_train_indel_boot, 0.975), np.quantile(PPV_train_indel_boot, 0.975), np.quantile(NPV_train_indel_boot, 0.975), np.quantile(MCC_train_indel_boot, 0.975)  ]
-			performance["U-CI-95"] = [ round(x, 6) for x in performance["U-CI-95"] ]
-
-
-
-			y_indel_test_pred = logReg_indel.predict(x_indel_test_imp_scal)
-			tn, fp, fn, tp = confusion_matrix(y_indel_test, y_indel_test_pred).ravel()
-	
-			p_tmp = pd.DataFrame()
-
-			p_tmp["Model"] = ["IND"]*5
-			p_tmp["Data"] = ["Test"]*5
-			p_tmp["Metric"] = ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"]
-			p_tmp["Value"] = [ tp / (tp + fn), tn / (tn + fp), tp / (tp + fp), tn / (tn + fn), matthews_corrcoef(y_indel_test, y_indel_test_pred) ]
-			p_tmp["Value"] = [ round(x, 6) for x in p_tmp["Value"] ]
-			p_tmp["L-CI-95"] = [ np.quantile(SENS_test_indel_boot, 0.025), np.quantile(SPEC_test_indel_boot, 0.025), np.quantile(PPV_test_indel_boot, 0.025), np.quantile(NPV_test_indel_boot, 0.025), np.quantile(MCC_test_indel_boot, 0.025)  ]
-			p_tmp["L-CI-95"] = [ round(x, 6) for x in p_tmp["L-CI-95"] ]
-			p_tmp["U-CI-95"] = [ np.quantile(SENS_test_indel_boot, 0.975), np.quantile(SPEC_test_indel_boot, 0.975), np.quantile(PPV_test_indel_boot, 0.975), np.quantile(NPV_test_indel_boot, 0.975), np.quantile(MCC_test_indel_boot, 0.975)  ]
-			p_tmp["U-CI-95"] = [ round(x, 6) for x in p_tmp["U-CI-95"] ]
-			performance = pd.concat([performance, p_tmp], ignore_index = True)
-
-
-
-		# impute the missing data
-		logging.info("Impute the data")
-		imp_indel = SimpleImputer(strategy = 'median')
-		imp_indel.fit(x_indel)
-
-		imp_indel.feature_names = list(x_indel.columns.values)
-		x_indel_imp = imp_indel.transform(x_indel)
-
-		with open(args.tempDir + args.prefix+'.imp_indel.pkl', 'wb') as f:
-			pickle.dump(imp_indel, f)
+	if (len(x_IND.index) > 0) and (len(uniq) == 2) and (counts.min() > 10*len(x_IND.columns)):
+		drop_cols = [ x for x in keysPredictors if x not in keysPredictors_IND ]
+		x_IND = x_IND.drop(drop_cols, axis=1, errors='ignore')
+		#x_IND = x_IND[x_IND.columns.intersection(keysPredictors_IND)]
 
 		
-		# scale the data
-		logging.info("Scaling to [0,1]")
-		scal_indel = MinMaxScaler(clip = 'true')
-		scal_indel.fit(x_indel_imp)
-
-		scal_indel.feature_names = list(x_indel.columns.values)
-		x_indel_imp_scal = scal_indel.transform(x_indel_imp)
-
-		with open(args.tempDir + args.prefix+'.scal_indel.pkl', 'wb') as f:
-			pickle.dump(scal_indel, f)
-
-
-
-		# run logistic regression
-		logging.info("Run logistic regression")
-		logReg_indel = LogisticRegression(penalty = 'none')
-		logReg_indel.fit(x_indel_imp_scal, y_indel)
-
-		logReg_indel.feature_names = list(x_indel.columns.values)
-
-		with open(args.tempDir + args.prefix+'.logReg_indel.pkl', 'wb') as f:
-			pickle.dump(logReg_indel, f)
-
-		with open(args.tempDir + args.prefix+'.predictors_indel.npy', 'wb') as f:
-			np.save(f, x_indel.columns)
-
-		results_indel = logReg_indel.predict_proba(x_indel_imp_scal)[:,1]
-		
-		with open(args.tempDir + args.prefix + ".indel_coef.txt", 'a') as f:
-			pprint.pprint(list(zip(logReg_indel.feature_names, np.round(logReg_indel.coef_.flatten(), 6))), f)
-			print("Intercept: ", np.round(logReg_indel.intercept_, 6), file=f)
-
-	else:
-		if 'indel' in flatPriors.keys():
-			msg = "Not enough indels in training data, using flat prior: " + str(np.round(flatPriors['indel'], 6))
-			results_indel = np.full(len(x_indel.index), flatPriors['indel'])
+		if args.eval:
+			perf_IND, vif_IND = generate_prior(x_IND, y_IND, "IND", args)
 
 		else:
-			msg = "Not enough indels in training data, all indels will be ignored"
-			results_indel = np.full(len(x_indel.index), np.nan)
+			generate_prior(x_IND, y_IND, "IND", args)
+			
+
+
+	else:
+		if 'IND' in flatPriors.keys():
+			msg = "Not enough IND in training data, using flat prior: " + str(np.round(flatPriors['IND'], 6))
+			results_IND = np.full(len(x_IND.index), flatPriors['IND'])
+
+		else:
+			msg = "Not enough IND in training data, all IND will be ignored"
+			results_IND = np.full(len(x_IND.index), np.nan)
 
 		logging.info(msg)
 
 		if args.eval:
-			performance = pd.DataFrame()
+			perf_IND = pd.DataFrame()
 
-			performance["Model"] = ["IND"]*10
-			performance["Data"] = [ ["Train"]*5 , ["Test"]*5 ] 
-			performance["Metric"] = ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"]*2
-			performance["Value"] = [ np.nan ]*10
-			performance["L-CI-95"] = [ np.nan ]*10
-			performance["U-CI-95"] = [ np.nan ]*10
+			perf_IND["Model"] = ["IND"]*10
+			perf_IND["Data"] = [ y for x in ["Train", "Test"] for y in (x,)*5]
+			perf_IND["Metric"] = [ y for x in ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"] for y in (x,)*2 ]
+			perf_IND["Value"] = [ np.nan ]*10
+			perf_IND["L-CI-95"] = [ np.nan ]*10
+			perf_IND["U-CI-95"] = [ np.nan ]*10
 
 
 
@@ -794,221 +825,60 @@ def PT_main(args):
 
 
 	## MISSENSE SNV
-	logging.info("MISSENSE VARIANTS")
-	x_missense = x[ (x['csqCV'] == 'missense_variant') & (x['typeCV'] == 'SNV') ]
-	x_missense_csq = x_missense['csqCV'] 
-	x_missense = x_missense.drop(['CADD_PHRED', 'typeCV', 'csqCV', 'impactCV'], axis=1, errors='ignore')
+	logging.info("MIS")
+	x_MIS = x[ (x['csqCV'] == 'missense_variant') & (x['typeCV'] == 'SNV') ]
+	x_MIS_csq = x_MIS['csqCV'] 
+	x_MIS = x_MIS.drop(['CADD_PHRED', 'typeCV', 'csqCV', 'impactCV'], axis=1, errors='ignore')
 
 
 
-	y_missense = y[ (y['csqCV'] == 'missense_variant') & (y['typeCV'] == 'SNV') ]
-	y_missense = y_missense.drop(['csqCV', 'typeCV'], axis=1)
-	y_missense = y_missense.values.reshape(-1,1)
+	y_MIS = y[ (y['csqCV'] == 'missense_variant') & (y['typeCV'] == 'SNV') ]
+	y_MIS = y_MIS.drop(['csqCV', 'typeCV'], axis=1)
+	y_MIS = y_MIS.values.reshape(-1,1)
 
 
 	# get IDs
-	ID_missense = x_missense['ID']
-	alleleID_missense = x_missense['alleleID']
-	geneCV_missense = x_missense['geneCV']
-	x_missense = x_missense.drop(['ID', 'alleleID', 'geneCV'], axis=1)
-	x_missense_index = x_missense.index
+	ID_MIS = x_MIS['ID']
+	alleleID_MIS = x_MIS['alleleID']
+	geneCV_MIS = x_MIS['geneCV']
+	x_MIS = x_MIS.drop(['ID', 'alleleID', 'geneCV'], axis=1)
+	x_MIS_index = x_MIS.index
 
 
-	uniq, counts = np.unique(y_missense, return_counts = True)
+	uniq, counts = np.unique(y_MIS, return_counts = True)
 
-	if (len(x_missense.index) > 0) and (len(uniq) == 2) and (counts.min() > 15*len(x_missense.columns)):
-		msg = str(np.size(y_missense)) + " missense variants used (" + str(sum(y_missense == 'PATHOGENIC')) + " PATH, " + str(sum(y_missense == 'BENIGN')) + " BEN)"
-		logging.info(msg)
-		
-		# remove columns that are all NA
-		x_missense = x_missense.dropna(axis=1, how='all')
+	if (len(x_MIS.index) > 0) and (len(uniq) == 2) and (counts.min() > 15*len(x_MIS.columns)):
+		drop_cols = [ x for x in keysPredictors if x not in keysPredictors_MIS ]
+		x_MIS = x_MIS.drop(drop_cols, axis=1, errors='ignore')
 
-	
-		# set missing allele frequencies to zero
-		if alleleFrequency  in x_missense.columns:
-			x_missense[alleleFrequency] = x_missense[alleleFrequency].fillna(0.0)
-
-
-
-		# evaluate the prior
-		if args.eval is True:
-			x_missense_train, x_missense_test, y_missense_train, y_missense_test = train_test_split(x_missense, y_missense, test_size = 0.2, random_state = 123)
-
-
-			logging.debug("Impute the training data (missense)")
-
-			imp_missense = SimpleImputer(strategy = 'median', verbose = 100)
-			imp_missense.fit(x_missense_train)
-			x_missense_train_imp = imp_missense.transform(x_missense_train)
-			x_missense_test_imp = imp_missense.transform(x_missense_test)
-
-			logging.debug("Scaling trainind data to [0,1] (missense)")
-			scal_missense = MinMaxScaler(clip = 'true')
-			scal_missense.fit(x_missense_train_imp)
-			x_missense_train_imp_scal = scal_missense.transform(x_missense_train_imp)
-			x_missense_test_imp_scal = scal_missense.transform(x_missense_test_imp)
-
-
-			logging.debug("Regression and VIF (missense)")
-			logReg_missense = LogisticRegression(penalty = 'none')
-			logReg_missense.fit(x_missense_train_imp_scal, y_missense_train)
-
-			vif_data = pd.DataFrame()
-			vif_data["Model"] =  [ "MIS" ] * len(x_missense_train.columns)
-			vif_data["feature"] = x_missense_train.columns
-			vif_data["VIF"] = [variance_inflation_factor(x_missense_train_imp_scal, i) for i in range(len(x_missense_train.columns))]
-			vif_data["Coefficient"] = logReg_missense.coef_.flatten()
-			vif_data.loc[len(vif_data)] = [ "Missense", "intercept", np.nan, round(logReg_missense.intercept_[0], 4) ]
-			print(vif_data)
-
-
-	
-			SENS_train_missense_boot = []
-			SPEC_train_missense_boot = []
-			PPV_train_missense_boot = []
-			NPV_train_missense_boot = []
-			MCC_train_missense_boot = []
-
-			SENS_test_missense_boot = []
-			SPEC_test_missense_boot = []
-			PPV_test_missense_boot = []
-			NPV_test_missense_boot = []
-			MCC_test_missense_boot = []
-
-
-			for i in range(args.boot):
-				ind_missense = np.random.randint(x_missense_train_imp_scal.shape[0], size=x_missense_train_imp_scal.shape[0])
-				x_missense_boot = x_missense_train_imp_scal[ind_missense]
-				y_missense_boot = y_missense_train[ind_missense]
-
-				y_missense_pred = logReg_missense.predict(x_missense_boot)
-				tn, fp, fn, tp = confusion_matrix(y_missense_boot, y_missense_pred).ravel()
-				SENS_train_missense_boot.append(tp / (tp + fn)) 
-				SPEC_train_missense_boot.append(tn / (tn + fp)) 
-				PPV_train_missense_boot.append(tp / (tp + fp)) 
-				NPV_train_missense_boot.append(tn / (tn + fn)) 
-				MCC_train_missense_boot.append(matthews_corrcoef(y_missense_boot, y_missense_pred))
-
-
-				ind_missense = np.random.randint(x_missense_test_imp_scal.shape[0], size=x_missense_test_imp_scal.shape[0])
-				x_missense_boot = x_missense_test_imp_scal[ind_missense]
-				y_missense_boot = y_missense_test[ind_missense]
-
-				y_missense_pred = logReg_missense.predict(x_missense_boot)
-				tn, fp, fn, tp = confusion_matrix(y_missense_boot, y_missense_pred).ravel()
-				SENS_test_missense_boot.append(tp / (tp + fn)) 
-				SPEC_test_missense_boot.append(tn / (tn + fp)) 
-				PPV_test_missense_boot.append(tp / (tp + fp)) 
-				NPV_test_missense_boot.append(tn / (tn + fn)) 
-				MCC_test_missense_boot.append(matthews_corrcoef(y_missense_boot, y_missense_pred))
-
-
-			y_missense_train_pred = logReg_missense.predict(x_missense_train_imp_scal)
-			tn, fp, fn, tp = confusion_matrix(y_missense_train, y_missense_train_pred).ravel()
-	
-
-			p_tmp = pd.DataFrame()
-
-			p_tmp["Model"] = ["MIS"]*5
-			p_tmp["Data"] = ["Train"]*5
-			p_tmp["Metric"] = ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"]
-			p_tmp["Value"] = [ tp / (tp + fn), tn / (tn + fp), tp / (tp + fp), tn / (tn + fn), matthews_corrcoef(y_missense_train, y_missense_train_pred) ]
-			p_tmp["Value"] = [ round(x, 6) for x in p_tmp["Value"] ]
-			p_tmp["L-CI-95"] = [ np.quantile(SENS_train_missense_boot, 0.025), np.quantile(SPEC_train_missense_boot, 0.025), np.quantile(PPV_train_missense_boot, 0.025), np.quantile(NPV_train_missense_boot, 0.025), np.quantile(MCC_train_missense_boot, 0.025)  ]
-			p_tmp["L-CI-95"] = [ round(x, 6) for x in p_tmp["L-CI-95"] ]
-			p_tmp["U-CI-95"] = [ np.quantile(SENS_train_missense_boot, 0.975), np.quantile(SPEC_train_missense_boot, 0.975), np.quantile(PPV_train_missense_boot, 0.975), np.quantile(NPV_train_missense_boot, 0.975), np.quantile(MCC_train_missense_boot, 0.975)  ]
-			p_tmp["U-CI-95"] = [ round(x, 6) for x in p_tmp["U-CI-95"] ]
-
-			performance = pd.concat([performance, p_tmp], ignore_index = True)
-
-
-
-			y_missense_test_pred = logReg_missense.predict(x_missense_test_imp_scal)
-			tn, fp, fn, tp = confusion_matrix(y_missense_test, y_missense_test_pred).ravel()
-	
-			p_tmp = pd.DataFrame()
-
-			p_tmp["Model"] = ["MIS"]*5
-			p_tmp["Data"] = ["Test"]*5
-			p_tmp["Metric"] = ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"]
-			p_tmp["Value"] = [ tp / (tp + fn), tn / (tn + fp), tp / (tp + fp), tn / (tn + fn), matthews_corrcoef(y_missense_test, y_missense_test_pred) ]
-			p_tmp["Value"] = [ round(x, 6) for x in p_tmp["Value"] ]
-			p_tmp["L-CI-95"] = [ np.quantile(SENS_test_missense_boot, 0.025), np.quantile(SPEC_test_missense_boot, 0.025), np.quantile(PPV_test_missense_boot, 0.025), np.quantile(NPV_test_missense_boot, 0.025), np.quantile(MCC_test_missense_boot, 0.025)  ]
-			p_tmp["L-CI-95"] = [ round(x, 6) for x in p_tmp["L-CI-95"] ]
-			p_tmp["U-CI-95"] = [ np.quantile(SENS_test_missense_boot, 0.975), np.quantile(SPEC_test_missense_boot, 0.975), np.quantile(PPV_test_missense_boot, 0.975), np.quantile(NPV_test_missense_boot, 0.975), np.quantile(MCC_test_missense_boot, 0.975)  ]
-			p_tmp["U-CI-95"] = [ round(x, 6) for x in p_tmp["U-CI-95"] ]
-			performance = pd.concat([performance, p_tmp], ignore_index = True)
-
-
-
-		# impute the missing data
-		logging.info("Impute the data")
-		imp_missense = SimpleImputer(strategy = 'median')
-		imp_missense.fit(x_missense)
-
-		imp_missense.feature_names = list(x_missense.columns.values)
-
-		x_missense_imp = imp_missense.transform(x_missense)
-
-		with open(args.tempDir + args.prefix+'.imp_missense.pkl', 'wb') as f:
-			pickle.dump(imp_missense, f)
-
-
-		# scale the data
-		logging.info("Scaling to [0,1]")
-		scal_missense = MinMaxScaler(clip = 'true')
-		scal_missense.fit(x_missense_imp)
-
-		scal_missense.feature_names = list(x_missense.columns.values)
-
-		x_missense_imp_scal = scal_missense.transform(x_missense_imp)
-
-		with open(args.tempDir + args.prefix+'.scal_missense.pkl', 'wb') as f:
-			pickle.dump(scal_missense, f)
-
-
-
-		# run logistic regression
-		logging.info("Run logistic regression")
-		logReg_missense = LogisticRegression(penalty = 'none')
-		logReg_missense.fit(x_missense_imp_scal, y_missense)
-
-		logReg_missense.feature_names = list(x_missense.columns.values)
-
-		with open(args.tempDir + args.prefix+'.logReg_missense.pkl', 'wb') as f:
-			pickle.dump(logReg_missense, f)
-
-		with open(args.tempDir + args.prefix+'.predictors_missense.npy', 'wb') as f:
-			np.save(f, x_missense.columns)
-
-		results_missense = logReg_missense.predict_proba(x_missense_imp_scal)[:,1]
-
-		with open(args.tempDir + args.prefix + ".missense_coef.txt", 'a') as f:
-		 pprint.pprint(list(zip(logReg_missense.feature_names, np.round(logReg_missense.coef_.flatten(), 6))), f)
-		 print("Intercept: ", np.round(logReg_missense.intercept_, 6), file=f)
-	
-	else:
-		if 'missense' in flatPriors.keys():
-			msg = "Not enough missense variants in training data, using flat prior: " + str(np.round(flatPriors['missense'], 6))
-			results_missense = np.full(len(x_missense.index), flatPriors['missense'])
+		if args.eval:
+			perf_MIS, vif_MIS = generate_prior(x_MIS, y_MIS, "MIS", args)
 
 		else:
-			msg = "Not enough missense variants in training data, all missense variants will be ignored"
-			results_missense = np.full(len(x_missense.index), np.nan)
+			generate_prior(x_MIS, y_MIS, "MIS", args)
+
+	
+	else:
+		if 'MIS' in flatPriors.keys():
+			msg = "Not enough MIS variants in training data, using flat prior: " + str(np.round(flatPriors['MIS'], 6))
+			results_MIS = np.full(len(x_MIS.index), flatPriors['MIS'])
+
+		else:
+			msg = "Not enough MIS variants in training data, all MIS variants will be ignored"
+			results_MIS = np.full(len(x_MIS.index), np.nan)
 
 		logging.info(msg)
 
 		if args.eval:
-			p_tmp = pd.DataFrame()
+			perf_MIS = pd.DataFrame()
 
-			p_tmp["Model"] = ["MIS"]*10
-			p_tmp["Data"] = ["Train"]*5 + ["Test"]*5  
-			p_tmp["Metric"] = ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"]*2
-			p_tmp["Value"] = [ np.nan ]*10
-			p_tmp["L-CI-95"] = [ np.nan ]*10
-			p_tmp["U-CI-95"] = [ np.nan ]*10
+			perf_MIS["Model"] = ["MIS"]*10
+			perf_MIS["Data"] = [ y for x in ["Train", "Test"] for y in (x,)*5 ]
+			perf_MIS["Metric"] = [ y for x in ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"] for y in (x,)*2 ]
+			perf_MIS["Value"] = [ np.nan ]*10
+			perf_MIS["L-CI-95"] = [ np.nan ]*10
+			perf_MIS["U-CI-95"] = [ np.nan ]*10
 
-			performance = pd.concat([ performance, p_tmp ], ignore_index = True)
 
 
 
@@ -1020,228 +890,67 @@ def PT_main(args):
 
 	## NON-MISSENSE SNV
 	logging.info("NON-MISSENSE SNV")
-	x_otherSNV = x[ (x['csqCV'] != 'missense_variant') & (x['typeCV'] == 'SNV') ]
-	x_otherSNV_csq = x_otherSNV['csqCV'] 
+	x_OTH = x[ (x['csqCV'] != 'missense_variant') & (x['typeCV'] == 'SNV') ]
+	x_OTH_csq = x_OTH['csqCV'] 
 
 
-	y_otherSNV = y[ (y['csqCV'] != 'missense_variant') & (y['typeCV'] == 'SNV') ]
-	y_otherSNV = y_otherSNV.drop(['csqCV', 'typeCV'], axis=1)
-	y_otherSNV = y_otherSNV.values.reshape(-1,1)
+	y_OTH = y[ (y['csqCV'] != 'missense_variant') & (y['typeCV'] == 'SNV') ]
+	y_OTH = y_OTH.drop(['csqCV', 'typeCV'], axis=1)
+	y_OTH = y_OTH.values.reshape(-1,1)
 
 
 	# get IDs
-	ID_otherSNV = x_otherSNV['ID']
-	alleleID_otherSNV = x_otherSNV['alleleID']
-	geneCV_otherSNV = x_otherSNV['geneCV']
-	x_otherSNV = x_otherSNV.drop(['ID', 'alleleID', 'geneCV', 'impactCV'], axis=1)
-	x_otherSNV_index = x_otherSNV.index
+	ID_OTH = x_OTH['ID']
+	alleleID_OTH = x_OTH['alleleID']
+	geneCV_OTH = x_OTH['geneCV']
+	x_OTH = x_OTH.drop(['ID', 'alleleID', 'geneCV', 'impactCV', 'typeCV'], axis=1)
+	x_OTH_index = x_OTH.index
 
-	x_otherSNV['csqCV'] = pd.Categorical(x_otherSNV['csqCV'], categories = sorted(x_otherSNV['csqCV'].unique()))
-	csqCV_otherSNV = [ x for x in x_otherSNV['csqCV'] if x in vepCSQRank.keys() ]
-	d_otherSNV = dict((k, vepCSQRank[k]) for k in csqCV_otherSNV)
-
-
-
-	uniq, counts = np.unique(y_otherSNV, return_counts = True)
-
-	if (len(x_otherSNV.index) > 0) and (len(uniq) == 2) and (counts.min() > 15*len(x_otherSNV.columns)):
-		drop_otherSNV = "csqCV_" + max(d_otherSNV, key=d_otherSNV.get)
-		x_otherSNV = pd.get_dummies(x_otherSNV, columns = ['csqCV']).drop(drop_otherSNV, axis=1)
-		x_otherSNV = x_otherSNV.drop(['FATHMM_score', 'MPC_score', 'Polyphen2_HDIV_score', 'REVEL_score', 'SIFT_score', 'typeCV'], axis=1, errors='ignore')
+	x_OTH['csqCV'] = pd.Categorical(x_OTH['csqCV'], categories = sorted(x_OTH['csqCV'].unique()))
+	csqCV_OTH = [ x for x in x_OTH['csqCV'] if x in vepCSQRank.keys() ]
+	d_OTH = dict((k, vepCSQRank[k]) for k in csqCV_OTH)
 
 
-		msg = str(np.size(y_otherSNV)) + " non-missense SNVs used (" + str(sum(y_otherSNV == 'PATHOGENIC')) + " PATH, " + str(sum(y_otherSNV == 'BENIGN')) + " BEN)"
-		logging.info(msg)
-		
-		# remove columns that are all NA
-		x_otherSNV = x_otherSNV.dropna(axis=1, how='all')
-
-	
-		# set missing allele frequencies to zero
-		if alleleFrequency in x_otherSNV.columns:
-			x_otherSNV[alleleFrequency] = x_otherSNV[alleleFrequency].fillna(0.0)
-
-		
-		# evaluate the prior
-		if args.eval is True:
-			x_otherSNV_train, x_otherSNV_test, y_otherSNV_train, y_otherSNV_test = train_test_split(x_otherSNV, y_otherSNV, test_size = 0.2, random_state = 123)
+	drop_OTH = "csqCV_" + max(d_OTH, key=d_OTH.get)
+	x_OTH = pd.get_dummies(x_OTH, columns = ['csqCV']).drop(drop_OTH, axis=1)
 
 
-			logging.debug("Impute the training data (other SNV)")
+	uniq, counts = np.unique(y_OTH, return_counts = True)
 
-			imp_otherSNV = SimpleImputer(strategy = 'median', verbose = 100)
-			imp_otherSNV.fit(x_otherSNV_train)
-			x_otherSNV_train_imp = imp_otherSNV.transform(x_otherSNV_train)
-			x_otherSNV_test_imp = imp_otherSNV.transform(x_otherSNV_test)
-
-			logging.debug("Scaling trainind data to [0,1] (other SNV)")
-			scal_otherSNV = MinMaxScaler(clip = 'true')
-			scal_otherSNV.fit(x_otherSNV_train_imp)
-			x_otherSNV_train_imp_scal = scal_otherSNV.transform(x_otherSNV_train_imp)
-			x_otherSNV_test_imp_scal = scal_otherSNV.transform(x_otherSNV_test_imp)
+	if (len(x_OTH.index) > 0) and (len(uniq) == 2) and (counts.min() > 15*len(x_OTH.columns)):
+		drop_cols = [ x for x in keysPredictors if x not in keysPredictors_OTH ]
+		x_OTH = x_OTH.drop(drop_cols, axis=1, errors='ignore')
 
 
-			logging.debug("Regression and VIF (other SNV)")
-			logReg_otherSNV = LogisticRegression(penalty = 'none')
-			logReg_otherSNV.fit(x_otherSNV_train_imp_scal, y_otherSNV_train)
-
-			vif_data = pd.DataFrame()
-			vif_data["Model"] =  [ "OTH" ] * len(x_otherSNV_train.columns)
-			vif_data["feature"] = x_otherSNV_train.columns
-			vif_data["VIF"] = [variance_inflation_factor(x_otherSNV_train_imp_scal, i) for i in range(len(x_otherSNV_train.columns))]
-			vif_data["Coefficient"] = logReg_otherSNV.coef_.flatten()
-			vif_data.loc[len(vif_data)] = [ "OtherSNV", "intercept", np.nan, round(logReg_otherSNV.intercept_[0], 4) ]
-			print(vif_data)
-
-
-	
-			SENS_train_otherSNV_boot = []
-			SPEC_train_otherSNV_boot = []
-			PPV_train_otherSNV_boot = []
-			NPV_train_otherSNV_boot = []
-			MCC_train_otherSNV_boot = []
-
-			SENS_test_otherSNV_boot = []
-			SPEC_test_otherSNV_boot = []
-			PPV_test_otherSNV_boot = []
-			NPV_test_otherSNV_boot = []
-			MCC_test_otherSNV_boot = []
-
-
-			for i in range(args.boot):
-				ind_otherSNV = np.random.randint(x_otherSNV_train_imp_scal.shape[0], size=x_otherSNV_train_imp_scal.shape[0])
-				x_otherSNV_boot = x_otherSNV_train_imp_scal[ind_otherSNV]
-				y_otherSNV_boot = y_otherSNV_train[ind_otherSNV]
-
-				y_otherSNV_pred = logReg_otherSNV.predict(x_otherSNV_boot)
-				tn, fp, fn, tp = confusion_matrix(y_otherSNV_boot, y_otherSNV_pred).ravel()
-				SENS_train_otherSNV_boot.append(tp / (tp + fn)) 
-				SPEC_train_otherSNV_boot.append(tn / (tn + fp)) 
-				PPV_train_otherSNV_boot.append(tp / (tp + fp)) 
-				NPV_train_otherSNV_boot.append(tn / (tn + fn)) 
-				MCC_train_otherSNV_boot.append(matthews_corrcoef(y_otherSNV_boot, y_otherSNV_pred))
-
-
-				ind_otherSNV = np.random.randint(x_otherSNV_test_imp_scal.shape[0], size=x_otherSNV_test_imp_scal.shape[0])
-				x_otherSNV_boot = x_otherSNV_test_imp_scal[ind_otherSNV]
-				y_otherSNV_boot = y_otherSNV_test[ind_otherSNV]
-
-				y_otherSNV_pred = logReg_otherSNV.predict(x_otherSNV_boot)
-				tn, fp, fn, tp = confusion_matrix(y_otherSNV_boot, y_otherSNV_pred).ravel()
-				SENS_test_otherSNV_boot.append(tp / (tp + fn)) 
-				SPEC_test_otherSNV_boot.append(tn / (tn + fp)) 
-				PPV_test_otherSNV_boot.append(tp / (tp + fp)) 
-				NPV_test_otherSNV_boot.append(tn / (tn + fn)) 
-				MCC_test_otherSNV_boot.append(matthews_corrcoef(y_otherSNV_boot, y_otherSNV_pred))
-
-
-			y_otherSNV_train_pred = logReg_otherSNV.predict(x_otherSNV_train_imp_scal)
-			tn, fp, fn, tp = confusion_matrix(y_otherSNV_train, y_otherSNV_train_pred).ravel()
-	
-
-			p_tmp = pd.DataFrame()
-
-			p_tmp["Model"] = ["OTH"]*5
-			p_tmp["Data"] = ["Train"]*5
-			p_tmp["Metric"] = ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"]
-			p_tmp["Value"] = [ tp / (tp + fn), tn / (tn + fp), tp / (tp + fp), tn / (tn + fn), matthews_corrcoef(y_otherSNV_train, y_otherSNV_train_pred) ]
-			p_tmp["Value"] = [ round(x, 6) for x in p_tmp["Value"] ]
-			p_tmp["L-CI-95"] = [ np.quantile(SENS_train_otherSNV_boot, 0.025), np.quantile(SPEC_train_otherSNV_boot, 0.025), np.quantile(PPV_train_otherSNV_boot, 0.025), np.quantile(NPV_train_otherSNV_boot, 0.025), np.quantile(MCC_train_otherSNV_boot, 0.025)  ]
-			p_tmp["L-CI-95"] = [ round(x, 6) for x in p_tmp["L-CI-95"] ]
-			p_tmp["U-CI-95"] = [ np.quantile(SENS_train_otherSNV_boot, 0.975), np.quantile(SPEC_train_otherSNV_boot, 0.975), np.quantile(PPV_train_otherSNV_boot, 0.975), np.quantile(NPV_train_otherSNV_boot, 0.975), np.quantile(MCC_train_otherSNV_boot, 0.975)  ]
-			p_tmp["U-CI-95"] = [ round(x, 6) for x in p_tmp["U-CI-95"] ]
-
-			performance = pd.concat([performance, p_tmp], ignore_index = True)
-
-
-			y_otherSNV_test_pred = logReg_otherSNV.predict(x_otherSNV_test_imp_scal)
-			tn, fp, fn, tp = confusion_matrix(y_otherSNV_test, y_otherSNV_test_pred).ravel()
-	
-			p_tmp = pd.DataFrame()
-
-			p_tmp["Model"] = ["OTH"]*5
-			p_tmp["Data"] = ["Test"]*5
-			p_tmp["Metric"] = ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"]
-			p_tmp["Value"] = [ tp / (tp + fn), tn / (tn + fp), tp / (tp + fp), tn / (tn + fn), matthews_corrcoef(y_otherSNV_test, y_otherSNV_test_pred) ]
-			p_tmp["Value"] = [ round(x, 6) for x in p_tmp["Value"] ]
-			p_tmp["L-CI-95"] = [ np.quantile(SENS_test_otherSNV_boot, 0.025), np.quantile(SPEC_test_otherSNV_boot, 0.025), np.quantile(PPV_test_otherSNV_boot, 0.025), np.quantile(NPV_test_otherSNV_boot, 0.025), np.quantile(MCC_test_otherSNV_boot, 0.025)  ]
-			p_tmp["L-CI-95"] = [ round(x, 6) for x in p_tmp["L-CI-95"] ]
-			p_tmp["U-CI-95"] = [ np.quantile(SENS_test_otherSNV_boot, 0.975), np.quantile(SPEC_test_otherSNV_boot, 0.975), np.quantile(PPV_test_otherSNV_boot, 0.975), np.quantile(NPV_test_otherSNV_boot, 0.975), np.quantile(MCC_test_otherSNV_boot, 0.975)  ]
-			p_tmp["U-CI-95"] = [ round(x, 6) for x in p_tmp["U-CI-95"] ]
-
-			performance = pd.concat([performance, p_tmp], ignore_index = True)
-		
-
-
-
-		# impute the missing data
-		logging.info("Impute the data")
-		imp_otherSNV = SimpleImputer(strategy = 'median')
-		imp_otherSNV.fit(x_otherSNV)
-
-		imp_otherSNV.feature_names = list(x_otherSNV.columns.values)
-
-		x_otherSNV_imp = imp_otherSNV.transform(x_otherSNV)
-
-		with open(args.tempDir + args.prefix+'.imp_otherSNV.pkl', 'wb') as f:
-			pickle.dump(imp_otherSNV, f)
-
-
-		# scale the data
-		logging.info("Scaling to [0,1]")
-		scal_otherSNV = MinMaxScaler(clip = 'true')
-		scal_otherSNV.fit(x_otherSNV_imp)
-
-		scal_otherSNV.feature_names = list(x_otherSNV.columns.values)
-
-		x_otherSNV_imp_scal = scal_otherSNV.transform(x_otherSNV_imp)
-
-		with open(args.tempDir + args.prefix+'.scal_otherSNV.pkl', 'wb') as f:
-			pickle.dump(scal_otherSNV, f)
-
-
-
-		# run logistic regression
-		logging.info("Run logistic regression")
-		logReg_otherSNV = LogisticRegression(penalty = 'none')
-		logReg_otherSNV.fit(x_otherSNV_imp_scal, y_otherSNV)
-
-		logReg_otherSNV.feature_names = list(x_otherSNV.columns.values)
-
-		with open(args.tempDir + args.prefix+'.logReg_otherSNV.pkl', 'wb') as f:
-			pickle.dump(logReg_otherSNV, f)
-
-		with open(args.tempDir + args.prefix+'.predictors_otherSNV.npy', 'wb') as f:
-			np.save(f, x_otherSNV.columns)
-
-		results_otherSNV = logReg_otherSNV.predict_proba(x_otherSNV_imp_scal)[:,1]
-
-		with open(args.tempDir + args.prefix + ".otherSNV_coef.txt", 'a') as f:
-		 pprint.pprint(list(zip(logReg_otherSNV.feature_names, np.round(logReg_otherSNV.coef_.flatten(), 6))), f)
-		 print("Intercept: ", np.round(logReg_otherSNV.intercept_, 6), file=f)
-
-	else:
-		if 'otherSNV' in flatPriors.keys():
-			msg = "Not enough non-missense SNVs in training data, using flat prior: " + str(np.round(flatPriors['otherSNV'], 6))
-			results_otherSNV = np.full(len(x_otherSNV.index), flatPriors['otherSNV'])
+		if args.eval:
+			perf_OTH, vif_OTH = generate_prior(x_OTH, y_OTH, "OTH", args)
 
 		else:
-			msg = "Not enough non-missense SNVs in training data, all non-missense SNVs will be ignored"
-			results_otherSNV = np.full(len(x_otherSNV.index), np.nan)
+			generate_prior(x_OTH, y_OTH, "OTH", args)
+
+
+
+	else:
+		if 'OTH' in flatPriors.keys():
+			msg = "Not enough OTH in training data, using flat prior: " + str(np.round(flatPriors['OTH'], 6))
+			results_OTH = np.full(len(x_OTH.index), flatPriors['OTH'])
+
+		else:
+			msg = "Not enough OTH in training data, all OTH will be ignored"
+			results_OTH = np.full(len(x_OTH.index), np.nan)
 
 		logging.info(msg)
 
 		if args.eval:
-			p_tmp = pd.DataFrame()
+			perf_MIS = pd.DataFrame()
 
-			p_tmp["Model"] = ["OTH"]*10
-			p_tmp["Data"] = ["Train"]*5 + ["Test"]*5 
-			p_tmp["Metric"] = ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"]*2
-			p_tmp["Value"] = [ np.nan ]*10
-			p_tmp["L-CI-95"] = [ np.nan ]*10
-			p_tmp["U-CI-95"] = [ np.nan ]*10
+			perf_MIS["Model"] = ["OTH"]*10
+			perf_MIS["Data"] =  [ y for x in ["Train", "Test"] for y in (x,)*5] 
+			perf_MIS["Metric"] = [ y for x in ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"] for y in (x,)*2 ]
+			perf_MIS["Value"] = [ np.nan ]*10
+			perf_MIS["L-CI-95"] = [ np.nan ]*10
+			perf_MIS["U-CI-95"] = [ np.nan ]*10
 
-			performance = pd.concat([ performance, p_tmp ], ignore_index = True)
 
 
 
@@ -1251,8 +960,11 @@ def PT_main(args):
 		fig, axs = plt.subplots(1, 5, sharey = True, figsize=(10,3))
 		x = ["IND", "MIS", "OTH"]
 
+		performance = pd.concat([ perf_IND, perf_MIS, perf_OTH ], ignore_index = True)
+
 		performance["L_Err"] = performance["Value"] - performance["L-CI-95"]
 		performance["U_Err"] = performance["U-CI-95"] - performance["Value"]
+		performance.to_csv(args.tempDir + args.prefix + ".performance.txt", index=False, sep='\t', na_rep='.')
 
 		p_train_null = performance[ (performance["Metric"] == "Sensitivity") & (performance["Data"] == "Train") & (performance["Value"].isnull()) ]
 		p_train_ok = performance[ (performance["Metric"] == "Sensitivity") & (performance["Data"] == "Train") & (performance["Value"].notnull()) ]
@@ -1344,7 +1056,9 @@ def PT_main(args):
 		fig.legend(handles[1:3], labels[0:3])
 		plt.savefig(args.outputDir + args.prefix + ".metrics_prior.png", dpi=300)
 
-
+		
+		VIF = pd.concat([ vif_IND, vif_MIS, vif_OTH ], ignore_index = True)
+		VIF.to_csv(args.tempDir + args.prefix + ".features.txt", index=False, sep='\t', na_rep='.')
 
 
 
