@@ -2,14 +2,23 @@ import csv
 import logging
 import math
 import os
+import plotly
 import re
 import sys
 
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 import BayesFactor
+
+
+#from plotly.subplots import make_subplots
+
+
 
 # main function
 def PO_main(args):
@@ -149,8 +158,66 @@ def PO_main(args):
 	ax3.axhline(y=0,linewidth=2, color='k')
 
 	plt.savefig(args.outputDir + args.prefix + ".BICEP.png", dpi=300)
+	
 
 
+
+
+
+
+	# get predictors
+	if args.predictors is not None:
+
+		d = {}
+
+		with open(args.predictors, 'r') as f:
+			for line in f:
+				(model, key, value)=line.split()
+				d[model, key] = value
+
+
+		# manually add allele frequency to the predictors
+		keysPredictors = sorted([ x[1] for x in d.keys()] + [args.frequency])
+
+
+
+	else:
+		keysPredictors = sorted([ "CADD_PHRED", "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score" ] + [ args.frequency ] )
+
+
+	# plotly
+	logging.info("Plotting with plotly")
+	#print(merged_sub.columns)
+
+	
+	custom_1 = merged_sub.filter(["ID", "Gene"])
+	template_1 = """<b>Rank:</b> %{x}<br><b>logPostOC:</b> %{y}<br><b>ID:</b> %{customdata[0]}<br><b>Gene:</b> <i>%{customdata[1]}</i><br>"""
+
+	custom_2 = merged_sub.filter(['logBF', 'AFF_CARR', 'AFF_NON-CARR', 'UNAFF_CARR', 'UNAFF_NON-CARR', 'MISS'])
+	custom_2['AFF'] =  custom_2['AFF_CARR'] + custom_2['AFF_NON-CARR']
+	custom_2['UNAFF'] =  custom_2['UNAFF_CARR'] + custom_2['UNAFF_NON-CARR']
+	custom_2 = custom_2.filter(['logBF', 'AFF_CARR', 'AFF', 'UNAFF_CARR', 'UNAFF', 'MISS'])
+	template_2 = """<b>logBF:</b> %{y}<br><b>AFF:</b> %{customdata[1]} / %{customdata[2]}<br><b>UNAFF:</b> %{customdata[3]} / %{customdata[4]}<br><b>MISS:</b> %{customdata[5]}<br>"""
+
+	custom_3 = merged_sub.filter(['csq', 'impact'] + keysPredictors).fillna('N/A')
+	custom_3[args.frequency] = custom_3[args.frequency].round(6)
+	template_3 = """<b>logPriorOC:</b> %{y}<br><b>CSQ:</b> %{customdata[0]}<br><b>IMPACT:</b> %{customdata[1]}<br>"""
+
+	i = 2
+	for pred in keysPredictors:
+		template_3 = template_3 + "<b>"  + pred + ":</b> %{customdata[" + str(i) + "]}<br>"
+		i = i+1
+
+
+	fig = make_subplots(rows=3, cols=1, shared_xaxes=True, row_titles=["logPostOC", "logBF", "logPriorOC"], x_title="Rank")
+	fig.append_trace(go.Bar(x=merged_sub["Rank"], y=merged_sub["logPostOC"], name='logPostOC', marker_color="#61D04F", customdata=custom_1, hovertemplate=template_1), 1, 1)
+	fig.append_trace(go.Bar(x=merged_sub["Rank"], y=merged_sub["logBF"], name='logBF', marker_color="#2297E6", customdata=custom_2, hovertemplate=template_2), 2, 1)
+	fig.append_trace(go.Bar(x=merged_sub["Rank"], y=merged_sub["logPriorOC"], name='logPriorOC', marker_color="#DF536B", customdata=custom_3, hovertemplate=template_3), 3, 1)
+	fig.add_shape(go.layout.Shape(type="line", x0=0, y0=max_logBF, x1=args.top, y1=max_logBF, line=dict(dash="dash", width=3),
+    ),row=2,col=1)
+	fig.update_layout(showlegend=False, xaxis=dict(tickmode='array', tick0=1, ticktext=x_ticks_label, tickvals=x_ticks))
+	
+	plotly.offline.plot(fig, filename=args.outputDir + args.prefix + ".BICEP.html")
 
 
 	
