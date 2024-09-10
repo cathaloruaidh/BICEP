@@ -34,7 +34,7 @@ If you use BICEP, please credit this GitHub repository.
 
 <img src="./doc/img/BICEP_Overview.png" alt="BICEP overview" width="80%" align="center">
 
-
+---
 
 
 ## Installation
@@ -52,7 +52,57 @@ python3 -m pip install --user -r BICEP/requirements.txt
 ```
 
 
+## Software parameters
 
+BICEP consists of five sub-modules: 
+- PriorTrain - generate the logistic regression coefficients from the training data
+- PriorApply - apply these coefficients to the pedigree variants to generate a prior odds of causality
+- BayesFactor - calculate Bayes Factors for all pedigree variants
+- Posterior - calculate the posterior odds of causality and generate the output plots
+- All - all of the above
+
+The following parameters are available to the "All" sub-module and 
+
+
+### Input (Required)
+```
+  -v [FILE], --vcf [FILE]          VCF file for variants (default: None)
+  -f [FILE], --fam [FILE]          FAM file describing the pedigree structure and phenotypes (default: None)
+
+```
+
+### Output 
+```
+  --prefix [STRING]                Output prefix (default: BICEP_output)
+  --top [N]                        Number of top ranking variants to plot (default: 50)
+  --highlight [STRING]             ID of variant to highlight in plot (default: None)
+
+```
+
+### General
+```
+  -h, --help                       show the help message and exit
+  -l [STRING], --log [STRING]      Logging level: ERROR, WARN, INFO, DEBUG (default: INFO)
+  -n [N], --cores [N]              Number of CPU cores available (default: 1)
+  --eval                           Evaluate the predictors and regression model for the prior (default: False)
+  --boot [N]                       Number of bootstraps for prior evaluation (default: 1000)
+  -m [STRING], --model [STRING]    Prefix for the regression model files (default: None)
+```
+
+### BICEP model parameters
+```
+  --build [STRING]                 Reference genome build: GRCh37, GRCh38 (default: GRCh38)
+  --frequency [STRING]             Allele frequency predictor (default: gnomAD_v2_exome_AF_popmax)
+  --predictors [FILE]              File containing regression predictors (default: None)
+  --clinvar [FILE]                 ClinVar VCF file annotated with VEP (default: None)
+  -e [FILE], --exclude [FILE]      File of ClinVar IDs to exclude from training (default: None)
+  -i [FILE], --include [FILE]      File of ClinVar IDs to include for training (default: None)
+  -b [FILE], --benign [FILE]       File of benign variant IDs for training (default: None)
+  -p [FILE], --pathogenic [FILE]   File of pathogenic variant IDs for training (default: None)
+  --priorCaus [uniform, linear]    Prior parameter distribution for causal model (default: linear)
+  --priorNeut [uniform, linear]    Prior parameter distribution for neutral model (default: uniform)
+
+```
 
 ## Test
 To test the installation, simulated genomic, phenotypic, and pedigree data are supplied in the `test/` directory. 
