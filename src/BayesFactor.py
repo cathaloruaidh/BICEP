@@ -162,22 +162,22 @@ def phenoCarriers(genotype, pedInfo, samples):
 			genotype[i] = -1
 
 	k1 = k2 = l1 = l2 = m = 0
-	for x in range(pedInfo.nPeople):
-		if pedInfo.phenotypeActual[x] == 1:
-			if genotype[x] == 1:
+	for i in range(pedInfo.nPeople):
+		if pedInfo.phenotypeActual[i] == 1:
+			if genotype[i] == 1:
 				k1 += 1
-			else:
+			elif genotype[i] == 0:
 				l1 += 1
 		else:
-			if genotype[x] == 1:
+			if genotype[i] == 1:
 				k2 += 1
-			else:
+			elif genotype[i] == 0:
 				l2 += 1
 		
-		if genotype[x] == -1:
+		if genotype[i] == -1 and pedInfo.indID[i] in samples:
 			m += 1
 	
-	return k1, l1, k2, l2, m - ( pedInfo.nPeople - len(samples) )
+	return k1, l1, k2, l2, m
 
 
 
@@ -729,8 +729,8 @@ def BF_main(args):
 	if args.fam is not None:
 		inputFamFile = args.fam
 
-	if args.minAff is not None:
-		minAffecteds = int(args.minAff)
+	#if args.minAff is not None:
+	#	minAffecteds = int(args.minAff)
 
 	if args.prefix is not None:
 		outputPrefix = args.prefix
@@ -933,24 +933,24 @@ def BF_main(args):
 	allBF["HOM_ALT"] = [ 0.0, 0.0, 0.0, 0 ]
 
 
-	if minAffecteds > 0:
-		msg = "Removing variants with minAff < " + str(minAffecteds)
-		logging.info(msg)
-
-		for i in range(len(genotypes)):
-
-			count = 0
-			affs = [ x for x in range(pedInfo.nPeople) if pedInfo.phenotypeActual[x] == 1 ]
-
-			for aff in affs:
-				if genotypes[i][aff] == 1:
-					count += 1
-
-			if count < minAffecteds:
-				allBF[varString[i]] = [ 0.0, 0.0, 0.0, 0 ]
-
-				msg = "Removed variant: " + varString[i]
-				logging.debug(msg)
+#	if minAffecteds > 0:
+#		msg = "Removing variants with minAff < " + str(minAffecteds)
+#		logging.info(msg)
+#
+#		for i in range(len(genotypes)):
+#
+#			count = 0
+#			affs = [ x for x in range(pedInfo.nPeople) if pedInfo.phenotypeActual[x] == 1 ]
+#
+#			for aff in affs:
+#				if genotypes[i][aff] == 1:
+#					count += 1
+#
+#			if count < minAffecteds:
+#				allBF[varString[i]] = [ 0.0, 0.0, 0.0, 0 ]
+#
+#				msg = "Removed variant: " + varString[i]
+#				logging.debug(msg)
 
 
 

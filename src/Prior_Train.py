@@ -59,6 +59,8 @@ def generate_prior(x, y, label, args):
 		imp.fit(x_train)
 		x_train_imp = imp.transform(x_train)
 		x_test_imp = imp.transform(x_test)
+		with open(args.tempDir + args.prefix + ".TRAIN." + label + '_imp.pkl', 'wb') as f:
+			pickle.dump(imp, f)
 
 		msg = "Scaling training data to [0,1] (" + label + ")"
 		logging.debug(msg)
@@ -66,12 +68,20 @@ def generate_prior(x, y, label, args):
 		scal.fit(x_train_imp)
 		x_train_imp_scal = scal.transform(x_train_imp)
 		x_test_imp_scal = scal.transform(x_test_imp)
+		with open(args.tempDir + args.prefix + ".TRAIN." + label + '_scal.pkl', 'wb') as f:
+			pickle.dump(scal, f)
 
 
 		msg = "Regression and VIF (" + label + ")"
 		logging.debug(msg)
 		logReg = LogisticRegression(penalty = 'none')
 		logReg.fit(x_train_imp_scal, y_train)
+		with open(args.tempDir + args.prefix + ".TRAIN." + label + '_logReg.pkl', 'wb') as f:
+			pickle.dump(logReg, f)
+		
+		with open(args.tempDir + args.prefix + ".TRAIN." + label + '_predictors.npy', 'wb') as f:
+			np.save(f, x.columns)
+
 
 		vif_data = pd.DataFrame()
 		vif_data["Model"] =  [ label ] * len(x_train.columns)
@@ -79,7 +89,6 @@ def generate_prior(x, y, label, args):
 		vif_data["VIF"] = [variance_inflation_factor(x_train_imp_scal, i) for i in range(len(x_train.columns))]
 		vif_data["Coefficient"] = logReg.coef_.flatten()
 		vif_data.loc[len(vif_data)] = [ label, "intercept", np.nan, round(logReg.intercept_[0], 4) ]
-		print(vif_data)
 
 
 
@@ -142,6 +151,8 @@ def generate_prior(x, y, label, args):
 
 
 		y_test_pred = logReg.predict(x_test_imp_scal)
+		df = pd.DataFrame(data={'Label' : y_test.flatten(), 'p' : logReg.predict_proba(x_test_imp_scal)[:,1]})
+		df.to_csv(args.tempDir + args.prefix + ".TEST." + label + '_priors.txt', index=False, sep="\t")
 		tn, fp, fn, tp = confusion_matrix(y_test, y_test_pred).ravel()
 
 		p_tmp = pd.DataFrame()
@@ -157,7 +168,7 @@ def generate_prior(x, y, label, args):
 		p_tmp["U-CI-95"] = [ round(x, 6) for x in p_tmp["U-CI-95"] ]
 		performance = pd.concat([performance, p_tmp], ignore_index = True)
 
-
+		print(performance)
 
 	# impute the missing data
 	logging.info("Impute the data")
@@ -226,20 +237,24 @@ def PT_main(args):
 
 
 	# command line arguments
-	clinVarFullVcfFile = None
+#	clinVarFullVcfFile = None
 	clinVarAnnoVcfFile = None
 
 	if args.clinvar is not None:
 		clinVarAnnoVcfFile = args.clinvar
 
 	else:
-		if args.clinvarPrefix is None:
-			clinVarAnnoVcfFile = args.scriptDir + "../data/clinvar_20231126." + args.build + ".PATH_BEN.single.strip.vep.vcf.gz"
-		else:
-			clinVarAnnoVcfFile = args.scriptDir + "../data/" + args.clinvarPrefix + "." + args.build + ".PATH_BEN.single.strip.vep.vcf.gz"
+		if args.cnv is False:
+			if args.clinvarPrefix is None:
+				clinVarAnnoVcfFile = args.scriptDir + "../data/clinvar_20231126." + args.build + ".PATH_BEN.single.strip.vep.vcf.gz"
+			else:
+				clinVarAnnoVcfFile = args.scriptDir + "../data/" + args.clinvarPrefix + "." + args.build + ".PATH_BEN.single.strip.vep.vcf.gz"
 
-	if args.clinvarFull is not None:
-		clinVarFullVcfFile = args.clinvarFull
+		else:
+			clinVarAnnoVcfFile = args.scriptDir + "../data/nstd102." + args.build + ".variant_call.CNV.PATH_BEN.annotated.vcf.gz"
+
+#	if args.clinvarFull is not None:
+#		clinVarFullVcfFile = args.clinvarFull
 
 
 
@@ -371,80 +386,71 @@ def PT_main(args):
 
 	# generate the flat priors
 
-	if clinVarFullVcfFile is not None:
-
-		CV_full_path = Path(clinVarFullVcfFile)
-
-		if CV_full_path.is_file():
-			logging.info("Generating the flat priors")
-
-			CV_full_vcf = VCF(clinVarFullVcfFile, gts012=True)
-			ALL_DATA = []
-			for variant in CV_full_vcf:
-				sig = variant.INFO.get('CLNSIG')
-				if sig is not None:
-					sig = sig.split(",", 1)[0]
-
-				gene = variant.INFO.get('GENEINFO')
-				vc = variant.INFO.get('CLNVC')
-				mc = variant.INFO.get('MC')
-
-				if not (vc == "single_nucleotide_variant" or vc == "Indel"):
-					continue
-				ALL_DATA.append([ sig, vc, gene, mc ])
-			
-			df_all = pd.DataFrame(ALL_DATA, columns=['sig', 'vc', 'gene', 'mc'])
-			df_all_path = df_all.dropna(subset=['sig'])
-			df_all_path = df_all_path[ df_all_path['sig'].str.contains("athogenic") ]
-			df_all_path = df_all_path[ df_all_path['sig'].str.contains("Conflicting") == False ]
-
-
-			flatPrior_NON =  df_all_path['gene'].isna().sum() / df_all['gene'].isna().sum()
-
-
-			df_all = df_all.dropna(subset=['gene'])
-			df_all_path = df_all_path.dropna(subset=['gene'])
-
-			flatPrior_IND = len(df_all_path[ df_all_path['vc'] == "Indel" ].index) / len(df_all[ df_all['vc'] == "Indel" ].index)
-
-
-			df_all = df_all.dropna(subset=['mc'])
-			df_all_path = df_all_path.dropna(subset=['mc'])
-
-			flatPrior_MIS = len(df_all_path[ df_all_path['mc'].str.contains("missense") ].index) / len(df_all[ df_all['mc'].str.contains("missense") ].index)
-
-			df_all = df_all[ df_all['vc'] == "single_nucleotide_variant" ]
-			df_all_path = df_all_path[ df_all_path['vc'] == "single_nucleotide_variant" ]
-
-			flatPrior_MIS = len(df_all_path[ ~df_all_path['mc'].str.contains("missense") ].index) / len(df_all[ ~df_all['mc'].str.contains("missense") ].index)
-
-
-			flatPriors = { 'NON' : flatPrior_nonCoding, 'IND' : flatPrior_IND, 'MIS' : flatPrior_MIS, 'OTH' : flatPrior_OTH }
-
-
-
-			with open(args.tempDir + args.prefix+'.flatPriors.pkl', 'wb') as f:
-				pickle.dump(flatPriors, f)
-		else:
-			msg = "Could not find the ClinVar file: " + clinVarFullVcfFile
-			logging.warning(msg)
-	else:
-		logging.info("Not generating flat priors for non-coding variants")
-
+#	if clinVarFullVcfFile is not None:
+#
+#		CV_full_path = Path(clinVarFullVcfFile)
+#
+#		if CV_full_path.is_file():
+#			logging.info("Generating the flat priors")
+#
+#			CV_full_vcf = VCF(clinVarFullVcfFile, gts012=True)
+#			ALL_DATA = []
+#			for variant in CV_full_vcf:
+#				sig = variant.INFO.get('CLNSIG')
+#				if sig is not None:
+#					sig = sig.split(",", 1)[0]
+#
+#				gene = variant.INFO.get('GENEINFO')
+#				vc = variant.INFO.get('CLNVC')
+#				mc = variant.INFO.get('MC')
+#
+#				if not (vc == "single_nucleotide_variant" or vc == "Indel"):
+#					continue
+#				ALL_DATA.append([ sig, vc, gene, mc ])
+#			
+#			df_all = pd.DataFrame(ALL_DATA, columns=['sig', 'vc', 'gene', 'mc'])
+#			df_all_path = df_all.dropna(subset=['sig'])
+#			df_all_path = df_all_path[ df_all_path['sig'].str.contains("athogenic") ]
+#			df_all_path = df_all_path[ df_all_path['sig'].str.contains("Conflicting") == False ]
+#
+#
+#			flatPrior_NON =  df_all_path['gene'].isna().sum() / df_all['gene'].isna().sum()
+#
+#
+#			df_all = df_all.dropna(subset=['gene'])
+#			df_all_path = df_all_path.dropna(subset=['gene'])
+#
+#			flatPrior_IND = len(df_all_path[ df_all_path['vc'] == "Indel" ].index) / len(df_all[ df_all['vc'] == "Indel" ].index)
+#
+#
+#			df_all = df_all.dropna(subset=['mc'])
+#			df_all_path = df_all_path.dropna(subset=['mc'])
+#
+#			flatPrior_MIS = len(df_all_path[ df_all_path['mc'].str.contains("missense") ].index) / len(df_all[ df_all['mc'].str.contains("missense") ].index)
+#
+#			df_all = df_all[ df_all['vc'] == "single_nucleotide_variant" ]
+#			df_all_path = df_all_path[ df_all_path['vc'] == "single_nucleotide_variant" ]
+#
+#			flatPrior_MIS = len(df_all_path[ ~df_all_path['mc'].str.contains("missense") ].index) / len(df_all[ ~df_all['mc'].str.contains("missense") ].index)
+#
+#
+#			flatPriors = { 'NON' : flatPrior_nonCoding, 'IND' : flatPrior_IND, 'MIS' : flatPrior_MIS, 'OTH' : flatPrior_OTH }
+#
+#
+#
+#			with open(args.tempDir + args.prefix+'.flatPriors.pkl', 'wb') as f:
+#				pickle.dump(flatPriors, f)
+#		else:
+#			msg = "Could not find the ClinVar file: " + clinVarFullVcfFile
+#			logging.warning(msg)
+#	else:
+#		logging.info("Not generating flat priors for non-coding variants")
+#
 
 
 	# parse data from annotated ClinVar file 
 	logging.info("Parsing the annotation information")
 	CV_anno_vcf = VCF(clinVarAnnoVcfFile, gts012=True)
-
-	keys = re.sub('^.*?: ', '', CV_anno_vcf.get_header_type('CSQ')['Description']).split("|")
-	keys = [ key.strip("\"") for key in keys ]
-
-	
-	# allele frequency predictor for prior
-	if args.frequency is None:
-		args.requency = "gnomAD_v2_exome_AF_popmax"
-
 
 	if args.predictors is not None:
 
@@ -456,26 +462,76 @@ def PT_main(args):
 				d[model, key] = value
 
 
-		# manually add allele frequency to the predictors
-		keysPredictors = sorted([ x[1] for x in d.keys()])
-		keysDescPred = sorted([ f for m,f in d.keys() if d[m,f] == "L" ] + [args.frequency])
-		keysAscPred = sorted([ f for m,f in d.keys() if d[m,f] == "H" ])
-		keysPredictors = sorted([ keysDescPred + keysAscPred ])
+	if args.cnv:
+		keys = re.sub('^.*?: ', '', CV_anno_vcf.get_header_type('CSQ')['Description']).split("|")
+		keys = [ key.strip("\"") for key in keys ]
 
-		keysPredictors_IND = [ f for m,f in d.keys() if m == "IND" ]
-		keysPredictors_MIS = [ f for m,f in d.keys() if m == "MIS" ]
-		keysPredictors_OTH = [ f for m,f in d.keys() if m == "OTH" ]
+		
+		# allele frequency predictor for prior
+		if args.frequency is None:
+			args.requency = "gnomAD_v2_exome_AF_popmax"
 
+
+
+			# manually add allele frequency to the predictors
+			keysPredictors = sorted([ x[1] for x in d.keys()])
+			keysDescPred = sorted([ f for m,f in d.keys() if d[m,f] == "L" ] + [args.frequency])
+			keysAscPred = sorted([ f for m,f in d.keys() if d[m,f] == "H" ])
+			keysPredictors = sorted( keysDescPred + keysAscPred )
+
+			keysPredictors_DEL = [ f for m,f in d.keys() if m == "IND" ] + [args.frequency]
+			keysPredictors_DUP = [ f for m,f in d.keys() if m == "MIS" ] + [args.frequency]
+
+
+		else:
+			keysPredictors = sorted([ "loeuf_v2_recip" ] + [ args.frequency ] )
+			keysDescPred = sorted( [ args.frequency ])
+			keysAscPred  = sorted([ "loeuf_v2_recip" ])
+
+
+			keysPredictors_DEL = sorted([ "loeuf_v2_recip" + args.frequency ])
+			keysPredictors_DUP = sorted([ "loeuf_v2_recip" + args.frequency ])
 
 	else:
-		keysPredictors = sorted([ "CADD_PHRED", "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score" ] + [ args.frequency ] )
-		keysDescPred = sorted([ "FATHMM_score", "SIFT_score" ] + [ args.frequency ])
-		keysAscPred  = sorted([ x for x in keysPredictors if x not in keysDescPred ])
+		keys = re.sub('^.*?: ', '', CV_anno_vcf.get_header_type('CSQ')['Description']).split("|")
+		keys = [ key.strip("\"") for key in keys ]
+
+		
+		# allele frequency predictor for prior
+		if args.frequency is None:
+			args.requency = "gnomAD_v2_exome_AF_popmax"
 
 
-		keysPredictors_IND = [ args.frequency ]
-		keysPredictors_MIS = sorted([ "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score" ] + [ args.frequency ])
-		keysPredictors_OTH = [ args.frequency ]
+		if args.predictors is not None:
+
+			d = {}
+
+			with open(args.predictors, 'r') as f:
+				for line in f:
+					(model, key, value)=line.split()
+					d[model, key] = value
+
+
+			# manually add allele frequency to the predictors
+			keysPredictors = sorted([ x[1] for x in d.keys()])
+			keysDescPred = sorted([ f for m,f in d.keys() if d[m,f] == "L" ] + [args.frequency])
+			keysAscPred = sorted([ f for m,f in d.keys() if d[m,f] == "H" ])
+			keysPredictors = sorted( keysDescPred + keysAscPred )
+
+			keysPredictors_IND = [ f for m,f in d.keys() if m == "IND" ] + [args.frequency]
+			keysPredictors_MIS = [ f for m,f in d.keys() if m == "MIS" ] + [args.frequency]
+			keysPredictors_OTH = [ f for m,f in d.keys() if m == "OTH" ] + [args.frequency]
+
+
+		else:
+			keysPredictors = sorted([ "CADD_PHRED", "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score" ] + [ args.frequency ] )
+			keysDescPred = sorted([ "FATHMM_score", "SIFT_score" ] + [ args.frequency ])
+			keysAscPred  = sorted([ x for x in keysPredictors if x not in keysDescPred ])
+
+
+			keysPredictors_IND = [ args.frequency ]
+			keysPredictors_MIS = sorted([ "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score" ] + [ args.frequency ])
+			keysPredictors_OTH = sorted([ "CADD_PHRED"] + [ args.frequency ])
 
 
 
@@ -488,174 +544,285 @@ def PT_main(args):
 		if len( set([variant.CHROM, "chr"+variant.CHROM]) & CHROMS ) == 0:
 			continue
 
-		# get the ID of the variant
-		ID = variant.CHROM + "_" + str(variant.start+1) + "_" + variant.REF + "_" + variant.ALT[0] 
-		
-		msg = "Reading variant " + ID
-		logging.debug(msg)
-
-
-
-		# get clinvar allele ID
-		alleleID = variant.ID
 
 
 
 
-		# get the clinvar significance, ignoring anything after a comma
-		sigCV = variant.INFO.get('CLNSIG').split(",", 1)[0]
+		if args.cnv:
 
-
-
-		# get the short significance
-		if (sigCV == "Benign") or (sigCV == "Benign/Likely_benign") or (sigCV == "Likely_benign"):
-			setCV = "BENIGN"
-		elif (sigCV == "Likely_pathogenic") or (sigCV == "Pathogenic/Likely_pathogenic") or (sigCV == "Pathogenic"):
-			setCV = "PATHOGENIC"
-
-
-		# get the variant type, ignore if not SNV or indel
-		if variant.INFO.get('CLNVC') == "single_nucleotide_variant":
-			typeCV = "SNV"
-		elif variant.INFO.get('CLNVC') == "Indel":
-			typeCV = "indel"
-		else:
-			continue
-
-
-
-		# get the clinvar gene list
-		tmp = variant.INFO.get('GENEINFO')
-		if (tmp is None) or ("|" in tmp):
-			continue
-		geneCV = re.sub(':.*?$', '', tmp)
-
-
-
-		# get the variant clinvar consequence
-		tmp = variant.INFO.get('MC')	
-		if (tmp is None) or ("," in tmp):
-			continue
-		csqCV = re.sub('^.*?\|', '', tmp)
-
-
-		# change 'nonsense' to 'stop_gained'
-		csqCV = re.sub('nonsense', 'stop_gained', csqCV)
-
-
-		# remove non-coding variants
-		if csqCV not in vepCSQRankCoding.keys():
-			continue
-
-
-
-		# get vep consequences and create a dictionary
-		CSQ = variant.INFO.get('CSQ').split(",")
-
-		csqVEP = []
-
-
-
-		for i in range(len(CSQ)):
-			add = True
-			tmp = np.array(CSQ[i].split("|"))
-			dictVEP = dict(zip(keys, tmp.T))
-
-
-			# split VEP consequences if multiple
-			if "&" in dictVEP["Consequence"]:
-				dictVEP["Consequence_split"] = dictVEP["Consequence"].split("&")
+			# get the ID of the variant
+			ID = variant.CHROM + "_" + str(variant.start+1) + "_" + variant.INFO.get('END') + "_" + variant.INFO.get('SVTYPE')
 			
-			else:
-				dictVEP["Consequence_split"] = [ dictVEP["Consequence"] ]
-			
-
-			# extract the transcript-specific metrics from dbNSFP
-			# and pick the most deleterious value
-			for key in keysAscPred:
-				l = [ float(x) for x in dictVEP[key].split("&") if x != '.' and x != "" ]
-				if len(l) == 0:
-					dictVEP[key] = "."
-				else:
-					dictVEP[key] = max(l)
-
-			for key in keysDescPred:
-				l = [ float(x) for x in dictVEP[key].split("&") if x != '.' and x != "" ]
-				if len(l) == 0:
-					dictVEP[key] = "."
-				else:
-					dictVEP[key] = min(l)
-
-			
-			# if the ClinVar consequence is not in the VEP consequences, do not include
-			# the transcript
-			incl = False
-			if csqCV in dictVEP['Consequence_split']:
-				incl = True
-			
-			if incl == False:
-				add = False
+			msg = "Reading variant " + ID
+			logging.debug(msg)
 
 
-			# if the VEP gene is not the same as the ClinVar gene, do not include the
-			# transcript
-			if dictVEP['SYMBOL'] != geneCV:
-				add = False
+
+			# get clinvar allele ID
+			alleleID = variant.ID
 
 
-			# if the transcript is not protein-coding reject it
-			if dictVEP['BIOTYPE'] != "protein_coding":
-				add = False
 
-			
-			# if the transcript hasn't been rejected, add it to the list
-			if add:
+
+			# get the clinvar significance, ignoring anything after a comma
+			sigCV = variant.INFO.get('CLNSIG').split(",", 1)[0]
+
+
+
+			# get the short significance
+			if (sigCV == "Benign") or (sigCV == "Benign/Likely_benign") or (sigCV == "Likely_benign"):
+				setCV = "BENIGN"
+			elif (sigCV == "Likely_pathogenic") or (sigCV == "Pathogenic/Likely_pathogenic") or (sigCV == "Pathogenic"):
+				setCV = "PATHOGENIC"
+
+
+			# get the variant type
+			typeCV = variant.INFO.get('SVTYPE')
+
+
+			# get the variant length
+			lenCV = variant.INFO.get('SVTYPE')
+
+			# get vep consequences and create a dictionary
+			CSQ = variant.INFO.get('CSQ').split(",")
+
+			csqVEP = []
+
+
+
+			for i in range(len(CSQ)):
+				add = True
+				tmp = np.array(CSQ[i].split("|"))
+				dictVEP = dict(zip(keys, tmp.T))
+
+
+				# extract the transcript-specific metrics from dbNSFP
+				# and pick the most deleterious value
+				for key in keysAscPred:
+					l = [ float(x) for x in dictVEP[key].split("&") if x != '.' and x != "" ]
+					if len(l) == 0:
+						dictVEP[key] = "."
+					else:
+						dictVEP[key] = max(l)
+
+				for key in keysDescPred:
+					l = [ float(x) for x in dictVEP[key].split("&") if x != '.' and x != "" ]
+					if len(l) == 0:
+						dictVEP[key] = "."
+					else:
+						dictVEP[key] = min(l)
+
+				
 				csqVEP.append(dictVEP)
 
 
 
 
-		# summarize scores across all transcripts
-		if len(csqVEP) > 0:
-			l = [ ID, setCV, geneCV, csqCV, vepCSQImpact[ csqCV ], typeCV, alleleID ]
+			# summarize scores across all transcripts
+			if len(csqVEP) > 0:
+				l = [ ID, setCV, typeCV, lenCV, alleleID ]
+
+		
+				for key in keysAscPred:
+					m = csqVEP[0][key]
+					for i in range(len(csqVEP)):
+						if csqVEP[i][key] == ".":
+							continue
+						if m == ".":
+							m = csqVEP[i][key]
+							continue
+						if csqVEP[i][key] > m:
+							m = csqVEP[i][key]
+					l.append(m)
+
+
+				for key in keysDescPred:
+					m = csqVEP[0][key]
+					for i in range(len(csqVEP)):
+						if csqVEP[i][key] == ".":
+							continue
+						if m == ".":
+							m = csqVEP[i][key]
+							continue
+						if csqVEP[i][key] < m:
+							m = csqVEP[i][key]
+					l.append(m)
+
+				DATA.append(l) 
+
+
+
+		else:
+			# get the ID of the variant
+			ID = variant.CHROM + "_" + str(variant.start+1) + "_" + variant.REF + "_" + variant.ALT[0] 
+			
+			msg = "Reading variant " + ID
+			logging.debug(msg)
+
+
+
+			# get clinvar allele ID
+			alleleID = variant.ID
+
+
+
+
+			# get the clinvar significance, ignoring anything after a comma
+			sigCV = variant.INFO.get('CLNSIG').split(",", 1)[0]
+
+
+
+			# get the short significance
+			if (sigCV == "Benign") or (sigCV == "Benign/Likely_benign") or (sigCV == "Likely_benign"):
+				setCV = "BENIGN"
+			elif (sigCV == "Likely_pathogenic") or (sigCV == "Pathogenic/Likely_pathogenic") or (sigCV == "Pathogenic"):
+				setCV = "PATHOGENIC"
+
+
+			# get the variant type, ignore if not SNV or indel
+			if variant.INFO.get('CLNVC') == "single_nucleotide_variant":
+				typeCV = "SNV"
+			elif variant.INFO.get('CLNVC') == "Indel":
+				typeCV = "indel"
+			else:
+				continue
+
+
+
+			# get the clinvar gene list
+			tmp = variant.INFO.get('GENEINFO')
+			if (tmp is None) or ("|" in tmp):
+				continue
+			geneCV = re.sub(':.*?$', '', tmp)
+
+
+
+			# get the variant clinvar consequence
+			tmp = variant.INFO.get('MC')	
+			if (tmp is None) or ("," in tmp):
+				continue
+			csqCV = re.sub('^.*?\|', '', tmp)
+
+
+			# change 'nonsense' to 'stop_gained'
+			csqCV = re.sub('nonsense', 'stop_gained', csqCV)
+
+
+			# remove non-coding variants
+			if csqCV not in vepCSQRankCoding.keys():
+				continue
+
+
+
+			# get vep consequences and create a dictionary
+			CSQ = variant.INFO.get('CSQ').split(",")
+
+			csqVEP = []
+
+
+
+			for i in range(len(CSQ)):
+				add = True
+				tmp = np.array(CSQ[i].split("|"))
+				dictVEP = dict(zip(keys, tmp.T))
+
+
+				# split VEP consequences if multiple
+				if "&" in dictVEP["Consequence"]:
+					dictVEP["Consequence_split"] = dictVEP["Consequence"].split("&")
+				
+				else:
+					dictVEP["Consequence_split"] = [ dictVEP["Consequence"] ]
+				
+
+				# extract the transcript-specific metrics from dbNSFP
+				# and pick the most deleterious value
+				for key in keysAscPred:
+					l = [ float(x) for x in dictVEP[key].split("&") if x != '.' and x != "" ]
+					if len(l) == 0:
+						dictVEP[key] = "."
+					else:
+						dictVEP[key] = max(l)
+
+				for key in keysDescPred:
+					l = [ float(x) for x in dictVEP[key].split("&") if x != '.' and x != "" ]
+					if len(l) == 0:
+						dictVEP[key] = "."
+					else:
+						dictVEP[key] = min(l)
+
+				
+				# if the ClinVar consequence is not in the VEP consequences, do not include
+				# the transcript
+				incl = False
+				if csqCV in dictVEP['Consequence_split']:
+					incl = True
+				
+				if incl == False:
+					add = False
+
+
+				# if the VEP gene is not the same as the ClinVar gene, do not include the
+				# transcript
+				if dictVEP['SYMBOL'] != geneCV:
+					add = False
+
+
+				# if the transcript is not protein-coding reject it
+				if dictVEP['BIOTYPE'] != "protein_coding":
+					add = False
+
+				
+				# if the transcript hasn't been rejected, add it to the list
+				if add:
+					csqVEP.append(dictVEP)
+
+
+
+
+			# summarize scores across all transcripts
+			if len(csqVEP) > 0:
+				l = [ ID, setCV, geneCV, csqCV, vepCSQImpact[ csqCV ], typeCV, alleleID ]
+
+		
+				for key in keysAscPred:
+					m = csqVEP[0][key]
+					for i in range(len(csqVEP)):
+						if csqVEP[i][key] == ".":
+							continue
+						if m == ".":
+							m = csqVEP[i][key]
+							continue
+						if csqVEP[i][key] > m:
+							m = csqVEP[i][key]
+					l.append(m)
+
+
+				for key in keysDescPred:
+					m = csqVEP[0][key]
+					for i in range(len(csqVEP)):
+						if csqVEP[i][key] == ".":
+							continue
+						if m == ".":
+							m = csqVEP[i][key]
+							continue
+						if csqVEP[i][key] < m:
+							m = csqVEP[i][key]
+					l.append(m)
+
+				DATA.append(l) 
+
+
+			# otherwise print to error file
+			#else:
+			#	with open(args.prefix + ".err", 'a') as f:
+			#		print(ID, "\t", setCV, "\t", csqCV, file=f)
 
 	
-			for key in keysAscPred:
-				m = csqVEP[0][key]
-				for i in range(len(csqVEP)):
-					if csqVEP[i][key] == ".":
-						continue
-					if m == ".":
-						m = csqVEP[i][key]
-						continue
-					if csqVEP[i][key] > m:
-						m = csqVEP[i][key]
-				l.append(m)
+	start = 4 if args.cnv else 6
 
-
-			for key in keysDescPred:
-				m = csqVEP[0][key]
-				for i in range(len(csqVEP)):
-					if csqVEP[i][key] == ".":
-						continue
-					if m == ".":
-						m = csqVEP[i][key]
-						continue
-					if csqVEP[i][key] < m:
-						m = csqVEP[i][key]
-				l.append(m)
-
-			DATA.append(l) 
-
-
-		# otherwise print to error file
-		#else:
-		#	with open(args.prefix + ".err", 'a') as f:
-		#		print(ID, "\t", setCV, "\t", csqCV, file=f)
-
-	
 	for i in range(len(DATA)):
-		for j in range(6, len(DATA[i])):
+		for j in range(start, len(DATA[i])):
 			if DATA[i][j] == "." or DATA[i][j] == "":
 				DATA[i][j] = np.nan
 			else:
@@ -666,8 +833,12 @@ def PT_main(args):
 	ped_vcf = VCF(args.vcf, gts012=True)
 
 	ped_ID = []
-	for variant in ped_vcf:
-		ped_ID.append(variant.CHROM + "_" + str(variant.start+1) + "_" + variant.REF + "_" + variant.ALT[0])
+	if args.cnv:
+		for variant in ped_vcf:
+			ped_ID.append(variant.CHROM + "_" + str(variant.start+1) + "_" + variant.INFO.get('END') + "_" + variant.INFO.get('SVTYPE'))
+	else:
+		for variant in ped_vcf:
+			ped_ID.append(variant.CHROM + "_" + str(variant.start+1) + "_" + variant.REF + "_" + variant.ALT[0])
 
 
 
@@ -679,7 +850,12 @@ def PT_main(args):
 
 	# read in the data
 	logging.debug("Converting to DataFrame")
-	df = pd.DataFrame(DATA, columns = [ 'ID', 'setCV', 'geneCV', 'csqCV', 'impactCV', 'typeCV', 'alleleID' ] + keysAscPred + keysDescPred )
+	if args.cnv:
+		df = pd.DataFrame(DATA, columns = [ 'ID', 'setCV', 'typeCV', 'lenCV', 'alleleID' ] + keysAscPred + keysDescPred )
+
+	else:
+		df = pd.DataFrame(DATA, columns = [ 'ID', 'setCV', 'geneCV', 'csqCV', 'impactCV', 'typeCV', 'alleleID' ] + keysAscPred + keysDescPred )
+	
 	df['alleleID'] = df.alleleID.astype(str).replace('\.0', '', regex=True)
 
 
@@ -745,311 +921,398 @@ def PT_main(args):
 
 
 	# subset to variables being used
-	#x = df.filter(['ID', 'alleleID', 'geneCV'] + keysPredictors + ['csqCV', 'typeCV'])
-	x = df.filter([ 'ID', 'geneCV', 'csqCV', 'impactCV', 'typeCV', 'alleleID' ] + keysAscPred + keysDescPred)
+	if args.cnv:
+		x = df.filter([ 'ID', 'typeCV', 'alleleID' ] + keysAscPred + keysDescPred)
 
 
-	y = df.filter(['setCV', 'csqCV', 'typeCV'])
+		y = df.filter(['setCV', 'typeCV'])
 
 
-	logging.info(" ")
+		logging.info(" ")
 
 
-	## INDELS
-	logging.info("IND")
-	
-	x_IND = x[ x['typeCV'] == 'indel' ]
-	ID_IND = x_IND['ID']
-	alleleID_IND = x_IND['alleleID']
-	geneCV_IND = x_IND['geneCV']
-	x_IND = x_IND.drop(['ID', 'alleleID', 'csqCV', 'geneCV', 'typeCV'], axis=1, errors='ignore')
+		## DELETIONS 
+		logging.info("DEL")
+		
+		x_DEL = x[ x['typeCV'] == 'DEL' ]
+		ID_DEL = x_DEL['ID']
+		alleleID_DEL = x_DEL['alleleID']
+		x_DEL = x_DEL.drop(['ID', 'alleleID', 'typeCV'], axis=1, errors='ignore')
 
-	x_IND_index = x_IND.index
-	x_IND['impactCV'] = pd.Categorical(x_IND['impactCV'], categories = sorted(x_IND['impactCV'].unique()))
-	
-	impactCV_IND = [ x for x in x_IND['impactCV'] if x in vepIMPACTRank.keys() ]
-	d_IND = dict((k, vepIMPACTRank[k]) for k in impactCV_IND)
-	drop_IND = "impactCV_" + max(d_IND, key=d_IND.get)
-	
-	x_IND = pd.get_dummies(x_IND, columns = ['impactCV']).drop(drop_IND, axis=1)
+		x_DEL_index = x_DEL.index
+		
+		
+
+		y_DEL = y[ y['typeCV'] == 'DEL' ]
+		y_DEL = y_DEL.drop(['typeCV'], axis=1, errors='ignore')
+		y_DEL = y_DEL.values.reshape(-1,1)
 
 
-	y_IND = y[ y['typeCV'] == 'indel' ]
-	y_IND = y_IND.drop(['csqCV', 'impactCV', 'typeCV'], axis=1, errors='ignore')
-	y_IND = y_IND.values.reshape(-1,1)
+		uniq, counts = np.unique(y_DEL, return_counts = True)
+
+		if (len(x_DEL.index) > 0) and (len(uniq) == 2) and (counts.min() > 10*len(x_DEL.columns)):
+			drop_cols = [ x for x in keysPredictors if x not in keysPredictors_DEL ]
+			x_DEL = x_DEL.drop(drop_cols, axis=1, errors='ignore')
+
+			
+			if args.eval:
+				perf_DEL, vif_DEL = generate_prior(x_DEL, y_DEL, "DEL", args)
+
+			else:
+				generate_prior(x_DEL, y_DEL, "DEL", args)
+				
 
 
-	uniq, counts = np.unique(y_IND, return_counts = True)
+		else:
+			if 'DEL' in flatPriors.keys():
+				msg = "Not enough DEL in training data, using flat prior: " + str(np.round(flatPriors['DEL'], 6))
+				results_DEL = np.full(len(x_DEL.index), flatPriors['DEL'])
 
-	if (len(x_IND.index) > 0) and (len(uniq) == 2) and (counts.min() > 10*len(x_IND.columns)):
-		drop_cols = [ x for x in keysPredictors if x not in keysPredictors_IND ]
-		x_IND = x_IND.drop(drop_cols, axis=1, errors='ignore')
-		#x_IND = x_IND[x_IND.columns.intersection(keysPredictors_IND)]
+			else:
+				msg = "Not enough DEL in training data, all DEL will be ignored"
+				results_DEL = np.full(len(x_DEL.index), np.nan)
+
+			logging.info(msg)
+
+			if args.eval:
+				perf_DEL = pd.DataFrame()
+
+				perf_DEL["Model"] = ["DEL"]*10
+				perf_DEL["Data"] = [ y for x in ["Train", "Test"] for y in (x,)*5]
+				perf_DEL["Metric"] = [ y for x in ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"] for y in (x,)*2 ]
+				perf_DEL["Value"] = [ np.nan ]*10
+				perf_DEL["L-CI-95"] = [ np.nan ]*10
+				perf_DEL["U-CI-95"] = [ np.nan ]*10
+
+
+
+
+
+		## DUPLICATIONS
+		logging.info("DUP")
+		
+		x_DUP = x[ x['typeCV'] == 'DUP' ]
+		ID_DUP = x_DUP['ID']
+		alleleID_DUP = x_DUP['alleleID']
+		x_DUP = x_DUP.drop(['ID', 'alleleID', 'typeCV'], axis=1, errors='ignore')
+
+		x_DUP_index = x_DUP.index
+		
+		
+
+		y_DUP = y[ y['typeCV'] == 'DUP' ]
+		y_DUP = y_DUP.drop(['typeCV'], axis=1, errors='ignore')
+		y_DUP = y_DUP.values.reshape(-1,1)
+
+
+		uniq, counts = np.unique(y_DUP, return_counts = True)
+
+		if (len(x_DUP.index) > 0) and (len(uniq) == 2) and (counts.min() > 10*len(x_DUP.columns)):
+			drop_cols = [ x for x in keysPredictors if x not in keysPredictors_DUP ]
+			x_DUP = x_DUP.drop(drop_cols, axis=1, errors='ignore')
+
+			
+			if args.eval:
+				perf_DUP, vif_DUP = generate_prior(x_DUP, y_DUP, "DUP", args)
+
+			else:
+				generate_prior(x_DUP, y_DUP, "DUP", args)
+				
+
+
+		else:
+			if 'DUP' in flatPriors.keys():
+				msg = "Not enough DUP in training data, using flat prior: " + str(np.round(flatPriors['DUP'], 6))
+				results_DUP = np.full(len(x_DUP.index), flatPriors['DUP'])
+
+			else:
+				msg = "Not enough DUP in training data, all DUP will be ignored"
+				results_DUP = np.full(len(x_DUP.index), np.nan)
+
+			logging.info(msg)
+
+			if args.eval:
+				perf_DUP = pd.DataFrame()
+
+				perf_DUP["Model"] = ["DUP"]*10
+				perf_DUP["Data"] = [ y for x in ["Train", "Test"] for y in (x,)*5]
+				perf_DUP["Metric"] = [ y for x in ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"] for y in (x,)*2 ]
+				perf_DUP["Value"] = [ np.nan ]*10
+				perf_DUP["L-CI-95"] = [ np.nan ]*10
+				perf_DUP["U-CI-95"] = [ np.nan ]*10
+
+
+
+
+		logging.info(" ")
+		logging.info(" ")
+
+
+	else:
+		x = df.filter([ 'ID', 'geneCV', 'csqCV', 'impactCV', 'typeCV', 'alleleID' ] + keysAscPred + keysDescPred)
+
+
+		y = df.filter(['setCV', 'csqCV', 'typeCV'])
+
+
+		logging.info(" ")
+
+
+		## INDELS
+		logging.info("IND")
+		
+		x_IND = x[ x['typeCV'] == 'indel' ]
+		ID_IND = x_IND['ID']
+		alleleID_IND = x_IND['alleleID']
+		geneCV_IND = x_IND['geneCV']
+		x_IND = x_IND.drop(['ID', 'alleleID', 'csqCV', 'geneCV', 'typeCV'], axis=1, errors='ignore')
+
+		x_IND_index = x_IND.index
+		x_IND['impactCV'] = pd.Categorical(x_IND['impactCV'], categories = sorted(x_IND['impactCV'].unique()))
+		
+		impactCV_IND = [ x for x in x_IND['impactCV'] if x in vepIMPACTRank.keys() ]
+		d_IND = dict((k, vepIMPACTRank[k]) for k in impactCV_IND)
+		drop_IND = "impactCV_" + max(d_IND, key=d_IND.get)
+		
+		x_IND = pd.get_dummies(x_IND, columns = ['impactCV']).drop(drop_IND, axis=1)
+
+
+		y_IND = y[ y['typeCV'] == 'indel' ]
+		y_IND = y_IND.drop(['csqCV', 'impactCV', 'typeCV'], axis=1, errors='ignore')
+		y_IND = y_IND.values.reshape(-1,1)
+
+
+		uniq, counts = np.unique(y_IND, return_counts = True)
+
+		if (len(x_IND.index) > 0) and (len(uniq) == 2) and (counts.min() > 10*len(x_IND.columns)):
+			drop_cols = [ x for x in keysPredictors if x not in keysPredictors_IND ]
+			x_IND = x_IND.drop(drop_cols, axis=1, errors='ignore')
+			#x_IND = x_IND[x_IND.columns.intersection(keysPredictors_IND)]
+
+			
+			if args.eval:
+				perf_IND, vif_IND = generate_prior(x_IND, y_IND, "IND", args)
+
+			else:
+				generate_prior(x_IND, y_IND, "IND", args)
+				
+
+
+		else:
+			if 'IND' in flatPriors.keys():
+				msg = "Not enough IND in training data, using flat prior: " + str(np.round(flatPriors['IND'], 6))
+				results_IND = np.full(len(x_IND.index), flatPriors['IND'])
+
+			else:
+				msg = "Not enough IND in training data, all IND will be ignored"
+				results_IND = np.full(len(x_IND.index), np.nan)
+
+			logging.info(msg)
+
+			if args.eval:
+				perf_IND = pd.DataFrame()
+
+				perf_IND["Model"] = ["IND"]*10
+				perf_IND["Data"] = [ y for x in ["Train", "Test"] for y in (x,)*5]
+				perf_IND["Metric"] = ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"]*2
+				perf_IND["Value"] = [ np.nan ]*10
+				perf_IND["L-CI-95"] = [ np.nan ]*10
+				perf_IND["U-CI-95"] = [ np.nan ]*10
+				print(perf_IND)
+
+				vif_IND = pd.DataFrame()
+				vif_IND["Model"] = "IND"
+				vif_IND["Feature"] = "NA"
+				vif_IND["VIF"] = np.nan
+				vif_IND["Coefficient"] = np.nan
+
+
+
+
+
+		logging.info(" ")
+		logging.info(" ")
+
+
+
+		## MISSENSE SNV
+		logging.info("MIS")
+		x_MIS = x[ (x['csqCV'] == 'missense_variant') & (x['typeCV'] == 'SNV') ]
+		x_MIS_csq = x_MIS['csqCV'] 
+		x_MIS = x_MIS.drop(['CADD_PHRED', 'typeCV', 'csqCV', 'impactCV'], axis=1, errors='ignore')
+
+
+
+		y_MIS = y[ (y['csqCV'] == 'missense_variant') & (y['typeCV'] == 'SNV') ]
+		y_MIS = y_MIS.drop(['csqCV', 'typeCV'], axis=1)
+		y_MIS = y_MIS.values.reshape(-1,1)
+
+
+		# get IDs
+		ID_MIS = x_MIS['ID']
+		alleleID_MIS = x_MIS['alleleID']
+		geneCV_MIS = x_MIS['geneCV']
+		x_MIS = x_MIS.drop(['ID', 'alleleID', 'geneCV'], axis=1)
+		x_MIS_index = x_MIS.index
+
+
+		uniq, counts = np.unique(y_MIS, return_counts = True)
+
+		if (len(x_MIS.index) > 0) and (len(uniq) == 2) and (counts.min() > 15*len(x_MIS.columns)):
+			drop_cols = [ x for x in keysPredictors if x not in keysPredictors_MIS ]
+			x_MIS = x_MIS.drop(drop_cols, axis=1, errors='ignore')
+
+			if args.eval:
+				perf_MIS, vif_MIS = generate_prior(x_MIS, y_MIS, "MIS", args)
+
+			else:
+				generate_prior(x_MIS, y_MIS, "MIS", args)
 
 		
-		if args.eval:
-			perf_IND, vif_IND = generate_prior(x_IND, y_IND, "IND", args)
+		else:
+			if 'MIS' in flatPriors.keys():
+				msg = "Not enough MIS variants in training data, using flat prior: " + str(np.round(flatPriors['MIS'], 6))
+				results_MIS = np.full(len(x_MIS.index), flatPriors['MIS'])
+
+			else:
+				msg = "Not enough MIS variants in training data, all MIS variants will be ignored"
+				results_MIS = np.full(len(x_MIS.index), np.nan)
+
+			logging.info(msg)
+
+			if args.eval:
+				perf_MIS = pd.DataFrame()
+
+				perf_MIS["Model"] = ["MIS"]*10
+				perf_MIS["Data"] = [ y for x in ["Train", "Test"] for y in (x,)*5 ]
+				perf_MIS["Metric"] = [ y for x in ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"] for y in (x,)*2 ]
+				perf_MIS["Value"] = [ np.nan ]*10
+				perf_MIS["L-CI-95"] = [ np.nan ]*10
+				perf_MIS["U-CI-95"] = [ np.nan ]*10
+
+				vif_MIS = pd.DataFrame()
+				vif_MIS["Model"] = "MIS"
+				vif_MIS["Feature"] = "NA"
+				vif_MIS["VIF"] = np.nan
+				vif_MIS["Coefficient"] = np.nan
+
+
+
+
+
+		logging.info(" ")
+		logging.info(" ")
+
+
+
+		## NON-MISSENSE SNV
+		logging.info("NON-MISSENSE SNV")
+		x_OTH = x[ (x['csqCV'] != 'missense_variant') & (x['typeCV'] == 'SNV') ]
+		x_OTH_csq = x_OTH['csqCV'] 
+
+
+		y_OTH = y[ (y['csqCV'] != 'missense_variant') & (y['typeCV'] == 'SNV') ]
+		y_OTH = y_OTH.drop(['csqCV', 'typeCV'], axis=1)
+		y_OTH = y_OTH.values.reshape(-1,1)
+
+
+		# get IDs
+		ID_OTH = x_OTH['ID']
+		alleleID_OTH = x_OTH['alleleID']
+		geneCV_OTH = x_OTH['geneCV']
+		x_OTH = x_OTH.drop(['ID', 'alleleID', 'geneCV', 'impactCV', 'typeCV'], axis=1)
+		x_OTH_index = x_OTH.index
+
+		x_OTH['csqCV'] = pd.Categorical(x_OTH['csqCV'], categories = sorted(x_OTH['csqCV'].unique()))
+		csqCV_OTH = [ x for x in x_OTH['csqCV'] if x in vepCSQRank.keys() ]
+		d_OTH = dict((k, vepCSQRank[k]) for k in csqCV_OTH)
+
+
+		drop_OTH = "csqCV_" + max(d_OTH, key=d_OTH.get)
+		x_OTH = pd.get_dummies(x_OTH, columns = ['csqCV']).drop(drop_OTH, axis=1)
+
+
+		uniq, counts = np.unique(y_OTH, return_counts = True)
+
+		if (len(x_OTH.index) > 0) and (len(uniq) == 2) and (counts.min() > 15*len(x_OTH.columns)):
+			drop_cols = [ x for x in keysPredictors if x not in keysPredictors_OTH ]
+			x_OTH = x_OTH.drop(drop_cols, axis=1, errors='ignore')
+
+
+			if args.eval:
+				perf_OTH, vif_OTH = generate_prior(x_OTH, y_OTH, "OTH", args)
+
+			else:
+				generate_prior(x_OTH, y_OTH, "OTH", args)
+
+
 
 		else:
-			generate_prior(x_IND, y_IND, "IND", args)
-			
+			if 'OTH' in flatPriors.keys():
+				msg = "Not enough OTH in training data, using flat prior: " + str(np.round(flatPriors['OTH'], 6))
+				results_OTH = np.full(len(x_OTH.index), flatPriors['OTH'])
 
+			else:
+				msg = "Not enough OTH in training data, all OTH will be ignored"
+				results_OTH = np.full(len(x_OTH.index), np.nan)
 
-	else:
-		if 'IND' in flatPriors.keys():
-			msg = "Not enough IND in training data, using flat prior: " + str(np.round(flatPriors['IND'], 6))
-			results_IND = np.full(len(x_IND.index), flatPriors['IND'])
+			logging.info(msg)
 
-		else:
-			msg = "Not enough IND in training data, all IND will be ignored"
-			results_IND = np.full(len(x_IND.index), np.nan)
+			if args.eval:
+				perf_OTH = pd.DataFrame()
 
-		logging.info(msg)
+				perf_OTH["Model"] = ["OTH"]*10
+				perf_OTH["Data"] =  [ y for x in ["Train", "Test"] for y in (x,)*5] 
+				perf_OTH["Metric"] = [ y for x in ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"] for y in (x,)*2 ]
+				perf_OTH["Value"] = [ np.nan ]*10
+				perf_OTH["L-CI-95"] = [ np.nan ]*10
+				perf_OTH["U-CI-95"] = [ np.nan ]*10
 
-		if args.eval:
-			perf_IND = pd.DataFrame()
-
-			perf_IND["Model"] = ["IND"]*10
-			perf_IND["Data"] = [ y for x in ["Train", "Test"] for y in (x,)*5]
-			perf_IND["Metric"] = [ y for x in ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"] for y in (x,)*2 ]
-			perf_IND["Value"] = [ np.nan ]*10
-			perf_IND["L-CI-95"] = [ np.nan ]*10
-			perf_IND["U-CI-95"] = [ np.nan ]*10
-
-
-
-
-	logging.info(" ")
-	logging.info(" ")
-
-
-
-	## MISSENSE SNV
-	logging.info("MIS")
-	x_MIS = x[ (x['csqCV'] == 'missense_variant') & (x['typeCV'] == 'SNV') ]
-	x_MIS_csq = x_MIS['csqCV'] 
-	x_MIS = x_MIS.drop(['CADD_PHRED', 'typeCV', 'csqCV', 'impactCV'], axis=1, errors='ignore')
-
-
-
-	y_MIS = y[ (y['csqCV'] == 'missense_variant') & (y['typeCV'] == 'SNV') ]
-	y_MIS = y_MIS.drop(['csqCV', 'typeCV'], axis=1)
-	y_MIS = y_MIS.values.reshape(-1,1)
-
-
-	# get IDs
-	ID_MIS = x_MIS['ID']
-	alleleID_MIS = x_MIS['alleleID']
-	geneCV_MIS = x_MIS['geneCV']
-	x_MIS = x_MIS.drop(['ID', 'alleleID', 'geneCV'], axis=1)
-	x_MIS_index = x_MIS.index
-
-
-	uniq, counts = np.unique(y_MIS, return_counts = True)
-
-	if (len(x_MIS.index) > 0) and (len(uniq) == 2) and (counts.min() > 15*len(x_MIS.columns)):
-		drop_cols = [ x for x in keysPredictors if x not in keysPredictors_MIS ]
-		x_MIS = x_MIS.drop(drop_cols, axis=1, errors='ignore')
-
-		if args.eval:
-			perf_MIS, vif_MIS = generate_prior(x_MIS, y_MIS, "MIS", args)
-
-		else:
-			generate_prior(x_MIS, y_MIS, "MIS", args)
-
-	
-	else:
-		if 'MIS' in flatPriors.keys():
-			msg = "Not enough MIS variants in training data, using flat prior: " + str(np.round(flatPriors['MIS'], 6))
-			results_MIS = np.full(len(x_MIS.index), flatPriors['MIS'])
-
-		else:
-			msg = "Not enough MIS variants in training data, all MIS variants will be ignored"
-			results_MIS = np.full(len(x_MIS.index), np.nan)
-
-		logging.info(msg)
-
-		if args.eval:
-			perf_MIS = pd.DataFrame()
-
-			perf_MIS["Model"] = ["MIS"]*10
-			perf_MIS["Data"] = [ y for x in ["Train", "Test"] for y in (x,)*5 ]
-			perf_MIS["Metric"] = [ y for x in ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"] for y in (x,)*2 ]
-			perf_MIS["Value"] = [ np.nan ]*10
-			perf_MIS["L-CI-95"] = [ np.nan ]*10
-			perf_MIS["U-CI-95"] = [ np.nan ]*10
-
-
-
-
-
-	logging.info(" ")
-	logging.info(" ")
-
-
-
-	## NON-MISSENSE SNV
-	logging.info("NON-MISSENSE SNV")
-	x_OTH = x[ (x['csqCV'] != 'missense_variant') & (x['typeCV'] == 'SNV') ]
-	x_OTH_csq = x_OTH['csqCV'] 
-
-
-	y_OTH = y[ (y['csqCV'] != 'missense_variant') & (y['typeCV'] == 'SNV') ]
-	y_OTH = y_OTH.drop(['csqCV', 'typeCV'], axis=1)
-	y_OTH = y_OTH.values.reshape(-1,1)
-
-
-	# get IDs
-	ID_OTH = x_OTH['ID']
-	alleleID_OTH = x_OTH['alleleID']
-	geneCV_OTH = x_OTH['geneCV']
-	x_OTH = x_OTH.drop(['ID', 'alleleID', 'geneCV', 'impactCV', 'typeCV'], axis=1)
-	x_OTH_index = x_OTH.index
-
-	x_OTH['csqCV'] = pd.Categorical(x_OTH['csqCV'], categories = sorted(x_OTH['csqCV'].unique()))
-	csqCV_OTH = [ x for x in x_OTH['csqCV'] if x in vepCSQRank.keys() ]
-	d_OTH = dict((k, vepCSQRank[k]) for k in csqCV_OTH)
-
-
-	drop_OTH = "csqCV_" + max(d_OTH, key=d_OTH.get)
-	x_OTH = pd.get_dummies(x_OTH, columns = ['csqCV']).drop(drop_OTH, axis=1)
-
-
-	uniq, counts = np.unique(y_OTH, return_counts = True)
-
-	if (len(x_OTH.index) > 0) and (len(uniq) == 2) and (counts.min() > 15*len(x_OTH.columns)):
-		drop_cols = [ x for x in keysPredictors if x not in keysPredictors_OTH ]
-		x_OTH = x_OTH.drop(drop_cols, axis=1, errors='ignore')
-
-
-		if args.eval:
-			perf_OTH, vif_OTH = generate_prior(x_OTH, y_OTH, "OTH", args)
-
-		else:
-			generate_prior(x_OTH, y_OTH, "OTH", args)
-
-
-
-	else:
-		if 'OTH' in flatPriors.keys():
-			msg = "Not enough OTH in training data, using flat prior: " + str(np.round(flatPriors['OTH'], 6))
-			results_OTH = np.full(len(x_OTH.index), flatPriors['OTH'])
-
-		else:
-			msg = "Not enough OTH in training data, all OTH will be ignored"
-			results_OTH = np.full(len(x_OTH.index), np.nan)
-
-		logging.info(msg)
-
-		if args.eval:
-			perf_MIS = pd.DataFrame()
-
-			perf_MIS["Model"] = ["OTH"]*10
-			perf_MIS["Data"] =  [ y for x in ["Train", "Test"] for y in (x,)*5] 
-			perf_MIS["Metric"] = [ y for x in ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"] for y in (x,)*2 ]
-			perf_MIS["Value"] = [ np.nan ]*10
-			perf_MIS["L-CI-95"] = [ np.nan ]*10
-			perf_MIS["U-CI-95"] = [ np.nan ]*10
-
+				vif_OTH = pd.DataFrame()
+				vif_OTH["Model"] = "OTH"
+				vif_OTH["Feature"] = "NA"
+				vif_OTH["VIF"] = np.nan
+				vif_OTH["Coefficient"] = np.nan
 
 
 
 
 	#  plot the evaluation metrics for the prior 
 	if args.eval:
-		fig, axs = plt.subplots(1, 5, sharey = True, figsize=(10,3))
-		x = ["IND", "MIS", "OTH"]
+		if args.cnv:
+			x = ["DEL", "DUP"]
+			performance = pd.concat([ perf_DEL, perf_DUP ], ignore_index = True)
 
-		performance = pd.concat([ perf_IND, perf_MIS, perf_OTH ], ignore_index = True)
+
+		else:
+			x = ["IND", "MIS", "OTH"]
+			performance = pd.concat([ perf_IND, perf_MIS, perf_OTH ], ignore_index = True)
 
 		performance["L_Err"] = performance["Value"] - performance["L-CI-95"]
 		performance["U_Err"] = performance["U-CI-95"] - performance["Value"]
 		performance.to_csv(args.tempDir + args.prefix + ".performance.txt", index=False, sep='\t', na_rep='.')
 
-		p_train_null = performance[ (performance["Metric"] == "Sensitivity") & (performance["Data"] == "Train") & (performance["Value"].isnull()) ]
-		p_train_ok = performance[ (performance["Metric"] == "Sensitivity") & (performance["Data"] == "Train") & (performance["Value"].notnull()) ]
-		p_test_null = performance[ (performance["Metric"] == "Sensitivity") & (performance["Data"] == "Test") & (performance["Value"].isnull()) ]
-		p_test_ok = performance[ (performance["Metric"] == "Sensitivity") & (performance["Data"] == "Test") & (performance["Value"].notnull()) ]
 
-		trans1 = Affine2D().translate(-0.15, 0.0) + axs[0].transData
-		trans2 = Affine2D().translate(+0.15, 0.0) + axs[0].transData
+		title_list = [ "Sensitivity", "Specificity", "PPV", "NPV", "MCC" ]
 
-		axs[0].errorbar(x, [1,1,1], color="white", label="_tmp_")
-		axs[0].errorbar(p_train_ok["Model"], p_train_ok["Value"], yerr=[ p_train_ok["L_Err"].values.tolist(), p_train_ok["U_Err"].values.tolist()  ], marker="o", linestyle="none", transform=trans1, capsize=4, label="Train")
-		axs[0].errorbar(p_test_ok["Model"], p_test_ok["Value"], yerr=[ p_test_ok["L_Err"].values.tolist(), p_test_ok["U_Err"].values.tolist()  ], marker="^", linestyle="none", transform=trans2, capsize=4, label="Test")
-		axs[0].errorbar(p_train_null["Model"], [1]*p_train_null["Value"].isnull().sum(), yerr=0, marker="x", linestyle="none", transform=trans1, color="#7f7f7f", label="NA")
-		axs[0].errorbar(p_test_null["Model"], [1]*p_test_null["Value"].isnull().sum(), yerr=0, marker="x", linestyle="none", transform=trans2, color="#7f7f7f", label="NA")
-		axs[0].set_title('Sensitivity')
+		fig, axs = plt.subplots(1, 5, sharey = True, figsize=(10,3))
 
+		for i in range(5):
+			p_train_null = performance[ (performance["Metric"] == title_list[i]) & (performance["Data"] == "Train") & (performance["Value"].isnull()) ]
+			p_train_ok = performance[ (performance["Metric"] == title_list[i]) & (performance["Data"] == "Train") & (performance["Value"].notnull()) ]
+			p_test_null = performance[ (performance["Metric"] == title_list[i]) & (performance["Data"] == "Test") & (performance["Value"].isnull()) ]
+			p_test_ok = performance[ (performance["Metric"] == title_list[i]) & (performance["Data"] == "Test") & (performance["Value"].notnull()) ]
 
+			trans1 = Affine2D().translate(-0.15, 0.0) + axs[i].transData
+			trans2 = Affine2D().translate(+0.15, 0.0) + axs[i].transData
 
-		p_train_null = performance[ (performance["Metric"] == "Specificity") & (performance["Data"] == "Train") & (performance["Value"].isnull()) ]
-		p_train_ok = performance[ (performance["Metric"] == "Specificity") & (performance["Data"] == "Train") & (performance["Value"].notnull()) ]
-		p_test_null = performance[ (performance["Metric"] == "Specificity") & (performance["Data"] == "Test") & (performance["Value"].isnull()) ]
-		p_test_ok = performance[ (performance["Metric"] == "Specificity") & (performance["Data"] == "Test") & (performance["Value"].notnull()) ]
+			axs[i].errorbar(x, [1,1,1], color="white", label="_tmp_")
+			axs[i].errorbar(p_train_ok["Model"], p_train_ok["Value"], yerr=[ p_train_ok["L_Err"].values.tolist(), p_train_ok["U_Err"].values.tolist()  ], marker="o", linestyle="none", transform=trans1, capsize=4, label="Train")
+			axs[i].errorbar(p_test_ok["Model"], p_test_ok["Value"], yerr=[ p_test_ok["L_Err"].values.tolist(), p_test_ok["U_Err"].values.tolist()  ], marker="^", linestyle="none", transform=trans2, capsize=4, label="Test")
+			axs[i].errorbar(p_train_null["Model"], [1]*p_train_null["Value"].isnull().sum(), yerr=0, marker="x", linestyle="none", transform=trans1, color="#7f7f7f", label="NA")
+			axs[i].errorbar(p_test_null["Model"], [1]*p_test_null["Value"].isnull().sum(), yerr=0, marker="x", linestyle="none", transform=trans2, color="#7f7f7f", label="NA")
+			axs[i].set_title(title_list[i])
 
-
-
-		trans1 = Affine2D().translate(-0.15, 0.0) + axs[1].transData
-		trans2 = Affine2D().translate(+0.15, 0.0) + axs[1].transData
-
-		axs[1].errorbar(x, [1,1,1], color="white", label="_tmp")
-		axs[1].errorbar(p_train_ok["Model"], p_train_ok["Value"], yerr=[ p_train_ok["L_Err"].values.tolist(), p_train_ok["U_Err"].values.tolist()  ], marker="o", linestyle="none", transform=trans1, capsize=4)
-		axs[1].errorbar(p_test_ok["Model"], p_test_ok["Value"], yerr=[ p_test_ok["L_Err"].values.tolist(), p_test_ok["U_Err"].values.tolist()  ], marker="^", linestyle="none", transform=trans2, capsize=4)
-		axs[1].errorbar(p_train_null["Model"], [1]*p_train_null["Value"].isnull().sum(), yerr=0, marker="x", linestyle="none", transform=trans1, color="#7f7f7f")
-		axs[1].errorbar(p_test_null["Model"], [1]*p_test_null["Value"].isnull().sum(), yerr=0, marker="x", linestyle="none", transform=trans2, color="#7f7f7f")
-		axs[1].set_title('Specificity')
-
-
-
-		p_train_null = performance[ (performance["Metric"] == "PPV") & (performance["Data"] == "Train") & (performance["Value"].isnull()) ]
-		p_train_ok = performance[ (performance["Metric"] == "PPV") & (performance["Data"] == "Train") & (performance["Value"].notnull()) ]
-		p_test_null = performance[ (performance["Metric"] == "PPV") & (performance["Data"] == "Test") & (performance["Value"].isnull()) ]
-		p_test_ok = performance[ (performance["Metric"] == "PPV") & (performance["Data"] == "Test") & (performance["Value"].notnull()) ]
-
-		trans1 = Affine2D().translate(-0.15, 0.0) + axs[2].transData
-		trans2 = Affine2D().translate(+0.15, 0.0) + axs[2].transData
-
-		axs[2].errorbar(x, [1,1,1], color="white", label="_tmp")
-		axs[2].errorbar(p_train_ok["Model"], p_train_ok["Value"], yerr=[ p_train_ok["L_Err"].values.tolist(), p_train_ok["U_Err"].values.tolist()  ], marker="o", linestyle="none", transform=trans1, capsize=4)
-		axs[2].errorbar(p_test_ok["Model"], p_test_ok["Value"], yerr=[ p_test_ok["L_Err"].values.tolist(), p_test_ok["U_Err"].values.tolist()  ], marker="^", linestyle="none", transform=trans2, capsize=4)
-		axs[2].errorbar(p_train_null["Model"], [1]*p_train_null["Value"].isnull().sum(), yerr=0, marker="x", linestyle="none", transform=trans1, color="#7f7f7f")
-		axs[2].errorbar(p_test_null["Model"], [1]*p_test_null["Value"].isnull().sum(), yerr=0, marker="x", linestyle="none", transform=trans2, color="#7f7f7f")
-		axs[2].set_title('PPV')
-
-
-
-		p_train_null = performance[ (performance["Metric"] == "NPV") & (performance["Data"] == "Train") & (performance["Value"].isnull()) ]
-		p_train_ok = performance[ (performance["Metric"] == "NPV") & (performance["Data"] == "Train") & (performance["Value"].notnull()) ]
-		p_test_null = performance[ (performance["Metric"] == "NPV") & (performance["Data"] == "Test") & (performance["Value"].isnull()) ]
-		p_test_ok = performance[ (performance["Metric"] == "NPV") & (performance["Data"] == "Test") & (performance["Value"].notnull()) ]
-
-		trans1 = Affine2D().translate(-0.15, 0.0) + axs[3].transData
-		trans2 = Affine2D().translate(+0.15, 0.0) + axs[3].transData
-
-		axs[3].errorbar(x, [1,1,1], color="white", label="_tmp")
-		axs[3].errorbar(p_train_ok["Model"], p_train_ok["Value"], yerr=[ p_train_ok["L_Err"].values.tolist(), p_train_ok["U_Err"].values.tolist()  ], marker="o", linestyle="none", transform=trans1, capsize=4)
-		axs[3].errorbar(p_test_ok["Model"], p_test_ok["Value"], yerr=[ p_test_ok["L_Err"].values.tolist(), p_test_ok["U_Err"].values.tolist()  ], marker="^", linestyle="none", transform=trans2, capsize=4)
-		axs[3].errorbar(p_train_null["Model"], [1]*p_train_null["Value"].isnull().sum(), yerr=0, marker="x", linestyle="none", transform=trans1, color="#7f7f7f")
-		axs[3].errorbar(p_test_null["Model"], [1]*p_test_null["Value"].isnull().sum(), yerr=0, marker="x", linestyle="none", transform=trans2, color="#7f7f7f")
-		axs[3].set_title('NPV')
-
-
-
-		p_train_null = performance[ (performance["Metric"] == "MCC") & (performance["Data"] == "Train") & (performance["Value"].isnull()) ]
-		p_train_ok = performance[ (performance["Metric"] == "MCC") & (performance["Data"] == "Train") & (performance["Value"].notnull()) ]
-		p_test_null = performance[ (performance["Metric"] == "MCC") & (performance["Data"] == "Test") & (performance["Value"].isnull()) ]
-		p_test_ok = performance[ (performance["Metric"] == "MCC") & (performance["Data"] == "Test") & (performance["Value"].notnull()) ]
-
-		trans1 = Affine2D().translate(-0.15, 0.0) + axs[4].transData
-		trans2 = Affine2D().translate(+0.15, 0.0) + axs[4].transData
-
-		axs[4].errorbar(x, [1,1,1], color="white", label="_tmp")
-		axs[4].errorbar(p_train_ok["Model"], p_train_ok["Value"], yerr=[ p_train_ok["L_Err"].values.tolist(), p_train_ok["U_Err"].values.tolist()  ], marker="o", linestyle="none", transform=trans1, capsize=4)
-		axs[4].errorbar(p_test_ok["Model"], p_test_ok["Value"], yerr=[ p_test_ok["L_Err"].values.tolist(), p_test_ok["U_Err"].values.tolist()  ], marker="^", linestyle="none", transform=trans2, capsize=4)
-		axs[4].errorbar(p_train_null["Model"], [1]*p_train_null["Value"].isnull().sum(), yerr=0, marker="x", linestyle="none", transform=trans1, color="#7f7f7f")
-		axs[4].errorbar(p_test_null["Model"], [1]*p_test_null["Value"].isnull().sum(), yerr=0, marker="x", linestyle="none", transform=trans2, color="#7f7f7f")
-		axs[4].set_title('MCC')
 
 
 		handles, labels = axs[0].get_legend_handles_labels()

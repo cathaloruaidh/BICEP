@@ -226,15 +226,23 @@ def PA_main(args):
 
 		d = {}
 
-		with open(predictorsFile, 'r') as f:
+		with open(args.predictors, 'r') as f:
 			for line in f:
-				(key, value)=line.split()
-				d[key] = value
+				(model, key, value)=line.split()
+				d[model, key] = value
 
-		keysPredictors = sorted(list(d.keys()))
-		keysDescPred = sorted([ x for x in keysPredictors if d[x] == "-" ] + [args.frequency])
-		keysAscPred  = sorted([ x for x in keysPredictors if d[x] == "+" ])
-		keysPredictors = sorted(list(d.keys()) + [args.frequency])
+
+		# manually add allele frequency to the predictors
+		keysPredictors = sorted([ x[1] for x in d.keys()])
+		keysDescPred = sorted([ f for m,f in d.keys() if d[m,f] == "L" ] + [args.frequency])
+		keysAscPred = sorted([ f for m,f in d.keys() if d[m,f] == "H" ])
+		keysPredictors = sorted( keysDescPred + keysAscPred )
+
+		keysPredictors_IND = [ f for m,f in d.keys() if m == "IND" ] + [args.frequency]
+		keysPredictors_MIS = [ f for m,f in d.keys() if m == "MIS" ] + [args.frequency]
+		keysPredictors_OTH = [ f for m,f in d.keys() if m == "OTH" ] + [args.frequency]
+
+
 
 
 	else:
@@ -399,7 +407,7 @@ def PA_main(args):
 
 
 
-	if os.path.isfile(modelPrefix + '.IND_predictors.npy') and (x_IND.index) > 0:
+	if os.path.isfile(modelPrefix + '.IND_predictors.npy') and not x_IND.empty:
 
 		# load in the predictor IDs for the models
 		with open(modelPrefix + '.IND_predictors.npy', 'rb') as f:
@@ -440,7 +448,7 @@ def PA_main(args):
 
 
 	else:
-		if 'MIS' in flatPriors.keys():
+		if 'IND' in flatPriors.keys():
 			logging.info("Using flat priors for IND. ")
 			y_IND_pred = np.full(len(x_IND), flatPriors['IND'])
 		else:
