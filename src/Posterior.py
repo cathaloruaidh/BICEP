@@ -209,12 +209,13 @@ def PO_main(args):
 		i = i+1
 
 
-	fig = make_subplots(rows=3, cols=1, shared_xaxes=True, row_titles=["logPostOC", "logBF", "logPriorOC"], x_title="Rank")
+	fig = make_subplots(rows=3, cols=1, shared_xaxes=True, shared_yaxes='all', row_titles=["logPostOC", "logBF", "logPriorOC"], x_title="Rank")
 	fig.append_trace(go.Bar(x=merged_sub["Rank"], y=merged_sub["logPostOC"], name='logPostOC', marker_color="#61D04F", customdata=custom_1, hovertemplate=template_1), 1, 1)
 	fig.append_trace(go.Bar(x=merged_sub["Rank"], y=merged_sub["logBF"], name='logBF', marker_color="#2297E6", customdata=custom_2, hovertemplate=template_2), 2, 1)
 	fig.append_trace(go.Bar(x=merged_sub["Rank"], y=merged_sub["logPriorOC"], name='logPriorOC', marker_color="#DF536B", customdata=custom_3, hovertemplate=template_3), 3, 1)
 	fig.add_shape(go.layout.Shape(type="line", x0=0, y0=max_logBF, x1=args.top, y1=max_logBF, line=dict(dash="dash", width=3),
     ),row=2,col=1)
+	fig.add_hline(y=max_logBF, line_dash="dash", row=2, col=1)
 	fig.update_layout(showlegend=False, xaxis=dict(tickmode='array', tick0=1, ticktext=x_ticks_label, tickvals=x_ticks))
 	
 	plotly.offline.plot(fig, filename=args.outputDir + args.prefix + ".BICEP.html")
