@@ -85,6 +85,7 @@ def main(argv):
 	Run all steps of BICEP'''))
 	parser_ALL.add_argument("--predictors", nargs='?', help="File containing regression predictors", metavar='FILE')
 	parser_ALL.add_argument("--clinvar", nargs='?', help="ClinVar VCF file annotated with VEP", metavar='FILE')
+	parser_ALL.add_argument("--clinvarPrefix", nargs='?', help="Prefix for ClinVar VCF file in data directory", metavar='FILE')
 	parser_ALL.add_argument("-e", "--exclude", nargs='?', help="File of ClinVar IDs to exclude from training", metavar='FILE')
 	parser_ALL.add_argument("-i", "--include", nargs='?', help="File of ClinVar IDs to include for training", metavar='FILE')
 	parser_ALL.add_argument("-b", "--benign", nargs='?', help="File of benign variant IDs for training", metavar='FILE')

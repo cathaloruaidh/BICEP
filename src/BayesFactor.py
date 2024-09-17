@@ -181,6 +181,62 @@ def phenoCarriers(genotype, pedInfo, samples):
 
 
 
+# find the most recent common ancestor(s) for a given
+# genotype string
+def getMRCA(genotype, pedInfo):
+
+	# get founders all carriers are descended from
+	carrierIndex = [ x for x in range(pedInfo.nPeople) if genotype[x] == 1 ]
+	carrFounderIndex = []
+
+	for x in range(pedInfo.nPeople):
+		
+		add = True
+		if genotype[x] == 0:
+			add = False
+			continue
+
+		for carrier in carrierIndex:
+			if pedInfo.descendantTable[carrier,x] == 0:
+				add = False
+		if add:
+			carrFounderIndex.append(x)
+
+	MRCA = []
+
+	descSub = pedInfo.descendantTable[carrFounderIndex,:][:,carrFounderIndex]
+
+	if not descSub:
+		return "NA"
+
+
+	for i in range(len(carrFounderIndex)):
+		descSub[i,i] = 0
+
+	if np.max(descSub) == 0:
+		MRCA.extend(pedInfo.indID[carrFounderIndex])
+
+	else:
+		for i in carrFounderIndex:
+			add = True
+			for j in carrFounderIndex:
+				if pedInfo.descendantTable[i,j] == 0:
+					add = False
+
+			if add:
+				MRCA.append(pedInfo.indID[i])
+
+
+	if len(MRCA) == 0:
+		return "NA"
+	
+	else:
+		return '|'.join(MRCA)
+
+
+
+
+
 
 
 # given the founder vector, calculate the number of genotype states
@@ -993,10 +1049,11 @@ def BF_main(args):
 			print(varID[i], "\t", BFs[i], "\t", varString[i], "\t", sep="")
 	else:
 		with open(args.outputDir + outputPrefix + ".BF.txt", 'w') as f:
-			print("ID\tBF\tlogBF\tSTRING\tAFF_CARR\tAFF_NON-CARR\tUNAFF_CARR\tUNAFF_NON-CARR\tMISS", file=f)
+			print("ID\tBF\tlogBF\tSTRING\tAFF_CARR\tAFF_NON-CARR\tUNAFF_CARR\tUNAFF_NON-CARR\tMISS\tMRCA", file=f)
 			for i in range(len(varID)):
 				aff_c, aff_nc, un_c, un_nc, miss = phenoCarriers(genotypes[i], pedInfo, vcf.samples)
-				print(varID[i], "\t", BFs[i], "\t", np.log10(float(BFs[i])), "\t", varString[i], "\t", aff_c, "\t", aff_nc, "\t", un_c, "\t", un_nc, "\t", miss, file=f, sep="")
+				MRCA = getMRCA(genotypes[i], pedInfo)
+				print(varID[i], "\t", BFs[i], "\t", np.log10(float(BFs[i])), "\t", varString[i], "\t", aff_c, "\t", aff_nc, "\t", un_c, "\t", un_nc, "\t", miss, "\t", MRCA, file=f, sep="")
 		
 
 	# get the best co-segregation score
