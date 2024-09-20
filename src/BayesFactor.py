@@ -189,6 +189,9 @@ def getMRCA(genotype, pedInfo):
 	carrierIndex = [ x for x in range(pedInfo.nPeople) if genotype[x] == 1 ]
 	carrFounderIndex = []
 
+	if len(carrierIndex) == 0:
+		return "NA"
+
 	for x in range(pedInfo.nPeople):
 		
 		add = True
@@ -202,12 +205,14 @@ def getMRCA(genotype, pedInfo):
 		if add:
 			carrFounderIndex.append(x)
 
+	if len(carrFounderIndex) == 0:
+		return "NA"
+
+
+
 	MRCA = []
 
 	descSub = pedInfo.descendantTable[carrFounderIndex,:][:,carrFounderIndex]
-
-	if not descSub:
-		return "NA"
 
 
 	for i in range(len(carrFounderIndex)):
@@ -220,7 +225,7 @@ def getMRCA(genotype, pedInfo):
 		for i in carrFounderIndex:
 			add = True
 			for j in carrFounderIndex:
-				if pedInfo.descendantTable[i,j] == 0:
+				if j in pedInfo.children[i]:
 					add = False
 
 			if add:
