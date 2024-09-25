@@ -1,6 +1,7 @@
 import cProfile
 import csv
 import getopt
+import gzip
 import logging
 import math
 import multiprocessing
@@ -148,6 +149,96 @@ class Pedigree:
 # missing is '.', absent is '0' and carrier is '1'
 def genotypeString(vector):
 	return re.sub(']', '', re.sub('\[', '', re.sub('-1', '.', re.sub(' ', '', "".join(map(str, vector))))))
+
+
+
+
+# return how many aff/unaff carriers/non-carriers for a given
+# genotype string and the phenotypes
+def phenoCarriers(genotype, pedInfo, samples):
+
+	for i in range(pedInfo.nPeople):
+		if pedInfo.indID[i] not in samples:
+			genotype[i] = -1
+
+	k1 = k2 = l1 = l2 = m = 0
+	for i in range(pedInfo.nPeople):
+		if pedInfo.phenotypeActual[i] == 1:
+			if genotype[i] == 1:
+				k1 += 1
+			elif genotype[i] == 0:
+				l1 += 1
+		else:
+			if genotype[i] == 1:
+				k2 += 1
+			elif genotype[i] == 0:
+				l2 += 1
+		
+		if genotype[i] == -1 and pedInfo.indID[i] in samples:
+			m += 1
+	
+	return k1, l1, k2, l2, m
+
+
+
+# find the most recent common ancestor(s) for a given
+# genotype string
+def getMRCA(genotype, pedInfo):
+
+	# get founders all carriers are descended from
+	carrierIndex = [ x for x in range(pedInfo.nPeople) if genotype[x] == 1 ]
+	carrFounderIndex = []
+
+	if len(carrierIndex) == 0:
+		return "NA"
+
+	for x in range(pedInfo.nPeople):
+		
+		add = True
+		if genotype[x] == 0:
+			add = False
+			continue
+
+		for carrier in carrierIndex:
+			if pedInfo.descendantTable[carrier,x] == 0:
+				add = False
+		if add:
+			carrFounderIndex.append(x)
+
+	if len(carrFounderIndex) == 0:
+		return "NA"
+
+
+
+	MRCA = []
+
+	descSub = pedInfo.descendantTable[carrFounderIndex,:][:,carrFounderIndex]
+
+
+	for i in range(len(carrFounderIndex)):
+		descSub[i,i] = 0
+
+	if np.max(descSub) == 0:
+		MRCA.extend(pedInfo.indID[carrFounderIndex])
+
+	else:
+		for i in carrFounderIndex:
+			add = True
+			for j in carrFounderIndex:
+				if j in pedInfo.children[i]:
+					add = False
+
+			if add:
+				MRCA.append(pedInfo.indID[i])
+
+
+	if len(MRCA) == 0:
+		return "NA"
+	
+	else:
+		return '|'.join(MRCA)
+
+
 
 
 
@@ -699,8 +790,8 @@ def BF_main(args):
 	if args.fam is not None:
 		inputFamFile = args.fam
 
-	if args.minAff is not None:
-		minAffecteds = int(args.minAff)
+	#if args.minAff is not None:
+	#	minAffecteds = int(args.minAff)
 
 	if args.prefix is not None:
 		outputPrefix = args.prefix
@@ -769,7 +860,17 @@ def BF_main(args):
 
 	# get VCF file and variant/sample information
 	vcf = VCF(inputVcfFile, gts012=True)
-	nVariants = sum(1 for line in open(inputVcfFile) if not bool(re.match("^#", line)))
+	
+	
+	# check if file is binary
+	with open(inputVcfFile, 'rb') as test_f:
+		if test_f.read(2) == b'\x1f\x8b':
+			nVariants = sum(1 for line in gzip.open(inputVcfFile, mode='r') if not bool(re.match("^#", line.decode('utf-8'))))
+		else:
+			nVariants = sum(1 for line in open(inputVcfFile) if not bool(re.match("^#", line)))
+	
+	
+
 	vcfSampleIndex = []
 
 	for i in range(len(vcf.samples)):
@@ -893,24 +994,24 @@ def BF_main(args):
 	allBF["HOM_ALT"] = [ 0.0, 0.0, 0.0, 0 ]
 
 
-	if minAffecteds > 0:
-		msg = "Removing variants with minAff < " + str(minAffecteds)
-		logging.info(msg)
-
-		for i in range(len(genotypes)):
-
-			count = 0
-			affs = [ x for x in range(pedInfo.nPeople) if pedInfo.phenotypeActual[x] == 1 ]
-
-			for aff in affs:
-				if genotypes[i][aff] == 1:
-					count += 1
-
-			if count < minAffecteds:
-				allBF[varString[i]] = [ 0.0, 0.0, 0.0, 0 ]
-
-				msg = "Removed variant: " + varString[i]
-				logging.debug(msg)
+#	if minAffecteds > 0:
+#		msg = "Removing variants with minAff < " + str(minAffecteds)
+#		logging.info(msg)
+#
+#		for i in range(len(genotypes)):
+#
+#			count = 0
+#			affs = [ x for x in range(pedInfo.nPeople) if pedInfo.phenotypeActual[x] == 1 ]
+#
+#			for aff in affs:
+#				if genotypes[i][aff] == 1:
+#					count += 1
+#
+#			if count < minAffecteds:
+#				allBF[varString[i]] = [ 0.0, 0.0, 0.0, 0 ]
+#
+#				msg = "Removed variant: " + varString[i]
+#				logging.debug(msg)
 
 
 
@@ -953,9 +1054,11 @@ def BF_main(args):
 			print(varID[i], "\t", BFs[i], "\t", varString[i], "\t", sep="")
 	else:
 		with open(args.outputDir + outputPrefix + ".BF.txt", 'w') as f:
-			print("ID\tBF\tlogBF\tSTRING", file=f)
+			print("ID\tBF\tlogBF\tSTRING\tAFF_CARR\tAFF_NON-CARR\tUNAFF_CARR\tUNAFF_NON-CARR\tMISS\tMRCA", file=f)
 			for i in range(len(varID)):
-				print(varID[i], "\t", BFs[i], "\t", np.log10(float(BFs[i])), "\t", varString[i], file=f, sep="")
+				aff_c, aff_nc, un_c, un_nc, miss = phenoCarriers(genotypes[i], pedInfo, vcf.samples)
+				MRCA = getMRCA(genotypes[i], pedInfo)
+				print(varID[i], "\t", BFs[i], "\t", np.log10(float(BFs[i])), "\t", varString[i], "\t", aff_c, "\t", aff_nc, "\t", un_c, "\t", un_nc, "\t", miss, "\t", MRCA, file=f, sep="")
 		
 
 	# get the best co-segregation score
