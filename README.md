@@ -45,10 +45,18 @@ Clone the repostory:
 git clone https://github.com/cathaloruaidh/BICEP.git
 ```
 
-Install the required python libraries:
+Install the required python packages with pip:
 
 ```
 python3 -m pip install --user -r BICEP/requirements.txt
+```
+
+Alternatively, the python packages can be installed with conda:
+
+```
+conda env create -n bicep --file BICEP/environment.yml
+
+conda activate bicep
 ```
 
 

@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 
 
 import argparse
@@ -70,11 +70,11 @@ def main(argv):
 	sub_parsers = parser.add_subparsers(title="Sub-commands", dest='command')
 
 	parser_parent = argparse.ArgumentParser(formatter_class=UltimateHelpFormatter, usage=SUPPRESS)
-	parser_parent.add_argument("-l", "--log", nargs='?', default="INFO", help="Logging level: ERROR, WARN, INFO, DEBUG", choices=['ERROR', 'WARN', 'INFO', 'DEBUG'], metavar='C')
+	parser_parent.add_argument("-l", "--log", nargs='?', default="INFO", help="Logging level: ERROR, WARN, INFO, DEBUG", choices=['ERROR', 'WARN', 'INFO', 'DEBUG'], metavar='STRING')
 	parser_parent.add_argument("-n", "--cores", nargs='?', default=1, type=int, help="Number of CPU cores available", metavar='N')
-	parser_parent.add_argument("--prefix", nargs='?', default="BICEP_output", help="Output prefix", metavar='C')
-	parser_parent.add_argument("--build", nargs='?', default='GRCh38', help="Reference genome build: GRCh37, GRCh38", choices=['GRCh37', 'GRCh38'], metavar='C')
-	parser_parent.add_argument("--frequency", nargs='?', default="gnomAD_v2_exome_AF_popmax", help="Allele frequency predictor", metavar='C')
+	parser_parent.add_argument("--prefix", nargs='?', default="BICEP_output", help="Output prefix", metavar='STRING')
+	parser_parent.add_argument("--build", nargs='?', default='GRCh38', help="Reference genome build: GRCh37, GRCh38", choices=['GRCh37', 'GRCh38'], metavar='STRING')
+	parser_parent.add_argument("--frequency", nargs='?', default="gnomAD_v2_exome_AF_popmax", help="Allele frequency predictor", metavar='STRING')
 
 
 	# All sub-command
@@ -83,24 +83,23 @@ def main(argv):
 	description = BICEP_textwrap + textwrap.dedent('''\
 
 	Run all steps of BICEP'''))
-	parser_ALL.add_argument("--predictors", nargs='?', help="File containing regression predictors", metavar='C')
-	parser_ALL.add_argument("--clinvar", nargs='?', help="ClinVar VCF file annotated with VEP", metavar='C')
-	parser_ALL.add_argument("--clinvarPrefix", nargs='?', help="Which release of ClinVar used to train the prior", metavar='C')
-	parser_ALL.add_argument("--clinvarFull", nargs='?', help="Full ClinVar VCF file to generate flat priors", metavar='C')
-	parser_ALL.add_argument("-e", "--exclude", nargs='?', help="File of ClinVar IDs to exclude from training", metavar='C')
-	parser_ALL.add_argument("-i", "--include", nargs='?', help="File of ClinVar IDs to include for training", metavar='C')
-	parser_ALL.add_argument("-b", "--benign", nargs='?', help="File of benign variant IDs for training", metavar='C')
-	parser_ALL.add_argument("-p", "--pathogenic", nargs='?', help="File of pathogenic variant IDs for training", metavar='C')
+	parser_ALL.add_argument("--predictors", nargs='?', help="File containing regression predictors", metavar='FILE')
+	parser_ALL.add_argument("--clinvar", nargs='?', help="ClinVar VCF file annotated with VEP", metavar='FILE')
+	parser_ALL.add_argument("--clinvarPrefix", nargs='?', help="Prefix for ClinVar VCF file in data directory", metavar='FILE')
+	parser_ALL.add_argument("-e", "--exclude", nargs='?', help="File of ClinVar IDs to exclude from training", metavar='FILE')
+	parser_ALL.add_argument("-i", "--include", nargs='?', help="File of ClinVar IDs to include for training", metavar='FILE')
+	parser_ALL.add_argument("-b", "--benign", nargs='?', help="File of benign variant IDs for training", metavar='FILE')
+	parser_ALL.add_argument("-p", "--pathogenic", nargs='?', help="File of pathogenic variant IDs for training", metavar='FILE')
 	parser_ALL.add_argument("--eval", action='store_true', help="Evaluate the predictors and regression model for the prior")
-	parser_ALL.add_argument("--boot", nargs='?', default=1, type=int, help="Number of bootstraps for prior evaluation", metavar='N')
-	parser_ALL.add_argument("-m", "--model", nargs='?', help="Prefix for the regression model files", metavar='C')
-	parser_ALL.add_argument("-v", "--vcf", nargs='?', help="VCF file for variants", metavar='F', required = True)
-	parser_ALL.add_argument("-f", "--fam", nargs='?', help="FAM file describing the pedigree structure and phenotypes", metavar='F', required = True)
-	parser_ALL.add_argument("--minAff", nargs='?', default=0, type=int, help="Minimum affected individuals per pedigree", metavar='N')
-	parser_ALL.add_argument("--priorCaus", nargs='?', default="linear", choices=["uniform", "linear"], help="Prior parameter distribution for causal model", metavar='C')
-	parser_ALL.add_argument("--priorNeut", nargs='?', default="uniform", choices=["uniform", "linear"], help="Prior parameter distribution for neutral model", metavar='C')
+	parser_ALL.add_argument("--boot", nargs='?', default=1000, type=int, help="Number of bootstraps for prior evaluation", metavar='N')
+	parser_ALL.add_argument("-m", "--model", nargs='?', help="Prefix for the regression model files", metavar='STRING')
+	parser_ALL.add_argument("-v", "--vcf", nargs='?', help="VCF file for variants", metavar='FILE', required = True)
+	parser_ALL.add_argument("-f", "--fam", nargs='?', help="FAM file describing the pedigree structure and phenotypes", metavar='FILE', required = True)
+	parser_ALL.add_argument("--priorCaus", nargs='?', default="linear", choices=["uniform", "linear"], help="Prior parameter distribution for causal model", metavar='STRING')
+	parser_ALL.add_argument("--priorNeut", nargs='?', default="uniform", choices=["uniform", "linear"], help="Prior parameter distribution for neutral model", metavar='STRING')
 	parser_ALL.add_argument("--top", nargs='?', default=50, type=int, help="Number of top ranking variants to plot", metavar='N')
-	parser_ALL.add_argument("--highlight", nargs='?', help="ID of variant to highlight in plot", metavar='C')
+	parser_ALL.add_argument("--highlight", nargs='?', help="ID of variant to highlight in plot", metavar='STRING')
+	parser_ALL.add_argument("--cnv", action='store_true', help="Use the CNV prior models")
 	
 	
 
@@ -111,17 +110,16 @@ def main(argv):
 	description = BICEP_textwrap + textwrap.dedent('''\
 
 	Train the regresison models to generate a prior'''))
-	parser_PT.add_argument("--predictors", nargs='?', help="File containing regression predictors", metavar='C')
-	parser_PT.add_argument("--clinvar", nargs='?', help="ClinVar VCF file annotated with VEP", metavar='C')
-	parser_PT.add_argument("--clinvarPrefix", nargs='?', help="Which release of ClinVar used to train the prior", metavar='C')
-	parser_PT.add_argument("--clinvarFull", nargs='?', help="Full ClinVar VCF file to generate flat priors", metavar='C')
-	parser_PT.add_argument("-v", "--vcf", nargs='?', help="VCF file for variants", metavar='F', required = True)
-	parser_PT.add_argument("-e", "--exclude", nargs='?', help="File of ClinVar IDs to exclude from training", metavar='C')
-	parser_PT.add_argument("-i", "--include", nargs='?', help="File of ClinVar IDs to include for training", metavar='C')
-	parser_PT.add_argument("-b", "--benign", nargs='?', help="File of benign variant IDs for training", metavar='C')
-	parser_PT.add_argument("-p", "--pathogenic", nargs='?', help="File of pathogenic variant IDs for training", metavar='C')
+	parser_PT.add_argument("--predictors", nargs='?', help="File containing regression predictors", metavar='FILE')
+	parser_PT.add_argument("--clinvar", nargs='?', help="ClinVar VCF file annotated with VEP", metavar='FILE')
+	parser_PT.add_argument("-v", "--vcf", nargs='?', help="VCF file for variants", metavar='FILE', required = True)
+	parser_PT.add_argument("-e", "--exclude", nargs='?', help="File of ClinVar IDs to exclude from training", metavar='FILE')
+	parser_PT.add_argument("-i", "--include", nargs='?', help="File of ClinVar IDs to include for training", metavar='FILE')
+	parser_PT.add_argument("-b", "--benign", nargs='?', help="File of benign variant IDs for training", metavar='FILE')
+	parser_PT.add_argument("-p", "--pathogenic", nargs='?', help="File of pathogenic variant IDs for training", metavar='FILE')
 	parser_PT.add_argument("--eval", action='store_true', help="Evaluate the predictors and regression model for the prior")
-	parser_PT.add_argument("--boot", nargs='?', default=1, type=int, help="Number of bootstraps for prior evaluation", metavar='N')
+	parser_PT.add_argument("--boot", nargs='?', default=1000, type=int, help="Number of bootstraps for prior evaluation", metavar='N')
+	parser_PT.add_argument("--cnv", action='store_true', help="Use the CNV prior models")
 	
 
 
@@ -133,9 +131,10 @@ def main(argv):
 	description = BICEP_textwrap + textwrap.dedent('''\
 	
 	Apply the regression models to the pedigree data'''))
-	parser_PA.add_argument("-v", "--vcf", nargs='?', help="VCF file for variants", metavar='F', required = True)
-	parser_PA.add_argument("-m", "--model", nargs='?', help="Prefix for the regression model files", metavar='C')
-	parser_PA.add_argument("--predictors", nargs='?', help="File containing regression predictors", metavar='F')
+	parser_PA.add_argument("-v", "--vcf", nargs='?', help="VCF file for variants", metavar='FILE', required = True)
+	parser_PA.add_argument("-m", "--model", nargs='?', help="Prefix for the regression model files", metavar='STRING')
+	parser_PA.add_argument("--predictors", nargs='?', help="File containing regression predictors", metavar='FILE')
+	parser_PA.add_argument("--cnv", action='store_true', help="Use the CNV prior models")
 	
 	
 	
@@ -145,11 +144,10 @@ def main(argv):
 	description= BICEP_textwrap + textwrap.dedent('''\
 
 	Calculate Bayes factors for co-segregation'''))
-	parser_BF.add_argument("-f", "--fam", nargs='?', help="FAM file describing the pedigree structure and phenotypes", metavar='F', required = True)
-	parser_BF.add_argument("-v", "--vcf", nargs='?', help="VCF file for variants", metavar='F', required = True)
-	parser_BF.add_argument("--minAff", nargs='?', default=0, type=int, help="Minimum affected individuals per pedigree", metavar='N')
-	parser_BF.add_argument("--priorCaus", nargs='?', default="linear", choices=["uniform", "linear"], help="Prior parameter distribution for causal model", metavar='C')
-	parser_BF.add_argument("--priorNeut", nargs='?', default="uniform", choices=["uniform", "linear"], help="Prior parameter distribution for neutral model", metavar='C')
+	parser_BF.add_argument("-f", "--fam", nargs='?', help="FAM file describing the pedigree structure and phenotypes", metavar='FILE', required = True)
+	parser_BF.add_argument("-v", "--vcf", nargs='?', help="VCF file for variants", metavar='FILE', required = True)
+	parser_BF.add_argument("--priorCaus", nargs='?', default="linear", choices=["uniform", "linear"], help="Prior parameter distribution for causal model", metavar='STRING')
+	parser_BF.add_argument("--priorNeut", nargs='?', default="uniform", choices=["uniform", "linear"], help="Prior parameter distribution for neutral model", metavar='STRING')
 
 
 
@@ -159,10 +157,11 @@ def main(argv):
 	description = BICEP_textwrap + textwrap.dedent('''\
 	
 	Generate posteriors and plots'''))
-	parser_PO.add_argument("--prior", nargs='?', help="Prefix for the prior input", metavar='C')
-	parser_PO.add_argument("--bf", nargs='?', help="Prefix for the Bayes factor input", metavar='C')
+	parser_PO.add_argument("--prior", nargs='?', help="Prefix for the prior input", metavar='FILE')
+	parser_PO.add_argument("--bf", nargs='?', help="Prefix for the Bayes factor input", metavar='FILE')
 	parser_PO.add_argument("--top", nargs='?', default=50, type=int, help="Number of top ranking variants to plot", metavar='N')
-	parser_PO.add_argument("--highlight", nargs='?', help="ID of variant to highlight in plot", metavar='C')
+	parser_PO.add_argument("--highlight", nargs='?', help="ID of variant to highlight in plot", metavar='STRING')
+	parser_PO.add_argument("--predictors", nargs='?', help="File containing regression predictors", metavar='FILE')
 	
 
 	args = parser.parse_args()
@@ -215,6 +214,8 @@ def main(argv):
 		#consoleHandler.setFormatter(logFormatter)
 		#rootLogger.addHandler(consoleHandler)
 
+		#if args.model is None:
+		#	args.model = args.tempDir + args.prefix
 
 		if args.command == "All":
 
