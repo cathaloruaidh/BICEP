@@ -45,13 +45,7 @@ Clone the repostory:
 git clone https://github.com/cathaloruaidh/BICEP.git
 ```
 
-Install the required python packages with pip:
-
-```
-python3 -m pip install --user -r BICEP/requirements.txt
-```
-
-Alternatively, the python packages can be installed with conda:
+The python packages can be installed with conda:
 
 ```
 conda env create -n bicep --file BICEP/environment.yml
@@ -59,11 +53,18 @@ conda env create -n bicep --file BICEP/environment.yml
 conda activate bicep
 ```
 
+Alternately, install with pip:
+
+```
+python3 -m pip install --user -r BICEP/requirements.txt
+```
+
+
 
 ## Software parameters
 
 BICEP consists of five sub-modules: 
-- PriorTrain - generate the logistic regression coefficients from the training data
+- PriorTrain - generate the logistic regression coefficients from the prior regression data
 - PriorApply - apply these coefficients to the pedigree variants to generate a prior odds of causality
 - BayesFactor - calculate Bayes Factors for all pedigree variants
 - Posterior - calculate the posterior odds of causality and generate the output plots
