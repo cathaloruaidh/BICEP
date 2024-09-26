@@ -45,7 +45,7 @@ Clone the repostory:
 git clone https://github.com/cathaloruaidh/BICEP.git
 ```
 
-The required python packages can be installed with conda. See [here](https://conda.io/projects/conda/en/latest/user-guide/install/index.html) for details on how to install conda. 
+The required python packages can be installed with conda. BICEP installation was tested using [Miniconda](https://docs.anaconda.com/miniconda/#quick-command-line-install). 
 
 ```
 conda env create -n bicep --file BICEP/environment.yml
@@ -53,7 +53,7 @@ conda env create -n bicep --file BICEP/environment.yml
 conda activate bicep
 ```
 
-A Jupyter notebook is provided in the `data` directory which outlines how to generate the prior regression data and run BICEP. Jupyter can also be installed via conda: 
+A Jupyter notebook is provided in the `data` directory which outlines how to download and generate the prior regression data and run BICEP. Jupyter can also be installed via conda: 
 
 ```
 conda install jupyter
