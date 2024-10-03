@@ -24,7 +24,7 @@ dependencies:
  - c-ares=1.33.1=heb4867d_0
  - ca-certificates=2024.8.30=hbcca054_0
  - cairo=1.18.0=h3faef2a_0
- - certifi=2024.8.30=pyhd8ed1ab_0
+ - certifi-2024.8.30-py38h06a4308_0
  - cffi=1.17.0=py38heb5c249_0
  - charset-normalizer=3.3.2=pyhd8ed1ab_0
  - click=8.1.7=unix_pyh707e725_0
@@ -38,6 +38,7 @@ dependencies:
  - dbus=1.13.6=h5008d03_3
  - ensembl-vep=112.0=pl5321h2a3209d_0
  - entrez-direct=22.4=he881be0_0
+ - et_xmlfile-1.1.0-py38h06a4308_0
  - expat=2.6.3=h5888daf_0
  - font-ttf-dejavu-sans-mono=2.37=hab24e00_0
  - font-ttf-inconsolata=3.000=h77eed37_0
@@ -162,6 +163,7 @@ dependencies:
  - nss=3.100=hca3bf56_0
  - numpy=1.24.4=py38h59b608b_0
  - openjpeg=2.5.2=h488ebb8_0
+ - openpyxl-3.1.5-py38h5eee18b_0
  - openssl=3.3.2=hb9d3cd8_0
  - packaging=24.1=pyhd8ed1ab_0
  - paml=4.10.7=h031d066_1
