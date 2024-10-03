@@ -7,6 +7,7 @@ import re
 import sys
 
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 import pandas as pd
 import plotly.express as px
@@ -102,6 +103,9 @@ def PO_main(args):
 
 	# plot top variants
 	logging.info("Plotting the top " + str(args.top) +  " variants")
+
+	matplotlib.use('agg')
+
 	max_y = np.ceil(np.max(np.concatenate((merged_sub['logPostOC'].values, merged_sub['logBF'].values, merged_sub['logPriorOC'].values, np.array([max_logBF])))))
 	min_y = np.floor(np.min(np.concatenate((merged_sub['logPostOC'].values, merged_sub['logBF'].values, merged_sub['logPriorOC'].values, np.array([max_logBF])))))
 
