@@ -70,7 +70,7 @@ class Pedigree:
 
 
 		# code phenotypes as 0,1 for convenience
-		self.phenotypeActual = pheID.astype(np.int)-1
+		self.phenotypeActual = pheID.astype(int)-1
 
 
 		# indices for the parents
@@ -958,7 +958,7 @@ def BF_main(args):
 
 
 	# transpose array for parallelisation
-	genotypes = np.transpose(genotypes.astype(np.int))
+	genotypes = np.transpose(genotypes.astype(int))
 
 
 	# combine variant name with genotypes
