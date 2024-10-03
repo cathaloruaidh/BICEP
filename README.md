@@ -45,7 +45,7 @@ Clone the repostory:
 git clone https://github.com/cathaloruaidh/BICEP.git
 ```
 
-The required python packages can be installed with conda. BICEP installation was tested using [Miniconda](https://docs.anaconda.com/miniconda/#quick-command-line-install). 
+The required python packages can be installed with conda. BICEP installation was tested using [Miniconda](https://docs.anaconda.com/miniconda/#quick-command-line-install) on a linux OS.  
 
 ```
 conda env create -n bicep --file BICEP/environment.yml
@@ -58,6 +58,16 @@ A Jupyter notebook is provided in the `data` directory which outlines how to dow
 ```
 conda install jupyter
 ```
+
+The notebook can be run interactively from a server or computing cluster as follows:
+
+```
+cd BICEP/data
+
+jupyter-lab --no-browser BICEP_Walkthrough.ipynb
+```
+
+If you are accessing the server via ssh, add the `-L 8888:localhost:8888` parameter when logging in. 
 
 
 ## Software parameters
