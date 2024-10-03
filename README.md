@@ -67,7 +67,7 @@ cd BICEP/data
 jupyter-lab --no-browser BICEP_Walkthrough.ipynb
 ```
 
-If you are accessing the server via ssh, add the `-L 8888:localhost:8888` parameter when logging in. 
+If you are accessing the server via ssh, add the `-L 8888:localhost:8888` parameter when logging in. If you are accessing the server via PuTTY, navigate to Connection > SSH > Tunnels, enter "8888" for the Source Port, enter "localhost:8888" for the Destination and click add. Then you can log in as usual. 
 
 
 ## Software parameters
