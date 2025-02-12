@@ -100,6 +100,7 @@ def main(argv):
 	parser_ALL.add_argument("--top", nargs='?', default=50, type=int, help="Number of top ranking variants to plot", metavar='N')
 	parser_ALL.add_argument("--highlight", nargs='?', help="ID of variant to highlight in plot", metavar='STRING')
 	parser_ALL.add_argument("--cnv", action='store_true', help="Use the CNV prior models")
+	parser_ALL.add_argument("-k", "--key", nargs='?', default="GT", help="VCF FORMAT tag for genotype or carrier status", metavar='STRING')
 	
 	
 
