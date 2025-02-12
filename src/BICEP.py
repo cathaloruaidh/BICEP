@@ -120,6 +120,7 @@ def main(argv):
 	parser_PT.add_argument("--eval", action='store_true', help="Evaluate the predictors and regression model for the prior")
 	parser_PT.add_argument("--boot", nargs='?', default=1000, type=int, help="Number of bootstraps for prior evaluation", metavar='N')
 	parser_PT.add_argument("--cnv", action='store_true', help="Use the CNV prior models")
+	parser_PT.add_argument("--trans", nargs='?', default="sum", choices=["sum", "min", "max", "sumRecip"], help="Transformation for CNV constrain score", metavar='STRING')
 	
 
 
@@ -148,6 +149,7 @@ def main(argv):
 	parser_BF.add_argument("-v", "--vcf", nargs='?', help="VCF file for variants", metavar='FILE', required = True)
 	parser_BF.add_argument("--priorCaus", nargs='?', default="linear", choices=["uniform", "linear"], help="Prior parameter distribution for causal model", metavar='STRING')
 	parser_BF.add_argument("--priorNeut", nargs='?', default="uniform", choices=["uniform", "linear"], help="Prior parameter distribution for neutral model", metavar='STRING')
+	parser_BF.add_argument("-k", "--key", nargs='?', default="GT", help="VCF FORMAT tag for genotype or carrier status", metavar='STRING')
 
 
 
