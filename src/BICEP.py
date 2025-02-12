@@ -120,7 +120,6 @@ def main(argv):
 	parser_PT.add_argument("--eval", action='store_true', help="Evaluate the predictors and regression model for the prior")
 	parser_PT.add_argument("--boot", nargs='?', default=1000, type=int, help="Number of bootstraps for prior evaluation", metavar='N')
 	parser_PT.add_argument("--cnv", action='store_true', help="Use the CNV prior models")
-	parser_PT.add_argument("--trans", nargs='?', default="sum", choices=["sum", "min", "max", "sumRecip"], help="Transformation for CNV constrain score", metavar='STRING')
 	
 
 
