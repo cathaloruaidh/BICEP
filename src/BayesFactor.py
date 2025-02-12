@@ -921,12 +921,18 @@ def BF_main(args):
 		#	else:
 		#		continue
 
+	
+		if args.key:
+			gt_list = variant.format(args.key)
+		else:
+			gt_list = variant.gt_types
+
 
 		# fill the known genotypes
 		for i in range(len(vcfSampleIndex)):
 
 			# get genotype type: {0,1,2,3}
-			gt = int(variant.gt_types[i])
+			gt = int(gt_list[i])
 
 			# dominant inheritance: HET and HOM_ALT are the same. 
 			# missing genotypes are set to -1
