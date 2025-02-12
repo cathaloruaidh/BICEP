@@ -469,29 +469,37 @@ def PT_main(args):
 		
 		# allele frequency predictor for prior
 		if args.frequency is None:
-			args.requency = "gnomAD_v2_exome_AF_popmax"
+			args.requency = "gnomAD_v4.1_Max_PopMax_AF"
 
+
+		if args.predictors is not None:
+
+			d = {}
+
+			with open(args.predictors, 'r') as f:
+				for line in f:
+					(model, key, value)=line.split()
+					d[model, key] = value
 
 
 			# manually add allele frequency to the predictors
 			keysPredictors = sorted([ x[1] for x in d.keys()])
-			keysDescPred = sorted([ f for m,f in d.keys() if d[m,f] == "L" ] + [args.frequency])
-			keysAscPred = sorted([ f for m,f in d.keys() if d[m,f] == "H" ])
-			keysPredictors = sorted( keysDescPred + keysAscPred )
+			keysPredictors = sorted( keysPredictors + [ args.frequency ] )
 
-			keysPredictors_DEL = [ f for m,f in d.keys() if m == "IND" ] + [args.frequency]
-			keysPredictors_DUP = [ f for m,f in d.keys() if m == "MIS" ] + [args.frequency]
+			keysPredictors_DEL = [ f for m,f in d.keys() if m == "DEL" ] + [args.frequency]
+			keysPredictors_DUP = [ f for m,f in d.keys() if m == "DUP" ] + [args.frequency]
 
 
 		else:
-			keysPredictors = sorted([ "loeuf_v2_recip" ] + [ args.frequency ] )
-			keysDescPred = sorted( [ args.frequency ])
-			keysAscPred  = sorted([ "loeuf_v2_recip" ])
+			# TODO update this
+			keysPredictors = sorted([ "overlap_loeuf_sumRecip",  args.frequency ])
 
 
-			keysPredictors_DEL = sorted([ "loeuf_v2_recip" + args.frequency ])
-			keysPredictors_DUP = sorted([ "loeuf_v2_recip" + args.frequency ])
+			keysPredictors_DEL = keysPredictors
+			keysPredictors_DUP = keysPredictors
 
+
+	# SNVs and indels
 	else:
 		keys = re.sub('^.*?: ', '', CV_anno_vcf.get_header_type('CSQ')['Description']).split("|")
 		keys = [ key.strip("\"") for key in keys ]
@@ -545,9 +553,6 @@ def PT_main(args):
 			continue
 
 
-
-
-
 		if args.cnv:
 
 			# get the ID of the variant
@@ -581,77 +586,23 @@ def PT_main(args):
 
 
 			# get the variant length
-			lenCV = variant.INFO.get('SVTYPE')
+			SVLEN = variant.INFO.get('SVLEN')
 
 			# get vep consequences and create a dictionary
-			CSQ = variant.INFO.get('CSQ').split(",")
-
-			csqVEP = []
+			CSQ = variant.INFO.get('CSQ')
 
 
-
-			for i in range(len(CSQ)):
-				add = True
-				tmp = np.array(CSQ[i].split("|"))
-				dictVEP = dict(zip(keys, tmp.T))
-
-
-				# extract the transcript-specific metrics from dbNSFP
-				# and pick the most deleterious value
-				for key in keysAscPred:
-					l = [ float(x) for x in dictVEP[key].split("&") if x != '.' and x != "" ]
-					if len(l) == 0:
-						dictVEP[key] = "."
-					else:
-						dictVEP[key] = max(l)
-
-				for key in keysDescPred:
-					l = [ float(x) for x in dictVEP[key].split("&") if x != '.' and x != "" ]
-					if len(l) == 0:
-						dictVEP[key] = "."
-					else:
-						dictVEP[key] = min(l)
-
-				
-				csqVEP.append(dictVEP)
+			# extract predictors from CSQ and add to DATA
+			tmp = np.array(CSQ.split("|"))
+			dictVEP = dict(zip(keys, tmp.T))
+			l = [ ID, setCV, typeCV, alleleID, SVLEN ]
+			for key in keysPredictors:
+				l.append(dictVEP[keysPredictors])
+			DATA.append(l) 
 
 
 
-
-			# summarize scores across all transcripts
-			if len(csqVEP) > 0:
-				l = [ ID, setCV, typeCV, lenCV, alleleID ]
-
-		
-				for key in keysAscPred:
-					m = csqVEP[0][key]
-					for i in range(len(csqVEP)):
-						if csqVEP[i][key] == ".":
-							continue
-						if m == ".":
-							m = csqVEP[i][key]
-							continue
-						if csqVEP[i][key] > m:
-							m = csqVEP[i][key]
-					l.append(m)
-
-
-				for key in keysDescPred:
-					m = csqVEP[0][key]
-					for i in range(len(csqVEP)):
-						if csqVEP[i][key] == ".":
-							continue
-						if m == ".":
-							m = csqVEP[i][key]
-							continue
-						if csqVEP[i][key] < m:
-							m = csqVEP[i][key]
-					l.append(m)
-
-				DATA.append(l) 
-
-
-
+		# SNVs and indels
 		else:
 			# get the ID of the variant
 			ID = variant.CHROM + "_" + str(variant.start+1) + "_" + variant.REF + "_" + variant.ALT[0] 
@@ -851,7 +802,7 @@ def PT_main(args):
 	# read in the data
 	logging.debug("Converting to DataFrame")
 	if args.cnv:
-		df = pd.DataFrame(DATA, columns = [ 'ID', 'setCV', 'typeCV', 'lenCV', 'alleleID' ] + keysAscPred + keysDescPred )
+		df = pd.DataFrame(DATA, columns = [ 'ID', 'setCV', 'typeCV', 'alleleID', 'SVLEN' ] + keysPredictors )
 
 	else:
 		df = pd.DataFrame(DATA, columns = [ 'ID', 'setCV', 'geneCV', 'csqCV', 'impactCV', 'typeCV', 'alleleID' ] + keysAscPred + keysDescPred )
@@ -922,11 +873,8 @@ def PT_main(args):
 
 	# subset to variables being used
 	if args.cnv:
-		x = df.filter([ 'ID', 'typeCV', 'alleleID' ] + keysAscPred + keysDescPred)
-
-
+		x = df.filter([ 'ID', 'typeCV', 'alleleID' ] + keysPredictors)
 		y = df.filter(['setCV', 'typeCV'])
-
 
 		logging.info(" ")
 
