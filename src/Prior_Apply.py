@@ -218,37 +218,67 @@ def PA_main(args):
 	keys = [ key.strip("\"") for key in keys ]
 
 
-	# allele frequency predictor for prior
-	if args.frequency is None:
-		args.frequency = "gnomAD_v2_exome_AF_popmax"
-
 	if predictorsFile is not None:
 
 		d = {}
 
-		with open(args.predictors, 'r') as f:
-			for line in f:
-				(model, key, value)=line.split()
-				d[model, key] = value
 
 
 		# manually add allele frequency to the predictors
-		keysPredictors = sorted([ x[1] for x in d.keys()])
-		keysDescPred = sorted([ f for m,f in d.keys() if d[m,f] == "L" ] + [args.frequency])
-		keysAscPred = sorted([ f for m,f in d.keys() if d[m,f] == "H" ])
-		keysPredictors = sorted( keysDescPred + keysAscPred )
+		if args.cnv:
+			with open(args.predictors, 'r') as f:
+				for line in f:
+					(model, key)=line.split()
+					d[model, key] = 1
 
-		keysPredictors_IND = [ f for m,f in d.keys() if m == "IND" ] + [args.frequency]
-		keysPredictors_MIS = [ f for m,f in d.keys() if m == "MIS" ] + [args.frequency]
-		keysPredictors_OTH = [ f for m,f in d.keys() if m == "OTH" ] + [args.frequency]
+			# allele frequency predictor for prior
+			if args.frequency is None:
+				args.frequency = "gnomAD_v4.1_Max_PopMax_AF"
+
+			# manually add allele frequency to the predictors
+			keysPredictors = [ x[1] for x in d.keys()] + [ args.frequency ]
+			keysPredictors = sorted(list(set(keysPredictors)))
+
+			keysPredictors_DEL = [ f for m,f in d.keys() if m == "DEL" ] + [args.frequency]
+			keysPredictors_DUP = [ f for m,f in d.keys() if m == "DUP" ] + [args.frequency]
+
+
+		else:
+			with open(args.predictors, 'r') as f:
+				for line in f:
+					(model, key, value)=line.split()
+					d[model, key] = value
+
+			# allele frequency predictor for prior
+			if args.frequency is None:
+				args.frequency = "gnomAD_v2_exome_AF_popmax"
+
+			keysPredictors = sorted([ x[1] for x in d.keys()])
+			keysDescPred = sorted([ f for m,f in d.keys() if d[m,f] == "L" ] + [args.frequency])
+			keysAscPred = sorted([ f for m,f in d.keys() if d[m,f] == "H" ])
+			keysPredictors = sorted( keysDescPred + keysAscPred )
+
+			keysPredictors_IND = [ f for m,f in d.keys() if m == "IND" ] + [args.frequency]
+			keysPredictors_MIS = [ f for m,f in d.keys() if m == "MIS" ] + [args.frequency]
+			keysPredictors_OTH = [ f for m,f in d.keys() if m == "OTH" ] + [args.frequency]
 
 
 
 
 	else:
-		keysPredictors = sorted([ "CADD_PHRED", "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score" ] + [args.frequency])
-		keysDescPred = sorted([ "SIFT_score", "FATHMM_score" ] + [args.frequency])
-		keysAscPred  = sorted([ x for x in keysPredictors if x not in keysDescPred ])
+		if args.cnv:
+			keysPredictors = sorted([ "overlap_loeuf_sumRecip",  args.frequency ])
+			keysPredictors_DEL = keysPredictors
+			keysPredictors_DUP = keysPredictors
+
+		else:
+			keysPredictors = sorted([ "CADD_PHRED", "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score" ] + [args.frequency])
+			keysDescPred = sorted([ "SIFT_score", "FATHMM_score" ] + [args.frequency])
+			keysAscPred  = sorted([ x for x in keysPredictors if x not in keysDescPred ])
+
+			keysPredictors_IND = sorted([ "CADD_PHRED" ] + [args.frequency])
+			keysPredictors_MIS = sorted(["FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score"] + [args.frequency])
+			keysPredictors_OTH = [args.frequency]
 	
 
 
@@ -265,109 +295,160 @@ def PA_main(args):
 		if len( set([variant.CHROM, "chr"+variant.CHROM]) & CHROMS ) == 0:
 			continue
 
-		# get the ID of the variant
-		ID = variant.CHROM + "_" + str(variant.start+1) + "_" + variant.REF + "_" + variant.ALT[0] 
+		if args.cnv:
+			# get the ID of the variant
+			ID = variant.CHROM + "_" + str(variant.start+1) + "_" + str(variant.INFO.get('END')) + "_" + variant.INFO.get('SVTYPE')
 
-		msg = "Reading variant " + ID
-		logging.debug(msg)
-
-
-
-		# get the variant type, ignore if not SNV or indel
-		if len(variant.REF) == 1 and len(variant.ALT[0]) == 1:
-			typeVEP = "SNV"
-		elif ( (len(variant.REF) == 1 and len(variant.ALT[0]) > 1) or ((len(variant.REF) > 1 and len(variant.ALT[0]) == 1)) ) and max(len(variant.REF), len(variant.ALT[0])) < 50:
-			typeVEP = "indel"
+			msg = "Reading variant " + ID
+			logging.debug(msg)
 
 
-
-		# get vep consequences and create a dictionary
-		CSQ = variant.INFO.get('CSQ').split(",")
+			SVLEN = variant.INFO.get('SVLEN')
 
 
-		csqVEP = []
+			# get the variant type, ignore if not SNV or indel
+			typeTMP = variant.INFO.get('SVTYPE')
+			typeVEP = "OTHER"
+
+			if (typeTMP == "DEL" or typeTMP == "DUP") and abs(SVLEN) >= 50:
+				typeVEP = typeTMP
 
 
-		for i in range(len(CSQ)):
-			add = True
-			tmp = np.array(CSQ[i].split("|"))
-			dictVEP = dict(zip_longest(keys, tmp.T, fillvalue="."))
+			# get vep consequences and create a dictionary
+			CSQ = np.array(variant.INFO.get('CSQ').split("|"))
+			if CSQ is not None:
 
+				csqVEP = dict(zip(keys, CSQ.T))	
+				l = [ ID, typeVEP, SVLEN ]
 
-			# split VEP consequences if multiple
-			if "&" in dictVEP["Consequence"]:
-				dictVEP["Consequence_split"] = dictVEP["Consequence"].split("&")
-			
-			else:
-				dictVEP["Consequence_split"] = [ dictVEP["Consequence"] ]
-
-
-			# select the consequence with the highest vep rank
-			csqCVSubset = [ x for x in dictVEP["Consequence_split"] if x in vepCSQRankCoding.keys() ]
-			
-			if len(csqCVSubset) > 0:
-				d = dict((k, vepCSQRank[k]) for k in csqCVSubset)
-				dictVEP["Consequence_select"] = min(d, key=d.get)
-			else:
-				#dictVEP["Consequence_select"] = np.nan
-				add = False
-
-
-			# extract the transcript-specific metrics from dbNSFP
-			# and pick the most deleterious value
-			for key in keysAscPred:
-				l = [ float(x) for x in dictVEP[key].split("&") if x != '.' and x != "" ]
-				if len(l) == 0:
-					dictVEP[key] = np.nan
-				else:
-					dictVEP[key] = max(l)
-
-			for key in keysDescPred:
-				l = [ float(x) for x in dictVEP[key].split("&") if x != '.' and x != "" ]
-				if len(l) == 0:
-					dictVEP[key] = np.nan
-				else:
-					dictVEP[key] = min(l)
-
-			
-
-			# if the transcript is not protein-coding reject it
-			if dictVEP['BIOTYPE'] != "protein_coding":
-				add = False
-
-
-			# make sure transcript is canonical
-			if dictVEP['CANONICAL'] != "YES":
-				add = False
-
-			
-			# if the transcript hasn't been rejected, add it to the list
-			if add:
-				csqVEP.append(dictVEP)
-
-
-
-		# summarize scores across all transcripts
-		if len(csqVEP) > 0:
-			for i in range(len(csqVEP)):
-				l = [ ID, csqVEP[i]["SYMBOL"], typeVEP, csqVEP[i]["Consequence_select"], csqVEP[i]["IMPACT"] ]
-
-				for key in keysAscPred + keysDescPred:
-					l.append(csqVEP[i][key])
+				for key in keysPredictors:
+					l.append(csqVEP[key])
 
 				DATA.append(l) 
 
 
-		# otherwise flat, nonCoding prior
-		else:
-			if 'nonCoding' in flatPriors.keys():
-				flat_DATA.append([ID, flatPriors['nonCoding']])
-
+			# otherwise flat, nonCoding prior
 			else:
-				flat_DATA.append([ID, np.nan])
+				if 'nonCoding' in flatPriors.keys():
+					flat_DATA.append([ID, flatPriors['nonCoding']])
 
+				else:
+					flat_DATA.append([ID, np.nan])
+
+		else:
+			# get the ID of the variant
+			ID = variant.CHROM + "_" + str(variant.start+1) + "_" + variant.REF + "_" + variant.ALT[0] 
+
+			msg = "Reading variant " + ID
+			logging.debug(msg)
+
+
+
+			# get the variant type, ignore if not SNV or indel
+			if len(variant.REF) == 1 and len(variant.ALT[0]) == 1:
+				typeVEP = "SNV"
+			elif ( (len(variant.REF) == 1 and len(variant.ALT[0]) > 1) or ((len(variant.REF) > 1 and len(variant.ALT[0]) == 1)) ) and max(len(variant.REF), len(variant.ALT[0])) < 50:
+				typeVEP = "indel"
+
+
+
+			# get vep consequences and create a dictionary
+			CSQ = variant.INFO.get('CSQ').split(",")
+
+
+			csqVEP = []
+
+
+			for i in range(len(CSQ)):
+				add = True
+				tmp = np.array(CSQ[i].split("|"))
+				dictVEP = dict(zip_longest(keys, tmp.T, fillvalue="."))
+
+
+				# split VEP consequences if multiple
+				if "&" in dictVEP["Consequence"]:
+					dictVEP["Consequence_split"] = dictVEP["Consequence"].split("&")
+				
+				else:
+					dictVEP["Consequence_split"] = [ dictVEP["Consequence"] ]
+
+
+				# select the consequence with the highest vep rank
+				csqCVSubset = [ x for x in dictVEP["Consequence_split"] if x in vepCSQRankCoding.keys() ]
+				
+				if len(csqCVSubset) > 0:
+					d = dict((k, vepCSQRank[k]) for k in csqCVSubset)
+					dictVEP["Consequence_select"] = min(d, key=d.get)
+				else:
+					#dictVEP["Consequence_select"] = np.nan
+					add = False
+
+
+				# extract the transcript-specific metrics from dbNSFP
+				# and pick the most deleterious value
+				for key in keysAscPred:
+					l = [ float(x) for x in dictVEP[key].split("&") if x != '.' and x != "" ]
+					if len(l) == 0:
+						dictVEP[key] = np.nan
+					else:
+						dictVEP[key] = max(l)
+
+				for key in keysDescPred:
+					l = [ float(x) for x in dictVEP[key].split("&") if x != '.' and x != "" ]
+					if len(l) == 0:
+						dictVEP[key] = np.nan
+					else:
+						dictVEP[key] = min(l)
+
+				
+
+				# if the transcript is not protein-coding reject it
+				if dictVEP['BIOTYPE'] != "protein_coding":
+					add = False
+
+
+				# make sure transcript is canonical
+				if dictVEP['CANONICAL'] != "YES":
+					add = False
+
+				
+				# if the transcript hasn't been rejected, add it to the list
+				if add:
+					csqVEP.append(dictVEP)
+
+
+
+			# summarize scores across all transcripts
+			if len(csqVEP) > 0:
+				for i in range(len(csqVEP)):
+					l = [ ID, csqVEP[i]["SYMBOL"], typeVEP, csqVEP[i]["Consequence_select"], csqVEP[i]["IMPACT"] ]
+
+					for key in keysAscPred + keysDescPred:
+						l.append(csqVEP[i][key])
+
+					DATA.append(l) 
+
+
+			# otherwise flat, nonCoding prior
+			else:
+				if 'nonCoding' in flatPriors.keys():
+					flat_DATA.append([ID, flatPriors['nonCoding']])
+
+				else:
+					flat_DATA.append([ID, np.nan])
+
+
+	start = 3 if args.cnv else 5
+
+	for i in range(len(DATA)):
+		for j in range(start, len(DATA[i])):
+			if DATA[i][j] == "." or DATA[i][j] == "":
+				DATA[i][j] = np.nan
+			else:
+				DATA[i][j] = float(DATA[i][j])
 
 	logging.info(" ")
+
 
 
 
@@ -378,210 +459,339 @@ def PA_main(args):
 	pd.set_option('display.max_colwidth', 100)
 
 	# read in the data
-	df = pd.DataFrame(DATA, columns = ['ID', 'Gene', 'typeVEP', 'csqVEP', 'impactVEP'] + keysAscPred + keysDescPred )
+	if args.cnv:
+		df = pd.DataFrame(DATA, columns = ['ID', 'typeVEP', 'SVLEN'] + keysPredictors )
+		df[args.frequency] = df[args.frequency].fillna(0.0)
 
-
-	df['csqVEP'] = pd.Categorical(df['csqVEP'], categories = sorted(vepCSQRank.keys()))
-	df['impactVEP'] = pd.Categorical(df['impactVEP'], categories = sorted(vepIMPACTRank.keys()))
-	df['typeVEP'] = pd.Categorical(df['typeVEP'], categories = ['indel', 'SNV'])
-
-
-	# set missing allele frequencies to zero
-	df[args.frequency] = df[args.frequency].fillna(0.0)
-
-
-	x = df.filter( ['csqVEP', 'impactVEP', 'typeVEP'] + keysAscPred + keysDescPred)
-	
-
-
-	## INDELS
-	logging.info("IND")
-
-	x_IND = x[ x['typeVEP'] == 'indel' ]
-	x_IND_csq = x_IND['csqVEP']
-	x_IND_impact = x_IND['impactVEP']
-	x_IND = pd.get_dummies(x_IND, columns = ['impactVEP'])
-	x_IND_index = x_IND.index
-
-	y_IND = df[ df['typeVEP'] == 'indel' ]
+		x = df.filter( ['typeVEP'] + keysPredictors )
 
 
 
-	if os.path.isfile(modelPrefix + '.IND_predictors.npy') and not x_IND.empty:
+		## DEL
+		logging.info("DEL")
 
-		# load in the predictor IDs for the models
-		with open(modelPrefix + '.IND_predictors.npy', 'rb') as f:
-			predictors_IND = np.load(f, allow_pickle = True)
-			predictors_IND = [ s.replace('CV', 'VEP') for s in predictors_IND ]
+		x_DEL = x[ x['typeVEP'] == 'DEL' ]
+		x_DEL_index = x_DEL.index
 
-		x_IND = x_IND[predictors_IND]
-
-
-
-		# impute the missing data
-		logging.info("Impute the data")
-
-		with open(modelPrefix + '.IND_imp.pkl', 'rb') as f:
-			imp_IND = pickle.load(f)
-
-		x_IND_imp = imp_IND.transform(x_IND)
+		y_DEL = df[ df['typeVEP'] == 'DEL' ]
 
 
 
-		# scale the data
-		logging.info("Scaling to [0,1]")
+		if os.path.isfile(modelPrefix + '.DEL_predictors.npy') and not x_DEL.empty:
 
-		with open(modelPrefix + '.IND_scal.pkl', 'rb') as f:
-			scal_IND = pickle.load(f)
+			# load in the predictor IDs for the models
+			with open(modelPrefix + '.DEL_predictors.npy', 'rb') as f:
+				predictors_DEL = np.load(f, allow_pickle = True)
+				predictors_DEL = [ s.replace('CV', 'VEP') for s in predictors_DEL ]
 
-		x_IND_imp_scal = scal_IND.transform(x_IND_imp)
-
-
-		# run logistic regression
-		logging.info("Apply logistic regression")
-
-		with open(modelPrefix + '.IND_logReg.pkl', 'rb') as f:
-			logReg_IND = pickle.load(f)
+			x_DEL = x_DEL[predictors_DEL]
 
 
-		y_IND_pred = logReg_IND.predict_proba(x_IND_imp_scal)[:,1]
+
+			# impute the missing data
+			logging.info("Impute the data")
+
+			with open(modelPrefix + '.DEL_imp.pkl', 'rb') as f:
+				imp_DEL = pickle.load(f)
+
+			x_DEL_imp = imp_DEL.transform(x_DEL)
+
+
+
+			# scale the data
+			logging.info("Scaling to [0,1]")
+
+			with open(modelPrefix + '.DEL_scal.pkl', 'rb') as f:
+				scal_DEL = pickle.load(f)
+
+			x_DEL_imp_scal = scal_DEL.transform(x_DEL_imp)
+
+
+			# run logistic regression
+			logging.info("Apply logistic regression")
+
+			with open(modelPrefix + '.DEL_logReg.pkl', 'rb') as f:
+				logReg_DEL = pickle.load(f)
+
+
+			y_DEL_pred = logReg_DEL.predict_proba(x_DEL_imp_scal)[:,1]
+
+
+		else:
+			if 'DEL' in flatPriors.keys():
+				logging.info("Using flat priors for DEL. ")
+				y_DEL_pred = np.full(len(x_DEL), flatPriors['DEL'])
+			else:
+				logging.info("Ignoring all DEL. ")
+				y_DEL_pred = np.full(len(x_DEL), np.nan)
+
+
+
+
+		## DUP
+		logging.info("DUP")
+
+		x_DUP = x[ x['typeVEP'] == 'DUP' ]
+		x_DUP_index = x_DUP.index
+
+		y_DUP = df[ df['typeVEP'] == 'DUP' ]
+
+
+
+		if os.path.isfile(modelPrefix + '.DUP_predictors.npy') and not x_DUP.empty:
+
+			# load in the predictor IDs for the models
+			with open(modelPrefix + '.DUP_predictors.npy', 'rb') as f:
+				predictors_DUP = np.load(f, allow_pickle = True)
+				predictors_DUP = [ s.replace('CV', 'VEP') for s in predictors_DUP ]
+
+			x_DUP = x_DUP[predictors_DUP]
+
+
+
+			# impute the missing data
+			logging.info("Impute the data")
+
+			with open(modelPrefix + '.DUP_imp.pkl', 'rb') as f:
+				imp_DUP = pickle.load(f)
+
+			x_DUP_imp = imp_DUP.transform(x_DUP)
+
+
+
+			# scale the data
+			logging.info("Scaling to [0,1]")
+
+			with open(modelPrefix + '.DUP_scal.pkl', 'rb') as f:
+				scal_DUP = pickle.load(f)
+
+			x_DUP_imp_scal = scal_DUP.transform(x_DUP_imp)
+
+
+			# run logistic regression
+			logging.info("Apply logistic regression")
+
+			with open(modelPrefix + '.DUP_logReg.pkl', 'rb') as f:
+				logReg_DUP = pickle.load(f)
+
+
+			y_DUP_pred = logReg_DUP.predict_proba(x_DUP_imp_scal)[:,1]
+
+
+		else:
+			if 'DUP' in flatPriors.keys():
+				logging.info("Using flat priors for DUP. ")
+				y_DUP_pred = np.full(len(x_DUP), flatPriors['DUP'])
+			else:
+				logging.info("Ignoring all DUP. ")
+				y_DUP_pred = np.full(len(x_DUP), np.nan)
+
+
+		logging.info(" ")
+
 
 
 	else:
-		if 'IND' in flatPriors.keys():
-			logging.info("Using flat priors for IND. ")
-			y_IND_pred = np.full(len(x_IND), flatPriors['IND'])
+		df = pd.DataFrame(DATA, columns = ['ID', 'Gene', 'typeVEP', 'csqVEP', 'impactVEP'] + keysAscPred + keysDescPred )
+		df[args.frequency] = df[args.frequency].fillna(0.0)
+
+		df['csqVEP'] = pd.Categorical(df['csqVEP'], categories = sorted(vepCSQRank.keys()))
+		df['impactVEP'] = pd.Categorical(df['impactVEP'], categories = sorted(vepIMPACTRank.keys()))
+		df['typeVEP'] = pd.Categorical(df['typeVEP'], categories = ['indel', 'SNV'])
+
+
+		x = df.filter( ['csqVEP', 'impactVEP', 'typeVEP'] + keysAscPred + keysDescPred)
+		
+
+
+		## INDELS
+		logging.info("IND")
+
+		x_IND = x[ x['typeVEP'] == 'indel' ]
+		x_IND_csq = x_IND['csqVEP']
+		x_IND_impact = x_IND['impactVEP']
+		x_IND = pd.get_dummies(x_IND, columns = ['impactVEP'])
+		x_IND_index = x_IND.index
+
+		y_IND = df[ df['typeVEP'] == 'indel' ]
+
+
+
+		if os.path.isfile(modelPrefix + '.IND_predictors.npy') and not x_IND.empty:
+
+			# load in the predictor IDs for the models
+			with open(modelPrefix + '.IND_predictors.npy', 'rb') as f:
+				predictors_IND = np.load(f, allow_pickle = True)
+				predictors_IND = [ s.replace('CV', 'VEP') for s in predictors_IND ]
+
+			x_IND = x_IND[predictors_IND]
+
+
+
+			# impute the missing data
+			logging.info("Impute the data")
+
+			with open(modelPrefix + '.IND_imp.pkl', 'rb') as f:
+				imp_IND = pickle.load(f)
+
+			x_IND_imp = imp_IND.transform(x_IND)
+
+
+
+			# scale the data
+			logging.info("Scaling to [0,1]")
+
+			with open(modelPrefix + '.IND_scal.pkl', 'rb') as f:
+				scal_IND = pickle.load(f)
+
+			x_IND_imp_scal = scal_IND.transform(x_IND_imp)
+
+
+			# run logistic regression
+			logging.info("Apply logistic regression")
+
+			with open(modelPrefix + '.IND_logReg.pkl', 'rb') as f:
+				logReg_IND = pickle.load(f)
+
+
+			y_IND_pred = logReg_IND.predict_proba(x_IND_imp_scal)[:,1]
+
+
 		else:
-			logging.info("Ignoring all IND. ")
-			y_IND_pred = np.full(len(x_IND), np.nan)
+			if 'IND' in flatPriors.keys():
+				logging.info("Using flat priors for IND. ")
+				y_IND_pred = np.full(len(x_IND), flatPriors['IND'])
+			else:
+				logging.info("Ignoring all IND. ")
+				y_IND_pred = np.full(len(x_IND), np.nan)
 
 
-	logging.info(" ")
-
-
-
-	## MISSENSE SNV
-	logging.info("MIS")
-
-	x_MIS = x[ x['csqVEP'] == 'missense_variant' ]
-	x_MIS_csq = x_MIS['csqVEP']
-	x_MIS_impact = x_MIS['impactVEP']
-	x_MIS_index = x_MIS.index
-
-
-	y_MIS = df[ df['csqVEP'] == 'missense_variant' ]
-
-	if os.path.isfile(modelPrefix + '.MIS_predictors.npy'):
-
-		# load in the predictor IDs for the models
-		with open(modelPrefix + '.MIS_predictors.npy', 'rb') as f:
-			predictors_MIS = np.load(f, allow_pickle = True)
-			predictors_MIS = [ s.replace('CV', 'VEP') for s in predictors_MIS ]
-
-		x_MIS = x_MIS[predictors_MIS]
-
-
-		# impute the missing data
-		logging.info("Impute the data")
-
-		with open(modelPrefix + '.MIS_imp.pkl', 'rb') as f:
-			imp_MIS = pickle.load(f)
-
-
-		x_MIS_imp = imp_MIS.transform(x_MIS)
-		x_MIS_imp_df = pd.DataFrame(x_MIS_imp, columns = x_MIS.columns)
-
-
-		# scale the data
-		logging.info("Scaling to [0,1]")
-
-		with open(modelPrefix + '.MIS_scal.pkl', 'rb') as f:
-			scal_MIS = pickle.load(f)
-
-		x_MIS_imp_scal = scal_MIS.transform(x_MIS_imp)
-
-		x_MIS_imp_scal_df = pd.DataFrame(x_MIS_imp_scal, columns = x_MIS.columns)
-
-		# run logistic regression
-		logging.info("Apply logistic regression")
-
-		with open(modelPrefix + '.MIS_logReg.pkl', 'rb') as f:
-			logReg_MIS = pickle.load(f)
-
-		y_MIS_pred = logReg_MIS.predict_proba(x_MIS_imp_scal)[:,1]
-
-	
-	else:
-		if 'MIS' in flatPriors.keys():
-			logging.info("Using flat priors for MIS. ")
-			y_MIS_pred = np.full(len(x_MIS), flatPriors['MIS'])
-		else:
-			logging.info("Ignoring all MIS")
-			y_MIS_pred = np.full(len(x_MIS), np.nan)
-
-	logging.info(" ")
+		logging.info(" ")
 
 
 
-	## NON-MISSENSE SNV
-	logging.info("NON-MISSENSE SNV")
+		## MISSENSE SNV
+		logging.info("MIS")
 
-	x_OTH = x[ (x['csqVEP'] != 'missense_variant') & (x['typeVEP'] == 'SNV') ]
-	x_OTH_csq = x_OTH['csqVEP']
-	x_OTH_impact = x_OTH['impactVEP']
-	x_OTH = pd.get_dummies(x_OTH, columns = ['csqVEP'])
-	x_OTH_index = x_OTH.index
+		x_MIS = x[ x['csqVEP'] == 'missense_variant' ]
+		x_MIS_csq = x_MIS['csqVEP']
+		x_MIS_impact = x_MIS['impactVEP']
+		x_MIS_index = x_MIS.index
 
-	y_OTH = df[ (df['csqVEP'] != 'missense_variant') & (df['typeVEP'] == 'SNV') ]
+
+		y_MIS = df[ df['csqVEP'] == 'missense_variant' ]
+
+		if os.path.isfile(modelPrefix + '.MIS_predictors.npy'):
+
+			# load in the predictor IDs for the models
+			with open(modelPrefix + '.MIS_predictors.npy', 'rb') as f:
+				predictors_MIS = np.load(f, allow_pickle = True)
+				predictors_MIS = [ s.replace('CV', 'VEP') for s in predictors_MIS ]
+
+			x_MIS = x_MIS[predictors_MIS]
+
+
+			# impute the missing data
+			logging.info("Impute the data")
+
+			with open(modelPrefix + '.MIS_imp.pkl', 'rb') as f:
+				imp_MIS = pickle.load(f)
+
+
+			x_MIS_imp = imp_MIS.transform(x_MIS)
+			x_MIS_imp_df = pd.DataFrame(x_MIS_imp, columns = x_MIS.columns)
+
+
+			# scale the data
+			logging.info("Scaling to [0,1]")
+
+			with open(modelPrefix + '.MIS_scal.pkl', 'rb') as f:
+				scal_MIS = pickle.load(f)
+
+			x_MIS_imp_scal = scal_MIS.transform(x_MIS_imp)
+
+			x_MIS_imp_scal_df = pd.DataFrame(x_MIS_imp_scal, columns = x_MIS.columns)
+
+			# run logistic regression
+			logging.info("Apply logistic regression")
+
+			with open(modelPrefix + '.MIS_logReg.pkl', 'rb') as f:
+				logReg_MIS = pickle.load(f)
+
+			y_MIS_pred = logReg_MIS.predict_proba(x_MIS_imp_scal)[:,1]
 
 		
-	if os.path.isfile(modelPrefix + '.OTH_predictors.npy'):
-
-		# load in the predictor IDs for the models
-		with open(modelPrefix + '.OTH_predictors.npy', 'rb') as f:
-			predictors_OTH = np.load(f, allow_pickle = True)
-			predictors_OTH = [ s.replace('CV', 'VEP') for s in predictors_OTH ]
-
-		x_OTH = x_OTH[predictors_OTH]
-
-
-		# impute the missing data
-		logging.info("Impute the data")
-
-		with open(modelPrefix + '.OTH_imp.pkl', 'rb') as f:
-			imp_OTH = pickle.load(f)
-		
-		x_OTH_imp = imp_OTH.transform(x_OTH)
-
-
-
-		# scale the data
-		logging.info("Scaling to [0,1]")
-
-		with open(modelPrefix + '.OTH_scal.pkl', 'rb') as f:
-			scal_OTH = pickle.load(f)
-
-		x_OTH_imp_scal = scal_OTH.transform(x_OTH_imp)
-
-
-
-		# run logistic regression
-		logging.info("Apply logistic regression")
-
-		with open(modelPrefix + '.OTH_logReg.pkl', 'rb') as f:
-			logReg_OTH = pickle.load(f)
-
-
-		y_OTH_pred = logReg_OTH.predict_proba(x_OTH_imp_scal)[:,1]
-
-
-	else:
-		if 'OTH' in flatPriors:
-			logging.info("Using flat priors for OTH")
-			y_OTH_pred = np.full(len(x_OTH), flatPriors['OTH'])
 		else:
-			logging.info("Ignoring all OTH")
-			y_OTH_pred = np.full(len(x_OTH), np.nan)
+			if 'MIS' in flatPriors.keys():
+				logging.info("Using flat priors for MIS. ")
+				y_MIS_pred = np.full(len(x_MIS), flatPriors['MIS'])
+			else:
+				logging.info("Ignoring all MIS")
+				y_MIS_pred = np.full(len(x_MIS), np.nan)
+
+		logging.info(" ")
+
+
+
+		## NON-MISSENSE SNV
+		logging.info("NON-MISSENSE SNV")
+
+		x_OTH = x[ (x['csqVEP'] != 'missense_variant') & (x['typeVEP'] == 'SNV') ]
+		x_OTH_csq = x_OTH['csqVEP']
+		x_OTH_impact = x_OTH['impactVEP']
+		x_OTH = pd.get_dummies(x_OTH, columns = ['csqVEP'])
+		x_OTH_index = x_OTH.index
+
+		y_OTH = df[ (df['csqVEP'] != 'missense_variant') & (df['typeVEP'] == 'SNV') ]
+
+			
+		if os.path.isfile(modelPrefix + '.OTH_predictors.npy'):
+
+			# load in the predictor IDs for the models
+			with open(modelPrefix + '.OTH_predictors.npy', 'rb') as f:
+				predictors_OTH = np.load(f, allow_pickle = True)
+				predictors_OTH = [ s.replace('CV', 'VEP') for s in predictors_OTH ]
+
+			x_OTH = x_OTH[predictors_OTH]
+
+
+			# impute the missing data
+			logging.info("Impute the data")
+
+			with open(modelPrefix + '.OTH_imp.pkl', 'rb') as f:
+				imp_OTH = pickle.load(f)
+			
+			x_OTH_imp = imp_OTH.transform(x_OTH)
+
+
+
+			# scale the data
+			logging.info("Scaling to [0,1]")
+
+			with open(modelPrefix + '.OTH_scal.pkl', 'rb') as f:
+				scal_OTH = pickle.load(f)
+
+			x_OTH_imp_scal = scal_OTH.transform(x_OTH_imp)
+
+
+
+			# run logistic regression
+			logging.info("Apply logistic regression")
+
+			with open(modelPrefix + '.OTH_logReg.pkl', 'rb') as f:
+				logReg_OTH = pickle.load(f)
+
+
+			y_OTH_pred = logReg_OTH.predict_proba(x_OTH_imp_scal)[:,1]
+
+
+		else:
+			if 'OTH' in flatPriors:
+				logging.info("Using flat priors for OTH")
+				y_OTH_pred = np.full(len(x_OTH), flatPriors['OTH'])
+			else:
+				logging.info("Ignoring all OTH")
+				y_OTH_pred = np.full(len(x_OTH), np.nan)
 
 
 	logging.info(" ")
@@ -593,67 +803,116 @@ def PA_main(args):
 	# combine and output to file
 	logging.info("Outputting the priors to file")
 
-	prior_prob = pd.DataFrame()
-	prior_prob["ID"] = np.concatenate((y_IND["ID"], y_MIS["ID"], y_OTH["ID"]))
-	prior_prob["csq"] = np.concatenate((x_IND_csq, x_MIS_csq, x_OTH_csq))
-	prior_prob["impact"] = np.concatenate((x_IND_impact, x_MIS_impact, x_OTH_impact))
-	prior_prob["Gene"] = np.concatenate((y_IND["Gene"], y_MIS["Gene"], y_OTH["Gene"]))
-	prior_prob["prior"] = np.concatenate((y_IND_pred, y_MIS_pred, y_OTH_pred))
+
+	if args.cnv:
+		prior_prob = pd.DataFrame()
+		prior_prob["ID"] = np.concatenate((y_DEL["ID"], y_DUP["ID"]))
+		prior_prob["prior"] = np.concatenate((y_DEL_pred, y_DUP_pred))
 
 
-	x_IND_data = pd.DataFrame()		
-	x_MIS_data = pd.DataFrame()		
-	x_OTH_data = pd.DataFrame()		
+		x_DEL_data = pd.DataFrame()		
+		x_DUP_data = pd.DataFrame()		
 
 
-	# get the regression input data if available
-	if os.path.isfile(modelPrefix + '.IND_predictors.npy'):
-		#x_IND_data = pd.DataFrame(x_IND_imp_scal, index = x_IND_index, columns = x_IND.columns)
-		x_IND_data = pd.DataFrame(x_IND, index = x_IND_index, columns = x_IND.columns)
-	
+		# get the regression input data if available
+		if os.path.isfile(modelPrefix + '.DEL_predictors.npy'):
+			#x_DEL_data = pd.DataFrame(x_DEL_imp_scal, index = x_DEL_index, columns = x_DEL.columns)
+			x_DEL_data = pd.DataFrame(x_DEL, index = x_DEL_index, columns = x_DEL.columns)
+		
+		else:
+			if len(x_DEL_index) > 0: 
+				x_DEL_data = pd.DataFrame(np.nan, index=range(len(x_DEL_index)), columns = x_DEL.columns)
+
+
+
+		if os.path.isfile(modelPrefix + '.DUP_predictors.npy'):
+			#x_DUP_data = pd.DataFrame(x_DUP_imp_scal, index = x_DUP_index, columns = x_DUP.columns)
+			x_DUP_data = pd.DataFrame(x_DUP, index = x_DUP_index, columns = x_DUP.columns)
+
+		else:
+			if len(x_DUP_index) > 0:
+				x_DUP_data = pd.DataFrame(np.nan, index=range(len(x_DUP_index)), columns = x_DUP.columns)
+		
+
+
+		x_data = pd.concat([x_DEL_data, x_DUP_data], ignore_index=True, sort=False)
+		combined = pd.concat([x_data, prior_prob], axis=1)
+		df_flat = pd.DataFrame(flat_DATA, columns = ['ID', 'prior'])
+		merged = pd.concat([combined, df_flat], sort = False)
+		merged["PriorOC"] = merged["prior"] / (1 - merged["prior"])
+		merged["logPriorOC"] = np.log10(merged["PriorOC"])
+		
+		orderFirst = [ "ID", "prior", "PriorOC", "logPriorOC" ]
+		orderSecond = [ x for x in merged.columns.tolist() if x not in orderFirst ]
+		merged = merged[ orderFirst + orderSecond ]
+
+
+		merged.to_csv(args.outputDir + outputPrefix+".priors.txt", index=False, sep='\t', na_rep='.')
+
+
+
 	else:
-		if len(x_IND_index) > 0: 
-			x_IND_data = pd.DataFrame(np.nan, index=range(len(x_IND_index)), columns = x_IND.columns)
+		prior_prob = pd.DataFrame()
+		prior_prob["ID"] = np.concatenate((y_IND["ID"], y_MIS["ID"], y_OTH["ID"]))
+		prior_prob["csq"] = np.concatenate((x_IND_csq, x_MIS_csq, x_OTH_csq))
+		prior_prob["impact"] = np.concatenate((x_IND_impact, x_MIS_impact, x_OTH_impact))
+		prior_prob["Gene"] = np.concatenate((y_IND["Gene"], y_MIS["Gene"], y_OTH["Gene"]))
+		prior_prob["prior"] = np.concatenate((y_IND_pred, y_MIS_pred, y_OTH_pred))
+
+
+		x_IND_data = pd.DataFrame()		
+		x_MIS_data = pd.DataFrame()		
+		x_OTH_data = pd.DataFrame()		
+
+
+		# get the regression input data if available
+		if os.path.isfile(modelPrefix + '.IND_predictors.npy'):
+			#x_IND_data = pd.DataFrame(x_IND_imp_scal, index = x_IND_index, columns = x_IND.columns)
+			x_IND_data = pd.DataFrame(x_IND, index = x_IND_index, columns = x_IND.columns)
+		
+		else:
+			if len(x_IND_index) > 0: 
+				x_IND_data = pd.DataFrame(np.nan, index=range(len(x_IND_index)), columns = x_IND.columns)
 
 
 
-	if os.path.isfile(modelPrefix + '.MIS_predictors.npy'):
-		#x_MIS_data = pd.DataFrame(x_MIS_imp_scal, index = x_MIS_index, columns = x_MIS.columns)
-		x_MIS_data = pd.DataFrame(x_MIS, index = x_MIS_index, columns = x_MIS.columns)
+		if os.path.isfile(modelPrefix + '.MIS_predictors.npy'):
+			#x_MIS_data = pd.DataFrame(x_MIS_imp_scal, index = x_MIS_index, columns = x_MIS.columns)
+			x_MIS_data = pd.DataFrame(x_MIS, index = x_MIS_index, columns = x_MIS.columns)
 
-	else:
-		if len(x_MIS_index) > 0:
-			x_MIS_data = pd.DataFrame(np.nan, index=range(len(x_MIS_index)), columns = x_MIS.columns)
-	
-
-
-	if os.path.isfile(modelPrefix + '.OTH_predictors.npy'):
-		#x_OTH_data = pd.DataFrame(x_OTH_imp_scal, index = x_OTH_index, columns = x_OTH.columns)
-		x_OTH_data = pd.DataFrame(x_OTH, index = x_OTH_index, columns = x_OTH.columns)
-	
-	else:
-		if len(x_OTH_index) > 0:
-			x_OTH_data = pd.DataFrame(np.nan, index=range(len(x_OTH_index)), columns = x_OTH.columns)
+		else:
+			if len(x_MIS_index) > 0:
+				x_MIS_data = pd.DataFrame(np.nan, index=range(len(x_MIS_index)), columns = x_MIS.columns)
+		
 
 
-
-	x_data = pd.concat([x_IND_data, x_MIS_data, x_OTH_data], ignore_index=True, sort=False)
-	combined = pd.concat([x_data, prior_prob], axis=1)
-	df_flat = pd.DataFrame(flat_DATA, columns = ['ID', 'prior'])
-	merged = pd.concat([combined, df_flat], sort = False)
-	merged["PriorOC"] = merged["prior"] / (1 - merged["prior"])
-	merged["logPriorOC"] = np.log10(merged["PriorOC"])
-	
-	merged = merged[merged.columns.drop(list(merged.filter(regex='csqVEP_')))]
-	merged = merged[merged.columns.drop(list(merged.filter(regex='typeVEP_')))]
-	merged = merged[merged.columns.drop(list(merged.filter(regex='impactVEP_')))]
-
-	orderFirst = [ "ID", "Gene", "csq", "impact", "prior", "PriorOC", "logPriorOC" ]
-	orderSecond = [ x for x in merged.columns.tolist() if x not in orderFirst ]
-	merged = merged[ orderFirst + orderSecond ]
+		if os.path.isfile(modelPrefix + '.OTH_predictors.npy'):
+			#x_OTH_data = pd.DataFrame(x_OTH_imp_scal, index = x_OTH_index, columns = x_OTH.columns)
+			x_OTH_data = pd.DataFrame(x_OTH, index = x_OTH_index, columns = x_OTH.columns)
+		
+		else:
+			if len(x_OTH_index) > 0:
+				x_OTH_data = pd.DataFrame(np.nan, index=range(len(x_OTH_index)), columns = x_OTH.columns)
 
 
-	merged.to_csv(args.outputDir + outputPrefix+".priors.txt", index=False, sep='\t', na_rep='.')
+
+		x_data = pd.concat([x_IND_data, x_MIS_data, x_OTH_data], ignore_index=True, sort=False)
+		combined = pd.concat([x_data, prior_prob], axis=1)
+		df_flat = pd.DataFrame(flat_DATA, columns = ['ID', 'prior'])
+		merged = pd.concat([combined, df_flat], sort = False)
+		merged["PriorOC"] = merged["prior"] / (1 - merged["prior"])
+		merged["logPriorOC"] = np.log10(merged["PriorOC"])
+		
+		merged = merged[merged.columns.drop(list(merged.filter(regex='csqVEP_')))]
+		merged = merged[merged.columns.drop(list(merged.filter(regex='typeVEP_')))]
+		merged = merged[merged.columns.drop(list(merged.filter(regex='impactVEP_')))]
+
+		orderFirst = [ "ID", "Gene", "csq", "impact", "prior", "PriorOC", "logPriorOC" ]
+		orderSecond = [ x for x in merged.columns.tolist() if x not in orderFirst ]
+		merged = merged[ orderFirst + orderSecond ]
+
+
+		merged.to_csv(args.outputDir + outputPrefix+".priors.txt", index=False, sep='\t', na_rep='.')
 
 
 	# get IDs of variants with a prior

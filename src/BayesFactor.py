@@ -912,7 +912,11 @@ def BF_main(args):
 			continue
 
 		# get the ID of the variant
-		var_tmp = variant.CHROM + "_" + str(variant.start+1) + "_" + variant.REF + "_" + variant.ALT[0]
+		if args.cnv:
+			var_tmp = variant.CHROM + "_" + str(variant.start+1) + "_" + str(variant.INFO.get('END')) + "_" + variant.INFO.get('SVTYPE')
+
+		else:
+			var_tmp = variant.CHROM + "_" + str(variant.start+1) + "_" + variant.REF + "_" + variant.ALT[0]
 		varID.append(var_tmp)
 
 		#if prior_IDs is not None:
@@ -926,6 +930,7 @@ def BF_main(args):
 			gt_list = variant.format(args.key)
 		else:
 			gt_list = variant.gt_types
+
 
 
 		# fill the known genotypes

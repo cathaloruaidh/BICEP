@@ -82,7 +82,11 @@ def PO_main(args):
 	# get rid of unnecessary columns and reorder
 	merged = merged.drop(['prior', 'PriorOC', 'BF'], axis=1)
 
-	orderFirst = [ "Rank", "ID", "Gene", "csq", "impact", "logPostOC", "logPriorOC", "logBF", "STRING" ]
+	if args.cnv:
+		orderFirst = [ "Rank", "ID", "logPostOC", "logPriorOC", "logBF", "STRING" ]
+	else:
+		orderFirst = [ "Rank", "ID", "Gene", "csq", "impact", "logPostOC", "logPriorOC", "logBF", "STRING" ]
+
 	orderSecond = [ x for x in merged.columns.tolist() if x not in orderFirst ]
 
 	merged[ orderFirst ] = merged[ orderFirst ].round(3)
@@ -170,23 +174,45 @@ def PO_main(args):
 
 
 	# get predictors
-	if args.predictors is not None:
+	if args.cnv:
+		if args.predictors is not None:
+	
+			d = {}
 
-		d = {}
-
-		with open(args.predictors, 'r') as f:
-			for line in f:
-				(model, key, value)=line.split()
-				d[model, key] = value
+			with open(args.predictors, 'r') as f:
+				for line in f:
+					(model, key)=line.split()
+					d[model, key] = 1
 
 
-		# manually add allele frequency to the predictors
-		keysPredictors = sorted([ x[1] for x in d.keys()] + [args.frequency])
+			# manually add allele frequency to the predictors
+			keysPredictors = [ x[1] for x in d.keys()] + [args.frequency]
+			keysPredictors = sorted(list(set(keysPredictors)))
+
+
+		else:
+			keysPredictors = sorted([ "overlap_loeuf_sumRecip" ] + [ args.frequency ] )
 
 
 
 	else:
-		keysPredictors = sorted([ "CADD_PHRED", "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score" ] + [ args.frequency ] )
+		if args.predictors is not None:
+	
+			d = {}
+
+			with open(args.predictors, 'r') as f:
+				for line in f:
+					(model, key, value)=line.split()
+					d[model, key] = value
+
+
+			# manually add allele frequency to the predictors
+			keysPredictors = sorted([ x[1] for x in d.keys()] + [args.frequency])
+
+
+
+		else:
+			keysPredictors = sorted([ "CADD_PHRED", "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score" ] + [ args.frequency ] )
 
 
 	# plotly
@@ -195,7 +221,11 @@ def PO_main(args):
 
 	
 	custom_1 = merged_sub.filter(["ID", "Gene"])
-	template_1 = """<b>Rank:</b> %{x}<br><b>logPostOC:</b> %{y}<br><b>ID:</b> %{customdata[0]}<br><b>Gene:</b> <i>%{customdata[1]}</i><br>"""
+	if args.cnv:
+		template_1 = """<b>Rank:</b> %{x}<br><b>logPostOC:</b> %{y}<br><b>ID:</b> %{customdata[0]}<br>"""
+
+	else:
+		template_1 = """<b>Rank:</b> %{x}<br><b>logPostOC:</b> %{y}<br><b>ID:</b> %{customdata[0]}<br><b>Gene:</b> <i>%{customdata[1]}</i><br>"""
 
 	custom_2 = merged_sub.filter(['logBF', 'AFF_CARR', 'AFF_NON-CARR', 'UNAFF_CARR', 'UNAFF_NON-CARR', 'MISS'])
 	custom_2['AFF'] =  custom_2['AFF_CARR'] + custom_2['AFF_NON-CARR']
@@ -203,11 +233,17 @@ def PO_main(args):
 	custom_2 = custom_2.filter(['logBF', 'AFF_CARR', 'AFF', 'UNAFF_CARR', 'UNAFF', 'MISS'])
 	template_2 = """<b>logBF:</b> %{y}<br><b>AFF:</b> %{customdata[1]} / %{customdata[2]}<br><b>UNAFF:</b> %{customdata[3]} / %{customdata[4]}<br><b>MISS:</b> %{customdata[5]}<br>"""
 
-	custom_3 = merged_sub.filter(['csq', 'impact'] + keysPredictors).fillna('N/A')
+	custom_3 = merged_sub.filter(keysPredictors).fillna('N/A')
 	custom_3[args.frequency] = custom_3[args.frequency].round(6)
-	template_3 = """<b>logPriorOC:</b> %{y}<br><b>CSQ:</b> %{customdata[0]}<br><b>IMPACT:</b> %{customdata[1]}<br>"""
 
-	i = 2
+	if args.cnv:
+		template_3 = """<b>logPriorOC:</b> %{y}<br>"""
+		i = 0
+
+	else:
+		template_3 = """<b>logPriorOC:</b> %{y}<br><b>CSQ:</b> %{customdata[0]}<br><b>IMPACT:</b> %{customdata[1]}<br>"""
+		i = 2
+
 	for pred in keysPredictors:
 		template_3 = template_3 + "<b>"  + pred + ":</b> %{customdata[" + str(i) + "]}<br>"
 		i = i+1
