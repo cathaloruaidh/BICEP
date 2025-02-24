@@ -75,6 +75,8 @@ def main(argv):
 	parser_parent.add_argument("--prefix", nargs='?', default="BICEP_output", help="Output prefix", metavar='STRING')
 	parser_parent.add_argument("--build", nargs='?', default='GRCh38', help="Reference genome build: GRCh37, GRCh38", choices=['GRCh37', 'GRCh38'], metavar='STRING')
 	parser_parent.add_argument("--frequency", nargs='?', default="gnomAD_v2_exome_AF_popmax", help="Allele frequency predictor", metavar='STRING')
+	parser_parent.add_argument("--cnv", action='store_true', help="Use the CNV prior models")
+	parser_parent.add_argument("-k", "--key", nargs='?', help="VCF FORMAT tag for genotype or carrier status", metavar='STRING')
 
 
 	# All sub-command
@@ -99,8 +101,6 @@ def main(argv):
 	parser_ALL.add_argument("--priorNeut", nargs='?', default="uniform", choices=["uniform", "linear"], help="Prior parameter distribution for neutral model", metavar='STRING')
 	parser_ALL.add_argument("--top", nargs='?', default=50, type=int, help="Number of top ranking variants to plot", metavar='N')
 	parser_ALL.add_argument("--highlight", nargs='?', help="ID of variant to highlight in plot", metavar='STRING')
-	parser_ALL.add_argument("--cnv", action='store_true', help="Use the CNV prior models")
-	parser_ALL.add_argument("-k", "--key", nargs='?', default="GT", help="VCF FORMAT tag for genotype or carrier status", metavar='STRING')
 	
 	
 
@@ -120,7 +120,6 @@ def main(argv):
 	parser_PT.add_argument("-p", "--pathogenic", nargs='?', help="File of pathogenic variant IDs for training", metavar='FILE')
 	parser_PT.add_argument("--eval", action='store_true', help="Evaluate the predictors and regression model for the prior")
 	parser_PT.add_argument("--boot", nargs='?', default=1000, type=int, help="Number of bootstraps for prior evaluation", metavar='N')
-	parser_PT.add_argument("--cnv", action='store_true', help="Use the CNV prior models")
 	
 
 
@@ -135,7 +134,6 @@ def main(argv):
 	parser_PA.add_argument("-v", "--vcf", nargs='?', help="VCF file for variants", metavar='FILE', required = True)
 	parser_PA.add_argument("-m", "--model", nargs='?', help="Prefix for the regression model files", metavar='STRING')
 	parser_PA.add_argument("--predictors", nargs='?', help="File containing regression predictors", metavar='FILE')
-	parser_PA.add_argument("--cnv", action='store_true', help="Use the CNV prior models")
 	
 	
 	
@@ -149,7 +147,6 @@ def main(argv):
 	parser_BF.add_argument("-v", "--vcf", nargs='?', help="VCF file for variants", metavar='FILE', required = True)
 	parser_BF.add_argument("--priorCaus", nargs='?', default="linear", choices=["uniform", "linear"], help="Prior parameter distribution for causal model", metavar='STRING')
 	parser_BF.add_argument("--priorNeut", nargs='?', default="uniform", choices=["uniform", "linear"], help="Prior parameter distribution for neutral model", metavar='STRING')
-	parser_BF.add_argument("-k", "--key", nargs='?', default="GT", help="VCF FORMAT tag for genotype or carrier status", metavar='STRING')
 
 
 

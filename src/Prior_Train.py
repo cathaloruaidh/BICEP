@@ -452,16 +452,6 @@ def PT_main(args):
 	logging.info("Parsing the annotation information")
 	CV_anno_vcf = VCF(clinVarAnnoVcfFile, gts012=True)
 
-	if args.predictors is not None:
-
-		d = {}
-
-		with open(args.predictors, 'r') as f:
-			for line in f:
-				(model, key, value)=line.split()
-				d[model, key] = value
-
-
 	if args.cnv:
 		keys = re.sub('^.*?: ', '', CV_anno_vcf.get_header_type('CSQ')['Description']).split("|")
 		keys = [ key.strip("\"") for key in keys ]
@@ -473,18 +463,16 @@ def PT_main(args):
 
 
 		if args.predictors is not None:
-
 			d = {}
 
 			with open(args.predictors, 'r') as f:
 				for line in f:
-					(model, key, value)=line.split()
-					d[model, key] = value
-
+					(model, key)=line.split()
+					d[model, key] = 1
 
 			# manually add allele frequency to the predictors
-			keysPredictors = sorted([ x[1] for x in d.keys()])
-			keysPredictors = sorted( keysPredictors + [ args.frequency ] )
+			keysPredictors = [ x[1] for x in d.keys()] + [ args.frequency ]
+			keysPredictors = sorted(list(set(keysPredictors)))
 
 			keysPredictors_DEL = [ f for m,f in d.keys() if m == "DEL" ] + [args.frequency]
 			keysPredictors_DUP = [ f for m,f in d.keys() if m == "DUP" ] + [args.frequency]
@@ -511,20 +499,20 @@ def PT_main(args):
 
 
 		if args.predictors is not None:
-
 			d = {}
 
 			with open(args.predictors, 'r') as f:
 				for line in f:
 					(model, key, value)=line.split()
 					d[model, key] = value
-
-
+	
 			# manually add allele frequency to the predictors
-			keysPredictors = sorted([ x[1] for x in d.keys()])
+			keysPredictors = sorted(list(set([ x[1] for x in d.keys()])))
 			keysDescPred = sorted([ f for m,f in d.keys() if d[m,f] == "L" ] + [args.frequency])
 			keysAscPred = sorted([ f for m,f in d.keys() if d[m,f] == "H" ])
+
 			keysPredictors = sorted( keysDescPred + keysAscPred )
+			keysPredictors = sorted(list(set(keysPredictors)))
 
 			keysPredictors_IND = [ f for m,f in d.keys() if m == "IND" ] + [args.frequency]
 			keysPredictors_MIS = [ f for m,f in d.keys() if m == "MIS" ] + [args.frequency]
@@ -539,7 +527,8 @@ def PT_main(args):
 
 			keysPredictors_IND = [ args.frequency ]
 			keysPredictors_MIS = sorted([ "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score" ] + [ args.frequency ])
-			keysPredictors_OTH = sorted([ "CADD_PHRED"] + [ args.frequency ])
+			keysPredictors_OTH = [ args.frequency ]
+
 
 
 
@@ -556,7 +545,7 @@ def PT_main(args):
 		if args.cnv:
 
 			# get the ID of the variant
-			ID = variant.CHROM + "_" + str(variant.start+1) + "_" + variant.INFO.get('END') + "_" + variant.INFO.get('SVTYPE')
+			ID = variant.CHROM + "_" + str(variant.start+1) + "_" + str(variant.INFO.get('END')) + "_" + variant.INFO.get('SVTYPE')
 			
 			msg = "Reading variant " + ID
 			logging.debug(msg)
@@ -570,14 +559,14 @@ def PT_main(args):
 
 
 			# get the clinvar significance, ignoring anything after a comma
-			sigCV = variant.INFO.get('CLNSIG').split(",", 1)[0]
+			sigCV = variant.INFO.get('CLNSIG').split("\"")[1]
 
 
 
 			# get the short significance
-			if (sigCV == "Benign") or (sigCV == "Benign/Likely_benign") or (sigCV == "Likely_benign"):
+			if (sigCV == "Benign") or (sigCV == "Benign%2FLikely_benign") or (sigCV == "Likely%20benign"):
 				setCV = "BENIGN"
-			elif (sigCV == "Likely_pathogenic") or (sigCV == "Pathogenic/Likely_pathogenic") or (sigCV == "Pathogenic"):
+			elif (sigCV == "Likely%20pathogenic") or (sigCV == "Pathogenic%2FLikely%20pathogenic") or (sigCV == "Pathogenic"):
 				setCV = "PATHOGENIC"
 
 
@@ -597,7 +586,7 @@ def PT_main(args):
 			dictVEP = dict(zip(keys, tmp.T))
 			l = [ ID, setCV, typeCV, alleleID, SVLEN ]
 			for key in keysPredictors:
-				l.append(dictVEP[keysPredictors])
+				l.append(dictVEP[key])
 			DATA.append(l) 
 
 
@@ -786,7 +775,7 @@ def PT_main(args):
 	ped_ID = []
 	if args.cnv:
 		for variant in ped_vcf:
-			ped_ID.append(variant.CHROM + "_" + str(variant.start+1) + "_" + variant.INFO.get('END') + "_" + variant.INFO.get('SVTYPE'))
+			ped_ID.append(variant.CHROM + "_" + str(variant.start+1) + "_" + str(variant.INFO.get('END')) + "_" + variant.INFO.get('SVTYPE'))
 	else:
 		for variant in ped_vcf:
 			ped_ID.append(variant.CHROM + "_" + str(variant.start+1) + "_" + variant.REF + "_" + variant.ALT[0])
@@ -1229,11 +1218,13 @@ def PT_main(args):
 	if args.eval:
 		if args.cnv:
 			x = ["DEL", "DUP"]
+			val_tmp = [1, 1]
 			performance = pd.concat([ perf_DEL, perf_DUP ], ignore_index = True)
 
 
 		else:
 			x = ["IND", "MIS", "OTH"]
+			val_tmp = [1, 1, 1]
 			performance = pd.concat([ perf_IND, perf_MIS, perf_OTH ], ignore_index = True)
 
 		performance["L_Err"] = performance["Value"] - performance["L-CI-95"]
@@ -1254,7 +1245,7 @@ def PT_main(args):
 			trans1 = Affine2D().translate(-0.15, 0.0) + axs[i].transData
 			trans2 = Affine2D().translate(+0.15, 0.0) + axs[i].transData
 
-			axs[i].errorbar(x, [1,1,1], color="white", label="_tmp_")
+			axs[i].errorbar(x, val_tmp, color="white", label="_tmp_")
 			axs[i].errorbar(p_train_ok["Model"], p_train_ok["Value"], yerr=[ p_train_ok["L_Err"].values.tolist(), p_train_ok["U_Err"].values.tolist()  ], marker="o", linestyle="none", transform=trans1, capsize=4, label="Train")
 			axs[i].errorbar(p_test_ok["Model"], p_test_ok["Value"], yerr=[ p_test_ok["L_Err"].values.tolist(), p_test_ok["U_Err"].values.tolist()  ], marker="^", linestyle="none", transform=trans2, capsize=4, label="Test")
 			axs[i].errorbar(p_train_null["Model"], [1]*p_train_null["Value"].isnull().sum(), yerr=0, marker="x", linestyle="none", transform=trans1, color="#7f7f7f", label="NA")
@@ -1268,7 +1259,12 @@ def PT_main(args):
 		plt.savefig(args.outputDir + args.prefix + ".metrics_prior.png", dpi=300)
 
 		
-		VIF = pd.concat([ vif_IND, vif_MIS, vif_OTH ], ignore_index = True)
+		if args.cnv:
+			VIF = pd.concat([ vif_DEL, vif_DUP ], ignore_index = True)
+
+		else:
+			VIF = pd.concat([ vif_IND, vif_MIS, vif_OTH ], ignore_index = True)
+
 		VIF.to_csv(args.tempDir + args.prefix + ".features.txt", index=False, sep='\t', na_rep='.')
 
 
