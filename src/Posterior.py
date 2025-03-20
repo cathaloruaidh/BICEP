@@ -212,7 +212,7 @@ def PO_main(args):
 
 
 		else:
-			keysPredictors = sorted([ "CADD_PHRED", "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score" ] + [ args.frequency ] )
+			keysPredictors = [ "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score" ] + [ args.frequency ] 
 
 
 	# plotly
@@ -233,7 +233,7 @@ def PO_main(args):
 	custom_2 = custom_2.filter(['logBF', 'AFF_CARR', 'AFF', 'UNAFF_CARR', 'UNAFF', 'MISS'])
 	template_2 = """<b>logBF:</b> %{y}<br><b>AFF:</b> %{customdata[1]} / %{customdata[2]}<br><b>UNAFF:</b> %{customdata[3]} / %{customdata[4]}<br><b>MISS:</b> %{customdata[5]}<br>"""
 
-	custom_3 = merged_sub.filter(keysPredictors).fillna('N/A')
+	custom_3 = merged_sub.filter(["csq", "impact"] + keysPredictors).fillna('N/A')
 	custom_3[args.frequency] = custom_3[args.frequency].round(6)
 
 	if args.cnv:
@@ -256,7 +256,9 @@ def PO_main(args):
 	fig.add_shape(go.layout.Shape(type="line", x0=0, y0=max_logBF, x1=args.top, y1=max_logBF, line=dict(dash="dash", width=3),
     ),row=2,col=1)
 	fig.add_hline(y=max_logBF, line_dash="dash", row=2, col=1)
-	fig.update_layout(showlegend=False, xaxis=dict(tickmode='array', tick0=1, ticktext=x_ticks_label, tickvals=x_ticks))
+	fig.update_layout(showlegend=False, xaxis=dict(tickmode='array', tick0=1, ticktext=x_ticks_label, tickvals=x_ticks), plot_bgcolor='white')
+	fig.update_xaxes(showline=True, linewidth=2, linecolor='black', mirror=True, ticks='outside', gridcolor='lightgrey')
+	fig.update_yaxes(showline=True, linewidth=2, linecolor='black', mirror=True, ticks='outside')
 	
 	plotly.offline.plot(fig, filename=args.outputDir + args.prefix + ".BICEP.html")
 
