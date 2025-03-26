@@ -28,7 +28,9 @@ These are combined (on the base 10 logarithmic scale) to get the final posterior
 The logPostOC can be used an absolute measure of a variant's causality or to compare the evidence between variants (see example below). 
 
 
-If you use BICEP, please credit this GitHub repository. 
+If you use BICEP, please cite the accompanying [manuscript](https://academic.oup.com/bib/article/26/1/bbae624/7914576): 
+
+Ormond et al., "BICEP: Bayesian inference for rare genomic variant causality evaluation in pedigrees". *Brief Bioinform*. 2024 Nov 22;26(1):bbae624; doi: 10.1093/bib/bbae624; PMID: 39656772. 
 
 
 
