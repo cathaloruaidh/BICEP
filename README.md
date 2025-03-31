@@ -30,7 +30,7 @@ The logPostOC can be used an absolute measure of a variant's causality or to com
 
 If you use BICEP, please cite the accompanying [manuscript](https://academic.oup.com/bib/article/26/1/bbae624/7914576): 
 
-Ormond et al., "BICEP: Bayesian inference for rare genomic variant causality evaluation in pedigrees". *Brief Bioinform*. 2024 Nov 22;26(1):bbae624; doi: 10.1093/bib/bbae624; PMID: 39656772. 
+Ormond et al., "**BICEP: Bayesian inference for rare genomic variant causality evaluation in pedigrees**". *Brief Bioinform*. 2024 Nov 22;26(1):bbae624; doi: 10.1093/bib/bbae624; PMID: 39656772. 
 
 
 
