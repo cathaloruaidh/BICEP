@@ -297,7 +297,8 @@ def PA_main(args):
 
 		if args.cnv:
 			# get the ID of the variant
-			ID = variant.CHROM + "_" + str(variant.start+1) + "_" + str(variant.INFO.get('END')) + "_" + variant.INFO.get('SVTYPE')
+			ID = variant.ID
+			#ID = variant.CHROM + "_" + str(variant.start+1) + "_" + str(variant.INFO.get('END')) + "_" + variant.INFO.get('SVTYPE')
 
 			msg = "Reading variant " + ID
 			logging.debug(msg)
