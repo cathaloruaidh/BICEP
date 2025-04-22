@@ -153,34 +153,6 @@ def genotypeString(vector):
 
 
 
-# return how many aff/unaff carriers/non-carriers for a given
-# genotype string and the phenotypes
-def phenoCarriers(genotype, pedInfo, samples):
-
-	for i in range(pedInfo.nPeople):
-		if pedInfo.indID[i] not in samples:
-			genotype[i] = -1
-
-	k1 = k2 = l1 = l2 = m = 0
-	for i in range(pedInfo.nPeople):
-		if pedInfo.phenotypeActual[i] == 1:
-			if genotype[i] == 1:
-				k1 += 1
-			elif genotype[i] == 0:
-				l1 += 1
-		else:
-			if genotype[i] == 1:
-				k2 += 1
-			elif genotype[i] == 0:
-				l2 += 1
-		
-		if genotype[i] == -1 and pedInfo.indID[i] in samples:
-			m += 1
-	
-	return k1, l1, k2, l2, m
-
-
-
 # find the most recent common ancestor(s) for a given
 # genotype string
 def getMRCA(genotype, pedInfo):
@@ -241,6 +213,34 @@ def getMRCA(genotype, pedInfo):
 
 
 
+
+
+
+# return how many aff/unaff carriers/non-carriers for a given
+# genotype string and the phenotypes
+def phenoCarriers(genotype, pedInfo, samples):
+
+	for i in range(pedInfo.nPeople):
+		if pedInfo.indID[i] not in samples:
+			genotype[i] = -1
+
+	k1 = k2 = l1 = l2 = m = 0
+	for i in range(pedInfo.nPeople):
+		if pedInfo.phenotypeActual[i] == 1:
+			if genotype[i] == 1:
+				k1 += 1
+			elif genotype[i] == 0:
+				l1 += 1
+		else:
+			if genotype[i] == 1:
+				k2 += 1
+			elif genotype[i] == 0:
+				l2 += 1
+		
+		if genotype[i] == -1 and pedInfo.indID[i] in samples:
+			m += 1
+	
+	return k1, l1, k2, l2, m
 
 
 
@@ -913,7 +913,8 @@ def BF_main(args):
 
 		# get the ID of the variant
 		if args.cnv:
-			var_tmp = variant.CHROM + "_" + str(variant.start+1) + "_" + str(variant.INFO.get('END')) + "_" + variant.INFO.get('SVTYPE')
+			#var_tmp = variant.CHROM + "_" + str(variant.start+1) + "_" + str(variant.INFO.get('END')) + "_" + variant.INFO.get('SVTYPE')
+			var_tmp = variant.ID
 
 		else:
 			var_tmp = variant.CHROM + "_" + str(variant.start+1) + "_" + variant.REF + "_" + variant.ALT[0]

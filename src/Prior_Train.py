@@ -86,7 +86,11 @@ def generate_prior(x, y, label, args):
 		vif_data = pd.DataFrame()
 		vif_data["Model"] =  [ label ] * len(x_train.columns)
 		vif_data["Feature"] = x_train.columns
-		vif_data["VIF"] = [variance_inflation_factor(x_train_imp_scal, i) for i in range(len(x_train.columns))]
+		
+		if len(x_train.columns) == 1:
+			vif_data["VIF"] = 1
+		else:
+			vif_data["VIF"] = [variance_inflation_factor(x_train_imp_scal, i) for i in range(len(x_train.columns))]
 		vif_data["Coefficient"] = logReg.coef_.flatten()
 		vif_data.loc[len(vif_data)] = [ label, "intercept", np.nan, round(logReg.intercept_[0], 4) ]
 
