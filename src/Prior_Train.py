@@ -1207,6 +1207,7 @@ def PT_main(args):
 		else:
 			VIF = pd.concat([ vif_IND, vif_MIS, vif_OTH ], ignore_index = True)
 
+		VIF = VIF.round(3)
 		VIF.to_csv(args.tempDir + args.prefix + ".features.txt", index=False, sep='\t', na_rep='.')
 
 
