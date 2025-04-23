@@ -1259,7 +1259,7 @@ def PT_main(args):
 
 
 		handles, labels = axs[0].get_legend_handles_labels()
-		fig.legend(handles[1:3], labels[0:3])
+		fig.legend(handles[0:2], labels[0:2])
 		plt.savefig(args.outputDir + args.prefix + ".metrics_prior.png", dpi=300)
 
 		
