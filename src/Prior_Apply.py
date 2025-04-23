@@ -276,7 +276,7 @@ def PA_main(args):
 			keysDescPred = sorted([ "SIFT_score", "FATHMM_score" ] + [args.frequency])
 			keysAscPred  = sorted([ x for x in keysPredictors if x not in keysDescPred ])
 
-			keysPredictors_IND = sorted([ "CADD_PHRED" ] + [args.frequency])
+			keysPredictors_IND = sorted([args.frequency])
 			keysPredictors_MIS = sorted(["FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score"] + [args.frequency])
 			keysPredictors_OTH = [args.frequency]
 	
@@ -381,7 +381,6 @@ def PA_main(args):
 					d = dict((k, vepCSQRank[k]) for k in csqCVSubset)
 					dictVEP["Consequence_select"] = min(d, key=d.get)
 				else:
-					#dictVEP["Consequence_select"] = np.nan
 					add = False
 
 
@@ -868,7 +867,6 @@ def PA_main(args):
 
 		# get the regression input data if available
 		if os.path.isfile(modelPrefix + '.IND_predictors.npy'):
-			#x_IND_data = pd.DataFrame(x_IND_imp_scal, index = x_IND_index, columns = x_IND.columns)
 			x_IND_data = pd.DataFrame(x_IND, index = x_IND_index, columns = x_IND.columns)
 		
 		else:
@@ -878,7 +876,6 @@ def PA_main(args):
 
 
 		if os.path.isfile(modelPrefix + '.MIS_predictors.npy'):
-			#x_MIS_data = pd.DataFrame(x_MIS_imp_scal, index = x_MIS_index, columns = x_MIS.columns)
 			x_MIS_data = pd.DataFrame(x_MIS, index = x_MIS_index, columns = x_MIS.columns)
 
 		else:
@@ -888,7 +885,6 @@ def PA_main(args):
 
 
 		if os.path.isfile(modelPrefix + '.OTH_predictors.npy'):
-			#x_OTH_data = pd.DataFrame(x_OTH_imp_scal, index = x_OTH_index, columns = x_OTH.columns)
 			x_OTH_data = pd.DataFrame(x_OTH, index = x_OTH_index, columns = x_OTH.columns)
 		
 		else:

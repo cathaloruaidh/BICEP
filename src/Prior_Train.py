@@ -388,68 +388,6 @@ def PT_main(args):
 
 
 
-	# generate the flat priors
-
-#	if clinVarFullVcfFile is not None:
-#
-#		CV_full_path = Path(clinVarFullVcfFile)
-#
-#		if CV_full_path.is_file():
-#			logging.info("Generating the flat priors")
-#
-#			CV_full_vcf = VCF(clinVarFullVcfFile, gts012=True)
-#			ALL_DATA = []
-#			for variant in CV_full_vcf:
-#				sig = variant.INFO.get('CLNSIG')
-#				if sig is not None:
-#					sig = sig.split(",", 1)[0]
-#
-#				gene = variant.INFO.get('GENEINFO')
-#				vc = variant.INFO.get('CLNVC')
-#				mc = variant.INFO.get('MC')
-#
-#				if not (vc == "single_nucleotide_variant" or vc == "Indel"):
-#					continue
-#				ALL_DATA.append([ sig, vc, gene, mc ])
-#			
-#			df_all = pd.DataFrame(ALL_DATA, columns=['sig', 'vc', 'gene', 'mc'])
-#			df_all_path = df_all.dropna(subset=['sig'])
-#			df_all_path = df_all_path[ df_all_path['sig'].str.contains("athogenic") ]
-#			df_all_path = df_all_path[ df_all_path['sig'].str.contains("Conflicting") == False ]
-#
-#
-#			flatPrior_NON =  df_all_path['gene'].isna().sum() / df_all['gene'].isna().sum()
-#
-#
-#			df_all = df_all.dropna(subset=['gene'])
-#			df_all_path = df_all_path.dropna(subset=['gene'])
-#
-#			flatPrior_IND = len(df_all_path[ df_all_path['vc'] == "Indel" ].index) / len(df_all[ df_all['vc'] == "Indel" ].index)
-#
-#
-#			df_all = df_all.dropna(subset=['mc'])
-#			df_all_path = df_all_path.dropna(subset=['mc'])
-#
-#			flatPrior_MIS = len(df_all_path[ df_all_path['mc'].str.contains("missense") ].index) / len(df_all[ df_all['mc'].str.contains("missense") ].index)
-#
-#			df_all = df_all[ df_all['vc'] == "single_nucleotide_variant" ]
-#			df_all_path = df_all_path[ df_all_path['vc'] == "single_nucleotide_variant" ]
-#
-#			flatPrior_MIS = len(df_all_path[ ~df_all_path['mc'].str.contains("missense") ].index) / len(df_all[ ~df_all['mc'].str.contains("missense") ].index)
-#
-#
-#			flatPriors = { 'NON' : flatPrior_nonCoding, 'IND' : flatPrior_IND, 'MIS' : flatPrior_MIS, 'OTH' : flatPrior_OTH }
-#
-#
-#
-#			with open(args.tempDir + args.prefix+'.flatPriors.pkl', 'wb') as f:
-#				pickle.dump(flatPriors, f)
-#		else:
-#			msg = "Could not find the ClinVar file: " + clinVarFullVcfFile
-#			logging.warning(msg)
-#	else:
-#		logging.info("Not generating flat priors for non-coding variants")
-#
 
 
 	# parse data from annotated ClinVar file 
