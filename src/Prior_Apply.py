@@ -254,9 +254,9 @@ def PA_main(args):
 				args.frequency = "gnomAD_v2_exome_AF_popmax"
 
 			keysPredictors = sorted([ x[1] for x in d.keys()])
-			keysDescPred = sorted([ f for m,f in d.keys() if d[m,f] == "L" ] + [args.frequency])
-			keysAscPred = sorted([ f for m,f in d.keys() if d[m,f] == "H" ])
-			keysPredictors = sorted( keysDescPred + keysAscPred )
+			keysDescPred = sorted(list(set([ f for m,f in d.keys() if d[m,f] == "L" ] + [args.frequency])))
+			keysAscPred = sorted(list(set([ f for m,f in d.keys() if d[m,f] == "H" ])))
+			keysPredictors = sorted( list(set(keysDescPred + keysAscPred )))
 
 			keysPredictors_IND = [ f for m,f in d.keys() if m == "IND" ] + [args.frequency]
 			keysPredictors_MIS = [ f for m,f in d.keys() if m == "MIS" ] + [args.frequency]
@@ -387,18 +387,20 @@ def PA_main(args):
 				# extract the transcript-specific metrics from dbNSFP
 				# and pick the most deleterious value
 				for key in keysAscPred:
-					l = [ float(x) for x in dictVEP[key].split("&") if x != '.' and x != "" ]
-					if len(l) == 0:
-						dictVEP[key] = np.nan
-					else:
-						dictVEP[key] = max(l)
+					if not isinstance(dictVEP[key], float):
+						l = [ float(x) for x in dictVEP[key].split("&") if x != '.' and x != "" ]
+						if len(l) == 0:
+							dictVEP[key] = np.nan
+						else:
+							dictVEP[key] = max(l)
 
 				for key in keysDescPred:
-					l = [ float(x) for x in dictVEP[key].split("&") if x != '.' and x != "" ]
-					if len(l) == 0:
-						dictVEP[key] = np.nan
-					else:
-						dictVEP[key] = min(l)
+					if not isinstance(dictVEP[key], float):
+						l = [ float(x) for x in dictVEP[key].split("&") if x != '.' and x != "" ]
+						if len(l) == 0:
+							dictVEP[key] = np.nan
+						else:
+							dictVEP[key] = min(l)
 
 				
 
