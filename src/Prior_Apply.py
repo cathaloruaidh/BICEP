@@ -272,7 +272,7 @@ def PA_main(args):
 			keysPredictors_DUP = keysPredictors
 
 		else:
-			keysPredictors = sorted([ "CADD_PHRED", "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score" ] + [args.frequency])
+			keysPredictors = sorted([ "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score" ] + [args.frequency])
 			keysDescPred = sorted([ "SIFT_score", "FATHMM_score" ] + [args.frequency])
 			keysAscPred  = sorted([ x for x in keysPredictors if x not in keysDescPred ])
 
