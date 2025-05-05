@@ -462,7 +462,7 @@ def PT_main(args):
 
 
 		else:
-			keysPredictors = sorted([ "CADD_PHRED", "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score" ] + [ args.frequency ] )
+			keysPredictors = sorted([ "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score" ] + [ args.frequency ] )
 			keysDescPred = sorted([ "FATHMM_score", "SIFT_score" ] + [ args.frequency ])
 			keysAscPred  = sorted([ x for x in keysPredictors if x not in keysDescPred ])
 
@@ -1020,7 +1020,7 @@ def PT_main(args):
 		logging.info("MIS")
 		x_MIS = x[ (x['csqCV'] == 'missense_variant') & (x['typeCV'] == 'SNV') ]
 		x_MIS_csq = x_MIS['csqCV'] 
-		x_MIS = x_MIS.drop(['CADD_PHRED', 'typeCV', 'csqCV', 'impactCV'], axis=1, errors='ignore')
+		x_MIS = x_MIS.drop(['typeCV', 'csqCV', 'impactCV'], axis=1, errors='ignore')
 
 
 
