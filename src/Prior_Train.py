@@ -930,7 +930,6 @@ def PT_main(args):
 
 
 	else:
-		print([ 'ID', 'geneCV', 'csqCV', 'impactCV', 'typeCV', 'alleleID' ] + keysAscPred+ keysDescPred)
 		x = df.filter([ 'ID', 'geneCV', 'csqCV', 'impactCV', 'typeCV', 'alleleID' ] + keysAscPred + keysDescPred)
 
 
