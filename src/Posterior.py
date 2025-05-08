@@ -113,9 +113,9 @@ def PO_main(args):
 	max_y = np.ceil(np.max(np.concatenate((merged_sub['logPostOC'].values, merged_sub['logBF'].values, merged_sub['logPriorOC'].values, np.array([max_logBF])))))
 	min_y = np.floor(np.min(np.concatenate((merged_sub['logPostOC'].values, merged_sub['logBF'].values, merged_sub['logPriorOC'].values, np.array([max_logBF])))))
 
-	# let the y_min be no larger than twice abs(y_max)
+	# let the y_min be no larger than abs(y_max)
 	# in case there are low-prior variants taking over the plot
-	min_y = np.max([min_y, -2*abs(max_y)])
+	min_y = np.max([min_y, -1*abs(max_y)])
 
 
 	fig, (ax1, ax2, ax3) = plt.subplots(nrows=3, ncols=1, sharex=True)
@@ -256,9 +256,10 @@ def PO_main(args):
 	fig.add_shape(go.layout.Shape(type="line", x0=0, y0=max_logBF, x1=args.top, y1=max_logBF, line=dict(dash="dash", width=3),
     ),row=2,col=1)
 	fig.add_hline(y=max_logBF, line_dash="dash", row=2, col=1)
-	fig.update_layout(showlegend=False, xaxis=dict(tickmode='array', tick0=1, ticktext=x_ticks_label, tickvals=x_ticks), plot_bgcolor='white')
+	fig.add_hline(y=0, line_width=1)
+	fig.update_layout(showlegend=False, xaxis=dict(tickmode='array', tick0=1, ticktext=x_ticks_label, tickvals=x_ticks), yaxis=dict(range=[min_y, max_y]), plot_bgcolor='white')
 	fig.update_xaxes(showline=True, linewidth=2, linecolor='black', mirror=True, ticks='outside', gridcolor='lightgrey')
-	fig.update_yaxes(showline=True, linewidth=2, linecolor='black', mirror=True, ticks='outside')
+	fig.update_yaxes(showline=True, linewidth=2, linecolor='black', mirror=True, ticks='outside', range=[min_y, max_y])
 	
 	plotly.offline.plot(fig, filename=args.outputDir + args.prefix + ".BICEP.html")
 
