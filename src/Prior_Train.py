@@ -401,7 +401,7 @@ def PT_main(args):
 		
 		# allele frequency predictor for prior
 		if args.frequency is None:
-			args.requency = "gnomAD_v4.1_Max_PopMax_AF"
+			args.frequency = "gnomAD_v4.1_Max_PopMax_AF"
 
 
 		if args.predictors is not None:
@@ -437,7 +437,7 @@ def PT_main(args):
 		
 		# allele frequency predictor for prior
 		if args.frequency is None:
-			args.requency = "gnomAD_v2_exome_AF_popmax"
+			args.frequency = "gnomAD_v2_exome_AF_popmax"
 
 
 		if args.predictors is not None:
