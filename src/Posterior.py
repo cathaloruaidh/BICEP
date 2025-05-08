@@ -256,7 +256,7 @@ def PO_main(args):
 	fig.add_shape(go.layout.Shape(type="line", x0=0, y0=max_logBF, x1=args.top, y1=max_logBF, line=dict(dash="dash", width=3),
     ),row=2,col=1)
 	fig.add_hline(y=max_logBF, line_dash="dash", row=2, col=1)
-	fig.add_hline(y=0, line_width=1)
+	fig.add_hline(y=0, line_width=1, row="all")
 	fig.update_layout(showlegend=False, xaxis=dict(tickmode='array', tick0=1, ticktext=x_ticks_label, tickvals=x_ticks), yaxis=dict(range=[min_y, max_y]), plot_bgcolor='white')
 	fig.update_xaxes(showline=True, linewidth=2, linecolor='black', mirror=True, ticks='outside', gridcolor='lightgrey')
 	fig.update_yaxes(showline=True, linewidth=2, linecolor='black', mirror=True, ticks='outside', range=[min_y, max_y])
