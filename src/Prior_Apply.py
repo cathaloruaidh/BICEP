@@ -251,7 +251,8 @@ def PA_main(args):
 
 			# allele frequency predictor for prior
 			if args.frequency is None:
-				args.frequency = "gnomAD_v2_exome_AF_popmax"
+				#args.frequency = "gnomAD_v2_exome_AF_popmax"
+				args.frequency = "gnomADe_AF"
 
 			keysPredictors = sorted([ x[1] for x in d.keys()])
 			keysDescPred = sorted(list(set([ f for m,f in d.keys() if d[m,f] == "L" ] + [args.frequency])))
@@ -272,12 +273,12 @@ def PA_main(args):
 			keysPredictors_DUP = keysPredictors
 
 		else:
-			keysPredictors = sorted([ "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score" ] + [args.frequency])
+			keysPredictors = sorted([ "fathmm-XF_coding_score", "MPC_score", "PolyPhen", "REVEL", "SIFT" ] + [args.frequency])
 			keysDescPred = sorted([ "SIFT_score", "FATHMM_score" ] + [args.frequency])
 			keysAscPred  = sorted([ x for x in keysPredictors if x not in keysDescPred ])
 
 			keysPredictors_IND = sorted([args.frequency])
-			keysPredictors_MIS = sorted(["FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score"] + [args.frequency])
+			keysPredictors_MIS = sorted(["fathmm-XF_coding_score", "MPC_score", "PolyPhen", "REVEL", "SIFT"] + [args.frequency])
 			keysPredictors_OTH = [args.frequency]
 	
 
