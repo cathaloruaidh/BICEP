@@ -274,7 +274,7 @@ def PA_main(args):
 
 		else:
 			keysPredictors = sorted([ "fathmm-XF_coding_score", "MPC_score", "PolyPhen", "REVEL", "SIFT" ] + [args.frequency])
-			keysDescPred = sorted([ "SIFT_score", "FATHMM_score" ] + [args.frequency])
+			keysDescPred = sorted([ "SIFT", "fathmm-XF_coding_score" ] + [args.frequency])
 			keysAscPred  = sorted([ x for x in keysPredictors if x not in keysDescPred ])
 
 			keysPredictors_IND = sorted([args.frequency])

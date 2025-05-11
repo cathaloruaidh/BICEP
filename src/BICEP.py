@@ -74,7 +74,7 @@ def main(argv):
 	parser_parent.add_argument("-n", "--cores", nargs='?', default=1, type=int, help="Number of CPU cores available", metavar='N')
 	parser_parent.add_argument("--prefix", nargs='?', default="BICEP_output", help="Output prefix", metavar='STRING')
 	parser_parent.add_argument("--build", nargs='?', default='GRCh38', help="Reference genome build: GRCh37, GRCh38", choices=['GRCh37', 'GRCh38'], metavar='STRING')
-	parser_parent.add_argument("--frequency", nargs='?', default="gnomAD_v2_exome_AF_popmax", help="Allele frequency predictor", metavar='STRING')
+	parser_parent.add_argument("--frequency", nargs='?', default="gnomADe_AF", help="Allele frequency predictor", metavar='STRING')
 	parser_parent.add_argument("--cnv", action='store_true', help="Use the CNV prior models")
 	parser_parent.add_argument("-k", "--key", nargs='?', help="VCF FORMAT tag for genotype or carrier status", metavar='STRING')
 

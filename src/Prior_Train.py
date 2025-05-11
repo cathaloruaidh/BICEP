@@ -465,7 +465,7 @@ def PT_main(args):
 		else:
 			#keysPredictors = sorted([ "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score" ] + [ args.frequency ] )
 			#keysDescPred = sorted([ "FATHMM_score", "SIFT_score" ] + [ args.frequency ])
-			keysPredictors = sorted([ "fathmm-XF_coding_score", "MPC_score", "PolyPhen2", "REVEL", "SIFT" ] + [ args.frequency ] )
+			keysPredictors = sorted([ "fathmm-XF_coding_score", "MPC_score", "PolyPhen", "REVEL", "SIFT" ] + [ args.frequency ] )
 			keysDescPred = sorted([ "fathmm-XF_coding_score", "SIFT" ] + [ args.frequency ])
 			keysAscPred  = sorted([ x for x in keysPredictors if x not in keysDescPred ])
 
