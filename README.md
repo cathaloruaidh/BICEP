@@ -47,7 +47,7 @@ Clone the repostory:
 git clone https://github.com/cathaloruaidh/BICEP.git
 ```
 
-The required python packages can be installed with conda. BICEP installation was tested using [Miniconda](https://docs.anaconda.com/miniconda/#quick-command-line-install) on a linux OS.  
+The required python packages can be installed with conda. BICEP installation was tested using [Miniconda](https://www.anaconda.com/docs/getting-started/miniconda/install) on a linux OS.  
 
 ```
 conda env create -n bicep --file BICEP/environment.yml
