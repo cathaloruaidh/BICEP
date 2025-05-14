@@ -64,7 +64,7 @@ def generate_prior(x, y, label, args):
 
 		msg = "Scaling training data to [0,1] (" + label + ")"
 		logging.debug(msg)
-		scal = MinMaxScaler(clip = 'true')
+		scal = MinMaxScaler(clip = True)
 		scal.fit(x_train_imp)
 		x_train_imp_scal = scal.transform(x_train_imp)
 		x_test_imp_scal = scal.transform(x_test_imp)
@@ -188,7 +188,7 @@ def generate_prior(x, y, label, args):
 	
 	# scale the data
 	logging.info("Scaling to [0,1]")
-	scal = MinMaxScaler(clip = 'true')
+	scal = MinMaxScaler(clip = True)
 	scal.fit(x_imp)
 
 	scal.feature_names = list(x.columns.values)
