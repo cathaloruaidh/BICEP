@@ -946,32 +946,33 @@ def PT_main(args):
 		logging.info("IND")
 		
 		x_IND = x[ x['typeCV'] == 'indel' ]
-		ID_IND = x_IND['ID']
-		alleleID_IND = x_IND['alleleID']
-		geneCV_IND = x_IND['geneCV']
-		x_IND = x_IND.drop(['ID', 'alleleID', 'csqCV', 'geneCV', 'typeCV'], axis=1, errors='ignore')
-
-		x_IND_index = x_IND.index
-		x_IND['impactCV'] = pd.Categorical(x_IND['impactCV'], categories = sorted(x_IND['impactCV'].unique()))
-		
-		impactCV_IND = [ x for x in x_IND['impactCV'] if x in vepIMPACTRank.keys() ]
-		d_IND = dict((k, vepIMPACTRank[k]) for k in impactCV_IND)
-		drop_IND = "impactCV_" + max(d_IND, key=d_IND.get)
-		
-		x_IND = pd.get_dummies(x_IND, columns = ['impactCV']).drop(drop_IND, axis=1)
 
 
 		y_IND = y[ y['typeCV'] == 'indel' ]
-		y_IND = y_IND.drop(['csqCV', 'impactCV', 'typeCV'], axis=1, errors='ignore')
-		y_IND = y_IND.values.reshape(-1,1)
-
 
 		uniq, counts = np.unique(y_IND, return_counts = True)
 
 		if (len(x_IND.index) > 0) and (len(uniq) == 2) and (counts.min() > 10*len(x_IND.columns)):
+			ID_IND = x_IND['ID']
+			alleleID_IND = x_IND['alleleID']
+			geneCV_IND = x_IND['geneCV']
+			x_IND = x_IND.drop(['ID', 'alleleID', 'csqCV', 'geneCV', 'typeCV'], axis=1, errors='ignore')
+
+			x_IND_index = x_IND.index
+			x_IND['impactCV'] = pd.Categorical(x_IND['impactCV'], categories = sorted(x_IND['impactCV'].unique()))
+			
+			impactCV_IND = [ x for x in x_IND['impactCV'] if x in vepIMPACTRank.keys() ]
+			d_IND = dict((k, vepIMPACTRank[k]) for k in impactCV_IND)
+			drop_IND = "impactCV_" + max(d_IND, key=d_IND.get)
+			
+			x_IND = pd.get_dummies(x_IND, columns = ['impactCV']).drop(drop_IND, axis=1)
 			drop_cols = [ x for x in keysPredictors if x not in keysPredictors_IND ]
 			x_IND = x_IND.drop(drop_cols, axis=1, errors='ignore')
 			#x_IND = x_IND[x_IND.columns.intersection(keysPredictors_IND)]
+
+			y_IND = y_IND.drop(['csqCV', 'impactCV', 'typeCV'], axis=1, errors='ignore')
+			y_IND = y_IND.values.reshape(-1,1)
+
 
 			
 			if args.eval:
@@ -1022,27 +1023,27 @@ def PT_main(args):
 		## MISSENSE SNV
 		logging.info("MIS")
 		x_MIS = x[ (x['csqCV'] == 'missense_variant') & (x['typeCV'] == 'SNV') ]
-		x_MIS_csq = x_MIS['csqCV'] 
-		x_MIS = x_MIS.drop(['typeCV', 'csqCV', 'impactCV'], axis=1, errors='ignore')
-
 
 
 		y_MIS = y[ (y['csqCV'] == 'missense_variant') & (y['typeCV'] == 'SNV') ]
-		y_MIS = y_MIS.drop(['csqCV', 'typeCV'], axis=1)
-		y_MIS = y_MIS.values.reshape(-1,1)
-
-
-		# get IDs
-		ID_MIS = x_MIS['ID']
-		alleleID_MIS = x_MIS['alleleID']
-		geneCV_MIS = x_MIS['geneCV']
-		x_MIS = x_MIS.drop(['ID', 'alleleID', 'geneCV'], axis=1)
-		x_MIS_index = x_MIS.index
 
 
 		uniq, counts = np.unique(y_MIS, return_counts = True)
 
 		if (len(x_MIS.index) > 0) and (len(uniq) == 2) and (counts.min() > 15*len(x_MIS.columns)):
+			# get IDs
+			x_MIS_csq = x_MIS['csqCV'] 
+			x_MIS = x_MIS.drop(['typeCV', 'csqCV', 'impactCV'], axis=1, errors='ignore')
+
+			ID_MIS = x_MIS['ID']
+			alleleID_MIS = x_MIS['alleleID']
+			geneCV_MIS = x_MIS['geneCV']
+			x_MIS = x_MIS.drop(['ID', 'alleleID', 'geneCV'], axis=1)
+			x_MIS_index = x_MIS.index
+
+			y_MIS = y_MIS.drop(['csqCV', 'typeCV'], axis=1)
+			y_MIS = y_MIS.values.reshape(-1,1)
+
 			drop_cols = [ x for x in keysPredictors if x not in keysPredictors_MIS ]
 			x_MIS = x_MIS.drop(drop_cols, axis=1, errors='ignore')
 
@@ -1092,35 +1093,37 @@ def PT_main(args):
 		## NON-MISSENSE SNV
 		logging.info("NON-MISSENSE SNV")
 		x_OTH = x[ (x['csqCV'] != 'missense_variant') & (x['typeCV'] == 'SNV') ]
-		x_OTH_csq = x_OTH['csqCV'] 
 
 
 		y_OTH = y[ (y['csqCV'] != 'missense_variant') & (y['typeCV'] == 'SNV') ]
-		y_OTH = y_OTH.drop(['csqCV', 'typeCV'], axis=1)
-		y_OTH = y_OTH.values.reshape(-1,1)
-
-
-		# get IDs
-		ID_OTH = x_OTH['ID']
-		alleleID_OTH = x_OTH['alleleID']
-		geneCV_OTH = x_OTH['geneCV']
-		x_OTH = x_OTH.drop(['ID', 'alleleID', 'geneCV', 'impactCV', 'typeCV'], axis=1)
-		x_OTH_index = x_OTH.index
-
-		x_OTH['csqCV'] = pd.Categorical(x_OTH['csqCV'], categories = sorted(x_OTH['csqCV'].unique()))
-		csqCV_OTH = [ x for x in x_OTH['csqCV'] if x in vepCSQRank.keys() ]
-		d_OTH = dict((k, vepCSQRank[k]) for k in csqCV_OTH)
-
-
-		drop_OTH = "csqCV_" + max(d_OTH, key=d_OTH.get)
-		x_OTH = pd.get_dummies(x_OTH, columns = ['csqCV']).drop(drop_OTH, axis=1)
-
 
 		uniq, counts = np.unique(y_OTH, return_counts = True)
 
 		if (len(x_OTH.index) > 0) and (len(uniq) == 2) and (counts.min() > 15*len(x_OTH.columns)):
+
+			# get IDs
+			x_OTH_csq = x_OTH['csqCV'] 
+			ID_OTH = x_OTH['ID']
+			alleleID_OTH = x_OTH['alleleID']
+			geneCV_OTH = x_OTH['geneCV']
+			x_OTH = x_OTH.drop(['ID', 'alleleID', 'geneCV', 'impactCV', 'typeCV'], axis=1)
+			x_OTH_index = x_OTH.index
+
+			x_OTH['csqCV'] = pd.Categorical(x_OTH['csqCV'], categories = sorted(x_OTH['csqCV'].unique()))
+			csqCV_OTH = [ x for x in x_OTH['csqCV'] if x in vepCSQRank.keys() ]
+			d_OTH = dict((k, vepCSQRank[k]) for k in csqCV_OTH)
+
+
+			drop_OTH = "csqCV_" + max(d_OTH, key=d_OTH.get)
+			x_OTH = pd.get_dummies(x_OTH, columns = ['csqCV']).drop(drop_OTH, axis=1)
+
+
 			drop_cols = [ x for x in keysPredictors if x not in keysPredictors_OTH ]
 			x_OTH = x_OTH.drop(drop_cols, axis=1, errors='ignore')
+
+
+			y_OTH = y_OTH.drop(['csqCV', 'typeCV'], axis=1)
+			y_OTH = y_OTH.values.reshape(-1,1)
 
 
 			if args.eval:
