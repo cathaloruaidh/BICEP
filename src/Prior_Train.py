@@ -949,6 +949,7 @@ def PT_main(args):
 
 
 		y_IND = y[ y['typeCV'] == 'indel' ]
+		y_IND = y_IND.drop(['csqCV', 'impactCV', 'typeCV'], axis=1, errors='ignore')
 
 		uniq, counts = np.unique(y_IND, return_counts = True)
 
@@ -970,7 +971,6 @@ def PT_main(args):
 			x_IND = x_IND.drop(drop_cols, axis=1, errors='ignore')
 			#x_IND = x_IND[x_IND.columns.intersection(keysPredictors_IND)]
 
-			y_IND = y_IND.drop(['csqCV', 'impactCV', 'typeCV'], axis=1, errors='ignore')
 			y_IND = y_IND.values.reshape(-1,1)
 
 
@@ -1026,6 +1026,7 @@ def PT_main(args):
 
 
 		y_MIS = y[ (y['csqCV'] == 'missense_variant') & (y['typeCV'] == 'SNV') ]
+		y_MIS = y_MIS.drop(['csqCV', 'typeCV'], axis=1)
 
 
 		uniq, counts = np.unique(y_MIS, return_counts = True)
@@ -1041,7 +1042,6 @@ def PT_main(args):
 			x_MIS = x_MIS.drop(['ID', 'alleleID', 'geneCV'], axis=1)
 			x_MIS_index = x_MIS.index
 
-			y_MIS = y_MIS.drop(['csqCV', 'typeCV'], axis=1)
 			y_MIS = y_MIS.values.reshape(-1,1)
 
 			drop_cols = [ x for x in keysPredictors if x not in keysPredictors_MIS ]
@@ -1096,6 +1096,7 @@ def PT_main(args):
 
 
 		y_OTH = y[ (y['csqCV'] != 'missense_variant') & (y['typeCV'] == 'SNV') ]
+		y_OTH = y_OTH.drop(['csqCV', 'typeCV'], axis=1)
 
 		uniq, counts = np.unique(y_OTH, return_counts = True)
 
@@ -1122,7 +1123,6 @@ def PT_main(args):
 			x_OTH = x_OTH.drop(drop_cols, axis=1, errors='ignore')
 
 
-			y_OTH = y_OTH.drop(['csqCV', 'typeCV'], axis=1)
 			y_OTH = y_OTH.values.reshape(-1,1)
 
 
