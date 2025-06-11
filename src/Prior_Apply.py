@@ -684,7 +684,7 @@ def PA_main(args):
 
 		y_MIS = df[ df['csqVEP'] == 'missense_variant' ]
 
-		if os.path.isfile(modelPrefix + '.MIS_predictors.npy'):
+		if os.path.isfile(modelPrefix + '.MIS_predictors.npy') and not x_MIS.empty:
 
 			# load in the predictor IDs for the models
 			with open(modelPrefix + '.MIS_predictors.npy', 'rb') as f:
@@ -748,7 +748,7 @@ def PA_main(args):
 		y_OTH = df[ (df['csqVEP'] != 'missense_variant') & (df['typeVEP'] == 'SNV') ]
 
 			
-		if os.path.isfile(modelPrefix + '.OTH_predictors.npy'):
+		if os.path.isfile(modelPrefix + '.OTH_predictors.npy') and not x_OTH.empty:
 
 			# load in the predictor IDs for the models
 			with open(modelPrefix + '.OTH_predictors.npy', 'rb') as f:
