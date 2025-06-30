@@ -31,7 +31,7 @@ from statsmodels.stats.outliers_influence import variance_inflation_factor
 
 
 
-def generate_prior(x, y, label, args):
+def generate_prior(x, y, label, args, LABELS_dict):
 
 
 	msg = str(np.size(y)) + " " + label + " used (" + str(sum(y == 'PATHOGENIC')) + " PATH, " + str(sum(y == 'BENIGN')) + " BEN)"
@@ -50,6 +50,13 @@ def generate_prior(x, y, label, args):
 	# evaluate the prior
 	if args.eval:
 		x_train, x_test, y_train, y_test = train_test_split(x, y, test_size = 0.2, random_state = 123)
+
+		x_train_ID = x_train["ID"].to_list()
+		x_train = x_train.drop(["ID"], axis=1, errors='ignore')
+
+		x_test_ID = x_test["ID"].to_list()
+		x_test = x_test.drop(["ID"], axis=1, errors='ignore')
+
 
 
 		msg = "Impute the training data (" + label + ")"
@@ -136,7 +143,20 @@ def generate_prior(x, y, label, args):
 			MCC_test_boot.append(matthews_corrcoef(y_boot, y_pred))
 
 
+		
+		origID = []
+		sigCV_short = []
+		for key in x_train_ID:
+			o,s = LABELS_dict[key]
+			origID.append(o)
+			sigCV_short.append(s)
+
+
 		y_train_pred = logReg.predict(x_train_imp_scal)
+		prior_train = logReg.predict_proba(x_train_imp_scal)[:,1]
+		logPriorOC_train = np.log10(prior_train / (1-prior_train))
+		df = pd.DataFrame(data={'ID' : x_train_ID, 'origID' : origID, 'Label' : y_train.flatten(), 'origLabel': sigCV_short, 'Prior' : prior_train, 'logPriorOC' : logPriorOC_train})
+		df.to_csv(args.tempDir + args.prefix + ".TRAIN." + label + '_priors.txt', index=False, sep="\t")
 		tn, fp, fn, tp = confusion_matrix(y_train, y_train_pred).ravel()
 
 
@@ -154,8 +174,18 @@ def generate_prior(x, y, label, args):
 
 
 
+		origID = []
+		sigCV_short = []
+		for key in x_test_ID:
+			o,s = LABELS_dict[key]
+			origID.append(o)
+			sigCV_short.append(s)
+
+
 		y_test_pred = logReg.predict(x_test_imp_scal)
-		df = pd.DataFrame(data={'Label' : y_test.flatten(), 'p' : logReg.predict_proba(x_test_imp_scal)[:,1]})
+		prior_test = logReg.predict_proba(x_test_imp_scal)[:,1]
+		logPriorOC_test = np.log10(prior_test / (1-prior_test))
+		df = pd.DataFrame(data={'ID' : x_test_ID, 'origID' : origID, 'Label' : y_test.flatten(), 'origLabel': sigCV_short, 'Prior' : prior_test, 'logPriorOC' : logPriorOC_test})
 		df.to_csv(args.tempDir + args.prefix + ".TEST." + label + '_priors.txt', index=False, sep="\t")
 		tn, fp, fn, tp = confusion_matrix(y_test, y_test_pred).ravel()
 
@@ -173,6 +203,11 @@ def generate_prior(x, y, label, args):
 		performance = pd.concat([performance, p_tmp], ignore_index = True)
 
 		print(performance)
+
+
+	# remove ID column from previous step
+	x = x.drop(["ID"], axis=1, errors='ignore')
+
 
 	# impute the missing data
 	logging.info("Impute the data")
@@ -480,6 +515,7 @@ def PT_main(args):
 
 	# save variants in list 
 	DATA = []
+	LABELS = []
 	CHROMS = set([ "chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7", "chr8", "chr9", "chr10", "chr11", "chr12", "chr13", "chr14", "chr15", "chr16", "chr17", "chr18", "chr19", "chr20", "chr21", "chr22" ])
 	for variant in CV_anno_vcf:
 		# remove variants not on autosomes
@@ -514,6 +550,28 @@ def PT_main(args):
 			elif (sigCV == "Likely%20pathogenic") or (sigCV == "Pathogenic%2FLikely%20pathogenic") or (sigCV == "Pathogenic"):
 				setCV = "PATHOGENIC"
 
+			# abbreviate the long significances
+			if (sigCV == "Benign"):
+				sigCV_short = "B"
+
+			elif sigCV == "Benign%2FLikely_benign":
+				sigCV_short = "B/LB"
+
+			elif sigCV == "Likely%20benign":
+				sigCV_short = "LB"
+
+			elif sigCV == "Likely%20pathogenic":
+				sigCV_short = "LP"
+
+			elif sigCV == "Pathogenic%2FLikely%20pathogenic":
+				sigCV_short = "P/LP"
+
+			elif sigCV == "Pathogenic":
+				sigCV_short = "P"
+
+			else:
+				sigCV_short = "UNKNOWN"
+
 
 			# get the variant type
 			typeCV = variant.INFO.get('SVTYPE')
@@ -533,6 +591,8 @@ def PT_main(args):
 			for key in keysPredictors:
 				l.append(dictVEP[key])
 			DATA.append(l) 
+
+			LABELS.append([alleleID, ID, sigCV_short])
 
 
 
@@ -562,6 +622,29 @@ def PT_main(args):
 				setCV = "BENIGN"
 			elif (sigCV == "Likely_pathogenic") or (sigCV == "Pathogenic/Likely_pathogenic") or (sigCV == "Pathogenic"):
 				setCV = "PATHOGENIC"
+
+
+			# abbreviate the long significances
+			if sigCV == "Benign":
+				sigCV_short = "B"
+
+			elif sigCV == "Benign/Likely_benign":
+				sigCV_short = "B/LB"
+
+			elif sigCV == "Likely_benign":
+				sigCV_short = "LB"
+
+			elif sigCV == "Likely_pathogenic":
+				sigCV_short = "LP"
+
+			elif sigCV == "Pathogenic/Likely_pathogenic":
+				sigCV_short = "P/LP"
+
+			elif sigCV == "Pathogenic":
+				sigCV_short = "P"
+
+			else:
+				sigCV_short = "UNKNOWN"
 
 
 			# get the variant type, ignore if not SNV or indel
@@ -699,6 +782,7 @@ def PT_main(args):
 
 				DATA.append(l) 
 
+				LABELS.append([alleleID, ID, sigCV_short])
 
 			# otherwise print to error file
 			#else:
@@ -726,6 +810,14 @@ def PT_main(args):
 	else:
 		for variant in ped_vcf:
 			ped_ID.append(variant.CHROM + "_" + str(variant.start+1) + "_" + variant.REF + "_" + variant.ALT[0])
+
+	
+	# make dictionary of ID labels
+	LABELS_origID = [ row[0] for row in LABELS ]
+	LABELS_newID = [ row[1] for row in LABELS ]
+	LABELS_sig = [ row[2] for row in LABELS ]
+	LABELS_dict = dict(zip(LABELS_newID, list(zip(LABELS_origID, LABELS_sig))))
+
 
 
 
@@ -821,7 +913,7 @@ def PT_main(args):
 		x_DEL = x[ x['typeCV'] == 'DEL' ]
 		ID_DEL = x_DEL['ID']
 		alleleID_DEL = x_DEL['alleleID']
-		x_DEL = x_DEL.drop(['ID', 'alleleID', 'typeCV'], axis=1, errors='ignore')
+		x_DEL = x_DEL.drop(['alleleID', 'typeCV'], axis=1, errors='ignore')
 
 		x_DEL_index = x_DEL.index
 		
@@ -840,10 +932,10 @@ def PT_main(args):
 
 			
 			if args.eval:
-				perf_DEL, vif_DEL = generate_prior(x_DEL, y_DEL, "DEL", args)
+				perf_DEL, vif_DEL = generate_prior(x_DEL, y_DEL, "DEL", args, LABELS_dict)
 
 			else:
-				generate_prior(x_DEL, y_DEL, "DEL", args)
+				generate_prior(x_DEL, y_DEL, "DEL", args, LABELS_dict)
 				
 
 
@@ -878,7 +970,7 @@ def PT_main(args):
 		x_DUP = x[ x['typeCV'] == 'DUP' ]
 		ID_DUP = x_DUP['ID']
 		alleleID_DUP = x_DUP['alleleID']
-		x_DUP = x_DUP.drop(['ID', 'alleleID', 'typeCV'], axis=1, errors='ignore')
+		x_DUP = x_DUP.drop(['alleleID', 'typeCV'], axis=1, errors='ignore')
 
 		x_DUP_index = x_DUP.index
 		
@@ -897,10 +989,10 @@ def PT_main(args):
 
 			
 			if args.eval:
-				perf_DUP, vif_DUP = generate_prior(x_DUP, y_DUP, "DUP", args)
+				perf_DUP, vif_DUP = generate_prior(x_DUP, y_DUP, "DUP", args, LABELS_dict)
 
 			else:
-				generate_prior(x_DUP, y_DUP, "DUP", args)
+				generate_prior(x_DUP, y_DUP, "DUP", args, LABELS_dict)
 				
 
 
@@ -957,7 +1049,7 @@ def PT_main(args):
 			ID_IND = x_IND['ID']
 			alleleID_IND = x_IND['alleleID']
 			geneCV_IND = x_IND['geneCV']
-			x_IND = x_IND.drop(['ID', 'alleleID', 'csqCV', 'geneCV', 'typeCV'], axis=1, errors='ignore')
+			x_IND = x_IND.drop(['alleleID', 'csqCV', 'geneCV', 'typeCV'], axis=1, errors='ignore')
 
 			x_IND_index = x_IND.index
 			x_IND['impactCV'] = pd.Categorical(x_IND['impactCV'], categories = sorted(x_IND['impactCV'].unique()))
@@ -976,10 +1068,10 @@ def PT_main(args):
 
 			
 			if args.eval:
-				perf_IND, vif_IND = generate_prior(x_IND, y_IND, "IND", args)
+				perf_IND, vif_IND = generate_prior(x_IND, y_IND, "IND", args, LABELS_dict)
 
 			else:
-				generate_prior(x_IND, y_IND, "IND", args)
+				generate_prior(x_IND, y_IND, "IND", args, LABELS_dict)
 				
 
 
@@ -1039,7 +1131,7 @@ def PT_main(args):
 			ID_MIS = x_MIS['ID']
 			alleleID_MIS = x_MIS['alleleID']
 			geneCV_MIS = x_MIS['geneCV']
-			x_MIS = x_MIS.drop(['ID', 'alleleID', 'geneCV'], axis=1)
+			x_MIS = x_MIS.drop(['alleleID', 'geneCV'], axis=1)
 			x_MIS_index = x_MIS.index
 
 			y_MIS = y_MIS.values.reshape(-1,1)
@@ -1048,10 +1140,10 @@ def PT_main(args):
 			x_MIS = x_MIS.drop(drop_cols, axis=1, errors='ignore')
 
 			if args.eval:
-				perf_MIS, vif_MIS = generate_prior(x_MIS, y_MIS, "MIS", args)
+				perf_MIS, vif_MIS = generate_prior(x_MIS, y_MIS, "MIS", args, LABELS_dict)
 
 			else:
-				generate_prior(x_MIS, y_MIS, "MIS", args)
+				generate_prior(x_MIS, y_MIS, "MIS", args, LABELS_dict)
 
 		
 		else:
@@ -1107,7 +1199,7 @@ def PT_main(args):
 			ID_OTH = x_OTH['ID']
 			alleleID_OTH = x_OTH['alleleID']
 			geneCV_OTH = x_OTH['geneCV']
-			x_OTH = x_OTH.drop(['ID', 'alleleID', 'geneCV', 'impactCV', 'typeCV'], axis=1)
+			x_OTH = x_OTH.drop(['alleleID', 'geneCV', 'impactCV', 'typeCV'], axis=1)
 			x_OTH_index = x_OTH.index
 
 			x_OTH['csqCV'] = pd.Categorical(x_OTH['csqCV'], categories = sorted(x_OTH['csqCV'].unique()))
@@ -1127,10 +1219,10 @@ def PT_main(args):
 
 
 			if args.eval:
-				perf_OTH, vif_OTH = generate_prior(x_OTH, y_OTH, "OTH", args)
+				perf_OTH, vif_OTH = generate_prior(x_OTH, y_OTH, "OTH", args, LABELS_dict)
 
 			else:
-				generate_prior(x_OTH, y_OTH, "OTH", args)
+				generate_prior(x_OTH, y_OTH, "OTH", args, LABELS_dict)
 
 
 
