@@ -19,6 +19,7 @@ import Prior_Train
 import Prior_Apply
 import BayesFactor
 import Posterior 
+import SelectSamples 
 
 
 
@@ -164,6 +165,19 @@ def main(argv):
 	parser_PO.add_argument("--predictors", nargs='?', help="File containing regression predictors", metavar='FILE')
 	
 
+	# SelectSamples sub-command
+	parser_SS = sub_parsers.add_parser("SelectSamples", help = "Heuristics for selecting samples for pedigree analysis", 
+	parents = [parser_parent], add_help=False, formatter_class=UltimateHelpFormatter, usage=SUPPRESS, 
+	description= BICEP_textwrap + textwrap.dedent('''\
+
+	Calculate Bayes factors for co-segregation'''))
+	parser_SS.add_argument("-f", "--fam", nargs='?', help="FAM file describing the pedigree structure and phenotypes", metavar='FILE', required = True)
+	parser_SS.add_argument("--priorCaus", nargs='?', default="linear", choices=["uniform", "linear"], help="Prior parameter distribution for causal model", metavar='STRING')
+	parser_SS.add_argument("--priorNeut", nargs='?', default="uniform", choices=["uniform", "linear"], help="Prior parameter distribution for neutral model", metavar='STRING')
+
+
+
+
 	args = parser.parse_args()
 
 
@@ -242,6 +256,9 @@ def main(argv):
 
 		if args.command == "Posterior":
 			Posterior.PO_main(args)
+
+		if args.command == "SelectSamples":
+			SelectSamples.SS_main(args)
 
 
 if __name__ == "__main__":
