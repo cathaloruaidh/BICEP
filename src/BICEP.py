@@ -170,8 +170,9 @@ def main(argv):
 	parents = [parser_parent], add_help=False, formatter_class=UltimateHelpFormatter, usage=SUPPRESS, 
 	description= BICEP_textwrap + textwrap.dedent('''\
 
-	Calculate Bayes factors for co-segregation'''))
+	Heuristics for selecting samples for pedigree analysis'''))
 	parser_SS.add_argument("-f", "--fam", nargs='?', help="FAM file describing the pedigree structure and phenotypes", metavar='FILE', required = True)
+	parser_SS.add_argument("-s", "--select", nargs='?', default=5, type=int, help="Number of individuals to be included in the analysis", metavar='N')
 	parser_SS.add_argument("--priorCaus", nargs='?', default="linear", choices=["uniform", "linear"], help="Prior parameter distribution for causal model", metavar='STRING')
 	parser_SS.add_argument("--priorNeut", nargs='?', default="uniform", choices=["uniform", "linear"], help="Prior parameter distribution for neutral model", metavar='STRING')
 

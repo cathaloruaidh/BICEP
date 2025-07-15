@@ -6,7 +6,6 @@ import logging
 import math
 import multiprocessing
 import os
-import PyAGH
 import pprint
 import re
 import sys
@@ -169,7 +168,7 @@ class Pedigree:
 				# set relatedness of full or half siblings
 				if len(children) > 1:
 					for sib in [ _ for _ in children if _ != child ]:
-						if kin_pd.loc[child,sib] == -1 or kin_pd.loc[sib,child] == -1
+						if kin_pd.loc[child,sib] == -1 or kin_pd.loc[sib,child] == -1:
 							if (df["FID"][df["IID"] == child].values[0] == df["FID"][df["IID"] == sib].values[0]) and (df["MID"][df["IID"] == child].values[0] == df["MID"][df["IID"] == sib].values[0]):
 								kin_pd.loc[child,sib] = kin_pd.loc[sib,child] = 0.5
 
@@ -372,6 +371,8 @@ def findGenerations(inputVector, founderVector, pedInfo):
 	carrierIndex = [ x for x in range(pedInfo.nPeople) if inputVector[x] == 1 ]
 	carrFounderIndex = []
 
+
+	print(carrierIndex)
 	for x in range(pedInfo.nPeople):
 		
 		add = True
@@ -388,6 +389,7 @@ def findGenerations(inputVector, founderVector, pedInfo):
 
 	if len(carrFounderIndex) == 0:
 		return 
+
 
 
 	# total number of permissible genotype states
@@ -438,7 +440,7 @@ def findGenerations(inputVector, founderVector, pedInfo):
 			continue
 
 
-		# this code won't work for bi-lineal pedigrees
+		# thiscommented code won't work for bi-lineal pedigrees
 		## zero out children of non-carriers
 		#while True:
 		#	vecTmp = vector.copy()
@@ -687,7 +689,7 @@ def calculateBF(pedInfo, allBF, priorParams, inputData):
 
 	# if we've already calculated it, return the value
 	if name in allBF:
-		return allBF[name][0]
+		return float(allBF[name][0])
 
 
 	BF = 0.0
@@ -745,6 +747,7 @@ def calculateBF(pedInfo, allBF, priorParams, inputData):
 	logging.debug(msg)
 	msg = "actual size - " + str( round(genotypeStates.nbytes / (1024**2), 3)) + "MB"
 	logging.debug(msg)
+
 
 
 	# calculate genotype configuration probabilities, and
@@ -826,7 +829,7 @@ def calculateBF(pedInfo, allBF, priorParams, inputData):
 
 
 
-	return BF
+	return float(BF)
 
 
 
