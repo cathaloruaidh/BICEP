@@ -28,7 +28,7 @@ def BF_main(args):
 	outputPrefix = None
 	outputLog = None
 	minAffecteds = 0
-	priorCaus = "uniform"
+	priorCaus = "linear"
 	priorNeut = "uniform"
 
 

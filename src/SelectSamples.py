@@ -25,11 +25,9 @@ def SS_main(args):
 	# command line arguments
 	nCores = 1
 	inputFamFile = None
-	inputVcfFile = None
 	outputPrefix = None
-	outputLog = None
-	minAffecteds = 0
-	priorCaus = "uniform"
+	nSelected = 5
+	priorCaus = "linear"
 	priorNeut = "uniform"
 
 
@@ -46,14 +44,16 @@ def SS_main(args):
 	if args.prefix is not None:
 		outputPrefix = args.prefix
 
-	if args.vcf is not None:
-		inputVcfFile = args.vcf
+	if args.select is not None:
+		nSelected = args.select
 
 	if args.priorCaus is not None:
 		priorCaus = args.priorCaus
 
 	if args.priorNeut is not None:
 		priorNeut = args.priorNeut
+
+
 
 
 
@@ -100,10 +100,10 @@ def SS_main(args):
 
 	# get list of samples available for selection
 	if pedigreeFile.shape[1] == 7:
-		availID = [indID[i] for i in range(pedIndo.nPeople) if pedigreeFile[i,6] == 1]
+		availIDX = [i for i in range(pedIndo.nPeople) if pedigreeFile[i,6] == 1]
 	
 	else:
-		availID = indID
+		availIDX = range(pedInfo.nPeople)
 
 
 	
@@ -127,6 +127,9 @@ def SS_main(args):
 	# set up for genetic algorithm
 	################################################################################
 
+	# set up lock
+	l = multiprocessing.Lock()
+	lock_init(l)
 
 
 	# create dictionary to store all BF
@@ -139,61 +142,61 @@ def SS_main(args):
 
 
 	# fitness function
-        def fitness_func( ga_instance, solution, solution_idx ):
-            nonlocal pedInfo
-            nonlocal allBF
-            nonlocal priorCaus
-            nonlocal priorNeut
+	def fitness_func( ga_instance, solution, solution_idx ):
+		nonlocal pedInfo
+		nonlocal allBF
+		nonlocal priorCaus
+		nonlocal priorNeut
 
-            genotypes = np.full(pedInfo.nPeople, -1)
+		genotypes = np.full(pedInfo.nPeople, -1)
 
 
-            for i in solution:
-                genotypes[i] = 1 if pedInfo.phenotypeActual[i] == 1 else 0
+		for i in solution:
+			genotypes[i] = pedInfo.phenotypeActual[i] 
 
-            return calculateBF(pedInfo, allBF, [priorCaus, priorNeut], [genotypes, genotypeString(genotypes)])
+		return calculateBF(pedInfo, allBF, [priorCaus, priorNeut], [genotypes, genotypeString(genotypes)])
 
 
 	logging.info("Running genetic algorithm")
 
-        # set the parameters of the GA
+    # set the parameters of the GA
+	num_generations = 100
+	sol_per_pop = 50
+	num_genes = nSelected
+	gene_type=int
+	init_range_low = 0
+	init_range_high = len(availIDX)
 
-        num_generations = 100
-        sol_per_pop = 100
-        num_genes = args.select
-        gene_type=int
-        init_range_low = 0
-        init_range_high = pedInfo.nPeople 
+	num_parents_mating = 10
+	parent_selection_type = "sss"
+	keep_parents = 10
+	crossover_type = "scattered"
 
-        num_parents_mating = 10
-        parent_selection_type = "sss"
-        keep_parents = 10
-        crossover_type = "scattered"
-
-        mutation_type = "random"
-        mutation_percent_genes = 100 / num_genes
-        mutation_num_genes = 1
-        random_mutation_min_val = 0.0
-        random_mutation_max_val = 1.0
+	mutation_type = "random"
+	mutation_percent_genes = 100 / num_genes
+	mutation_num_genes = 1
+	random_mutation_min_val = 0
+	random_mutation_max_val = len(availIDX)
 
 
 
 	# initiate the GA to find optimal samples
-        ga_instance = pygad.GA(num_generations=num_generations,
-        num_parents_mating=num_parents_mating,
-        fitness_func=fitness_function,
-        sol_per_pop=sol_per_pop,
-        num_genes=num_genes,
-        gene_type=gene_type,
-        init_range_low=init_range_low,
-        init_range_high=init_range_high,
-        parent_selection_type=parent_selection_type,
-        keep_parents=keep_parents,
-        crossover_type=crossover_type,
-        mutation_type=mutation_type,
-        mutation_num_genes=mutation_num_genes)
+	ga_instance = pygad.GA(num_generations=num_generations,
+	num_parents_mating=num_parents_mating,
+	fitness_func=fitness_func,
+	sol_per_pop=sol_per_pop,
+	num_genes=num_genes,
+	gene_type=gene_type,
+	allow_duplicate_genes=False,
+	init_range_low=init_range_low,
+	init_range_high=init_range_high,
+	parent_selection_type=parent_selection_type,
+	keep_parents=keep_parents,
+	crossover_type=crossover_type,
+	mutation_type=mutation_type,
+	mutation_num_genes=mutation_num_genes)
 
-        ga_instance.run()
+	ga_instance.run()
 
 
 
@@ -203,14 +206,17 @@ def SS_main(args):
 
 	logging.info("Output")
 
-	
 
-        solution, solution_fitness, solution_idx = ga_instance.best_solution()
-        print("Parameters of the best solution : {solution}".format(solution=solution))
-        print("Fitness value of the best solution = {solution_fitness}".format(solution_fitness=solution_fitness))
+	for sol in np.unique(ga_instance.population, axis=0):
+		print(sol)
 
-        prediction = fitness_func(None, solution, None)
-        print("Predicted output based on the best solution : {prediction}".format(prediction=prediction))
+	solution, solution_fitness, solution_idx = ga_instance.best_solution()
+	print("Parameters of the best solution : {solution}".format(solution=solution))
+	print("Fitness value of the best solution = {solution_fitness}".format(solution_fitness=solution_fitness))
+
+	prediction = fitness_func(None, solution, None)
+	print("Predicted output based on the best solution : {prediction}".format(prediction=prediction))
+	print("Predicted output based on the best solution : {prediction}".format(prediction=np.log10(prediction)))
 
         
 
