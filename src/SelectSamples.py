@@ -14,6 +14,54 @@ from multiprocessing import cpu_count, Pool, Manager
 from functools import partial
 
 
+
+
+# global variables for pygad parallelisation
+pedInfo = None
+allBF = None
+priorCaus = None
+priorNeut = None
+
+
+# fitness function
+def fitness_func( ga_instance, solution, solution_idx ):
+	global pedInfo
+	global allBF
+	global priorCaus
+	global priorNeut
+	global requiredIDX
+	global selectedGreedy
+
+	genotypes = np.full(pedInfo.nPeople, -1)
+
+
+	for i in [ int(_) for _ in np.concatenate([solution, requiredIDX, selectedGreedy]) ]:
+		genotypes[i] = pedInfo.phenotypeActual[i] 
+
+
+	# set control obligate carriers to carriers
+	for i in range(len(genotypes)):
+		if genotypes[i] == 0:
+			if pedInfo.hasParents[i] and ( genotypes[pedInfo.dadIndex[i]] + genotypes[pedInfo.mamIndex[i]] > 0):
+				c = sum([ genotypes[child] for child in pedInfo.children[i] if genotypes[child] > 0 ])
+				if c > 0:
+					genotypes[i] = 1
+
+	return calculateBF(pedInfo, allBF, [priorCaus, priorNeut], [genotypes, genotypeString(genotypes)])
+
+
+# messaging each generation
+def on_gen(ga_instance):
+	msg = "Generation : " + str(ga_instance.generations_completed)
+	logging.info(msg)
+
+	msg = "Fitness of the best solution :" + str(ga_instance.best_solution()[1])
+	logging.info(msg)
+
+
+
+
+
 # main function
 def SS_main(args):
 
@@ -27,7 +75,9 @@ def SS_main(args):
 	inputFamFile = None
 	outputPrefix = None
 	nSelected = 5
+	global priorCaus
 	priorCaus = "linear"
+	global priorNeut
 	priorNeut = "uniform"
 
 
@@ -94,16 +144,110 @@ def SS_main(args):
 	pheID = np.array(pedigreeFile[:,5])
 
 	# save pedigree info and initialise
+	global pedInfo
 	pedInfo = Pedigree(np.unique(famID), indID, dadID, mamID, sexID, pheID)
 
 
 
 	# get list of samples available for selection
 	if pedigreeFile.shape[1] == 7:
-		availIDX = [i for i in range(pedIndo.nPeople) if pedigreeFile[i,6] == 1]
+		availIDX = [i for i in range(pedInfo.nPeople) if int(pedigreeFile[i,6]) == 1]
 	
 	else:
 		availIDX = range(pedInfo.nPeople)
+
+
+
+	# get list of required samples
+	global requiredIDX
+	if pedigreeFile.shape[1] == 8:
+		requiredIDX = [i for i in range(pedInfo.nPeople) if int(pedigreeFile[i,7]) == 1]
+	
+	else:
+		requiredIDX = []
+
+
+	# remove required from available, and adjust nSelected accordingly
+	availIDX = [i for i in availIDX if i not in requiredIDX]
+
+	if len(availIDX) < nSelected:
+		logging.info(f"Note: {nSelected} individuals to be selected, but there are {len(availIDX)} individuals available, after including {len(requiredIDX)} required individuals. ")
+		nSelected = len(availIDX)
+
+
+	# greedy algorithm to select the cases which results in the highest number of obligate
+	# carriers. This will help reduce the numebr of unknown genotypes. 
+	global selectedGreedy
+	selectedGreedy = []
+
+	if args.greedy:
+		logging.info("Greedy initial selection of cases. ")
+
+		cases = [ i for i in availIDX if pedInfo.phenotypeActual[i] == 1 ]
+		nonParentCases = [ i for i in cases if pedInfo.isParent[i] == False  ]
+
+		carriers = np.full(pedInfo.nPeople, -1)
+		for i in nonParentCases:
+			carriers[i] = 1
+
+
+		foundersID = getMRCA(carriers, pedInfo).split("|")
+		foundersIDX = [ np.where(pedInfo.indID == founder) for founder in foundersID ]
+
+		founderPick = foundersIDX[0]
+
+
+		# for all nonParentCases, make a dictionary of their ancestors to the founder
+		ancestors = dict((k, []) for k in nonParentCases)
+
+		for case in nonParentCases:
+			obligateParent = pedInfo.dadIndex[case] if pedInfo.descendantTable[pedInfo.dadIndex[case], founderPick] else pedInfo.mamIndex[case]
+			
+			# now iterate over all their parents until we hit the founder
+			while obligateParent != founderPick:
+				ancestors[case].append(obligateParent)
+				obligateParent = pedInfo.dadIndex[obligateParent] if pedInfo.descendantTable[pedInfo.dadIndex[obligateParent], founderPick] else pedInfo.mamIndex[obligateParent]
+
+
+		# add case who is most distant to founder, then remove all their obligate carriers
+		# repeat until we have covered all obligate carriers, or until we have hit nSelected
+		while len(selectedGreedy) < nSelected and len(ancestors) > 0:
+			dist = 0
+			keep = None
+			for ind in ancestors.keys():
+				if len(ancestors[ind]) > dist:
+					dist = len(ancestors[ind])
+					keep = ind
+			if dist == 0:
+				break
+
+			removal = ancestors[keep]
+	
+			selectedGreedy.append(keep)
+
+			# add person with highest number of non-covered obligate carriers
+			for i in removal:
+				for key, value in ancestors.items():
+					if i in value:
+						val2 = [ _ for _ in value if _ != i ]
+						ancestors[key] = val2
+
+
+			#print("Loop over removal:")
+			#for i in removal:
+			#	for k in ancestors.keys():
+			#		if i in ancestors[k]:
+			#			print(f"Removing {pedInfo.indID[i]} from ancestors of {pedInfo.indID[k]}")
+			#			ancestors[k].remove(i)
+
+
+			ancestors = {k: v for k, v in ancestors.items() if v}
+
+		print([ pedInfo.indID[i] for i in selectedGreedy])
+
+	# remove greedy selection from available, and adjust the nSelected accordingly
+	availIDX = [i for i in availIDX if i not in selectedGreedy]
+	nSelected = nSelected - len(selectedGreedy)
 
 
 	
@@ -134,6 +278,7 @@ def SS_main(args):
 
 	# create dictionary to store all BF
 	manager = Manager()
+	global allBF
 	allBF = manager.dict()
 
 
@@ -141,62 +286,58 @@ def SS_main(args):
 	allBF["HOM_ALT"] = [ 0.0, 0.0, 0.0, 0 ]
 
 
-	# fitness function
-	def fitness_func( ga_instance, solution, solution_idx ):
-		nonlocal pedInfo
-		nonlocal allBF
-		nonlocal priorCaus
-		nonlocal priorNeut
-
-		genotypes = np.full(pedInfo.nPeople, -1)
-
-
-		for i in solution:
-			genotypes[i] = pedInfo.phenotypeActual[i] 
-
-		return calculateBF(pedInfo, allBF, [priorCaus, priorNeut], [genotypes, genotypeString(genotypes)])
-
 
 	logging.info("Running genetic algorithm")
 
     # set the parameters of the GA
-	num_generations = 100
-	sol_per_pop = 50
+	num_generations = 50
+	sol_per_pop = 500
 	num_genes = nSelected
 	gene_type=int
-	init_range_low = 0
-	init_range_high = len(availIDX)
+	gene_space = availIDX
 
-	num_parents_mating = 10
+	num_parents_mating = 50
 	parent_selection_type = "sss"
-	keep_parents = 10
+	keep_parents = 50
+	keep_elitism = 50
 	crossover_type = "scattered"
 
 	mutation_type = "random"
-	mutation_percent_genes = 100 / num_genes
-	mutation_num_genes = 1
-	random_mutation_min_val = 0
-	random_mutation_max_val = len(availIDX)
+	mutation_num_genes = np.min([2, nSelected])
 
+	parallel_processing = [ "process", nCores ]
+	stop_criteria = ["saturate_10"]
 
 
 	# initiate the GA to find optimal samples
-	ga_instance = pygad.GA(num_generations=num_generations,
-	num_parents_mating=num_parents_mating,
-	fitness_func=fitness_func,
-	sol_per_pop=sol_per_pop,
-	num_genes=num_genes,
-	gene_type=gene_type,
-	allow_duplicate_genes=False,
-	init_range_low=init_range_low,
-	init_range_high=init_range_high,
-	parent_selection_type=parent_selection_type,
-	keep_parents=keep_parents,
-	crossover_type=crossover_type,
-	mutation_type=mutation_type,
-	mutation_num_genes=mutation_num_genes)
+	if nSelected > 0:
+		ga_instance = pygad.GA(num_generations=num_generations,
+		on_generation=on_gen,
+		parallel_processing=parallel_processing,
+		num_parents_mating=num_parents_mating,
+		fitness_func=fitness_func,
+		sol_per_pop=sol_per_pop,
+		num_genes=num_genes,
+		gene_type=gene_type,
+		allow_duplicate_genes=False,
+		gene_space = gene_space,
+		parent_selection_type=parent_selection_type,
+		keep_elitism=keep_elitism,
+		crossover_type=crossover_type,
+		mutation_type=mutation_type,
+		mutation_num_genes=mutation_num_genes,
+		stop_criteria=stop_criteria,
+		suppress_warnings=True)
 
-	ga_instance.run()
+		ga_instance.run()
+		solution, solution_fitness, solution_idx = ga_instance.best_solution()
+	else:
+		logging.info("Skipping genetic algorithm due to greedy selection")
+		solution = []
+		solution_fitness = fitness_func(None, solution, None)
+
+	optimalSolutionID = np.array([ pedInfo.indID[int(i)] for i in np.concatenate([solution, requiredIDX, selectedGreedy]) ])
+		
 
 
 
@@ -207,18 +348,13 @@ def SS_main(args):
 	logging.info("Output")
 
 
-	for sol in np.unique(ga_instance.population, axis=0):
-		print(sol)
-
-	solution, solution_fitness, solution_idx = ga_instance.best_solution()
 	print("Parameters of the best solution : {solution}".format(solution=solution))
-	print("Fitness value of the best solution = {solution_fitness}".format(solution_fitness=solution_fitness))
+	print("Predicted output based on the best solution : {prediction}".format(prediction=np.log10(solution_fitness)))
 
-	prediction = fitness_func(None, solution, None)
-	print("Predicted output based on the best solution : {prediction}".format(prediction=prediction))
-	print("Predicted output based on the best solution : {prediction}".format(prediction=np.log10(prediction)))
 
-        
+	with open(args.outputDir + outputPrefix + ".SelectSamples.txt", 'w') as f:
+		print("BF\tlogBF\tN\tSAMPLES", file=f)
+		print(solution_fitness, "\t", np.log10(solution_fitness), "\t", len(optimalSolutionID),"\t", np.array2string(optimalSolutionID, separator=',')[1:-1].replace(" ", "").replace("'", "").replace("\n", ""), file=f)
 
 	
 
