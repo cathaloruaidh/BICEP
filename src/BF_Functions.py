@@ -225,7 +225,6 @@ def getMRCA(genotype, pedInfo):
 	carrFounderIndex = []
 
 	if len(carrierIndex) == 0:
-		print("No carriers")
 		return "NA"
 
 	for x in range(pedInfo.nPeople):
@@ -243,7 +242,6 @@ def getMRCA(genotype, pedInfo):
 			carrFounderIndex.append(x)
 
 	if len(carrFounderIndex) == 0:
-		print("No founders")
 		return "NA"
 
 
