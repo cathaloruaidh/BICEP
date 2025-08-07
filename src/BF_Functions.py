@@ -87,6 +87,7 @@ class Pedigree:
 		self.descendantTable = np.full((self.nPeople, self.nPeople), -1)
 		self.completed = np.zeros(self.nPeople, dtype=int)
 		self.hasParents = np.full(self.nPeople, True)
+		self.isParent = np.full(self.nPeople, False)
 		self.children = np.empty((self.nPeople,),object)
 
 		#self.children = [ [] for _ in range(self.nPeople) ]
@@ -118,6 +119,8 @@ class Pedigree:
 
 			# get children if any
 			self.children[i] = [ x for x in range(self.nPeople) if self.indID[i] == self.mamID[x] or self.indID[i] == self.dadID[x] ]
+
+			self.isParent[i] = True if len(self.children[i]) > 0 else False
 	
 
 		# set founders in desentant table
@@ -222,6 +225,7 @@ def getMRCA(genotype, pedInfo):
 	carrFounderIndex = []
 
 	if len(carrierIndex) == 0:
+		print("No carriers")
 		return "NA"
 
 	for x in range(pedInfo.nPeople):
@@ -234,10 +238,12 @@ def getMRCA(genotype, pedInfo):
 		for carrier in carrierIndex:
 			if pedInfo.descendantTable[carrier,x] == 0:
 				add = False
+				break
 		if add:
 			carrFounderIndex.append(x)
 
 	if len(carrFounderIndex) == 0:
+		print("No founders")
 		return "NA"
 
 
@@ -265,6 +271,7 @@ def getMRCA(genotype, pedInfo):
 
 
 	if len(MRCA) == 0:
+		print("No founders of everyone")
 		return "NA"
 	
 	else:
@@ -372,7 +379,6 @@ def findGenerations(inputVector, founderVector, pedInfo):
 	carrFounderIndex = []
 
 
-	print(carrierIndex)
 	for x in range(pedInfo.nPeople):
 		
 		add = True
@@ -440,19 +446,18 @@ def findGenerations(inputVector, founderVector, pedInfo):
 			continue
 
 
-		# thiscommented code won't work for bi-lineal pedigrees
-		## zero out children of non-carriers
-		#while True:
-		#	vecTmp = vector.copy()
-		#	for i in range(len(vector)):
-		#		if pedInfo.hasParents[i] and vector[pedInfo.dadIndex[i]] == 0 and vector[pedInfo.mamIndex[i]] == 0 and vector[i] < 0:
-		#			vector[i] = 0
-		#	if (vector == vecTmp).all():
-		#		break
+		# zero out children of non-carriers
+		while True:
+			vecTmp = vector.copy()
+			for i in range(len(vector)):
+				if pedInfo.hasParents[i] and vector[pedInfo.dadIndex[i]] == 0 and vector[pedInfo.mamIndex[i]] == 0 and vector[i] < 0:
+					vector[i] = 0
+			if (vector == vecTmp).all():
+				break
 
 		# zero out anyone who isn't related to the founder
 		for i in range(pedInfo.nPeople):
-			if pedInfo.kinshipMatrix[i, founder] == 0:
+			if pedInfo.kinshipMatrix[i, founder] == 0 and vector[i] < 0:
 				vector[i] = 0
 
 

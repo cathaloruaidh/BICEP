@@ -336,7 +336,7 @@ def BF_main(args):
 
 		if perfectCoseg_vector[i] == 0:
 			if pedInfo.hasParents[i] and ( perfectCoseg_vector[pedInfo.dadIndex[i]] + perfectCoseg_vector[pedInfo.mamIndex[i]] > 0 ):
-				c = sum([ perfectCoseg_vector[child] for child in pedInfo.children[i] ])
+				c = sum([ perfectCoseg_vector[child] for child in pedInfo.children[i] if perfectCoseg_vector[child] > 0 ])
 				if c > 0:
 					perfectCoseg_vector[i] = 1
 
