@@ -176,6 +176,7 @@ def main(argv):
 	parser_SS.add_argument("--priorCaus", nargs='?', default="linear", choices=["uniform", "linear"], help="Prior parameter distribution for causal model", metavar='STRING')
 	parser_SS.add_argument("--priorNeut", nargs='?', default="uniform", choices=["uniform", "linear"], help="Prior parameter distribution for neutral model", metavar='STRING')
 	parser_SS.add_argument("--greedy", action='store_true', help="Pre-select individuals using a greedy algorithm. ")
+	parser_SS.add_argument("--complete", action='store_true', help="Evaluate complete list of combinations for selection. ")
 
 
 

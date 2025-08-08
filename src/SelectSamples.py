@@ -1,5 +1,6 @@
 import BF_Functions
 import csv
+import itertools
 import logging
 import multiprocessing
 import pygad
@@ -7,6 +8,7 @@ import re
 import sys
 
 import numpy as np
+import scipy.special as sp
 
 from BF_Functions import *
 from cyvcf2 import VCF
@@ -180,7 +182,7 @@ def SS_main(args):
 	global selectedGreedy
 	selectedGreedy = []
 
-	if args.greedy:
+	if args.greedy and not args.complete:
 		logging.info("Greedy initial selection of cases. ")
 
 		cases = [ i for i in availIDX if pedInfo.phenotypeActual[i] == 1 ]
@@ -286,57 +288,96 @@ def SS_main(args):
 	allBF["HOM_ALT"] = [ 0.0, 0.0, 0.0, 0 ]
 
 
+	if args.complete:
+		logging.info("Running all combinations")
+		genotypes = np.full((pedInfo.nPeople, int(sp.comb(len(availIDX), nSelected))), -1)
 
-	logging.info("Running genetic algorithm")
+		selectedIDs = []
 
-    # set the parameters of the GA
-	num_generations = 50
-	sol_per_pop = 500
-	num_genes = nSelected
-	gene_type=int
-	gene_space = availIDX
+		for i, comb in enumerate(itertools.combinations(availIDX, nSelected)):
+			for c in comb:
+				genotypes[c][i] = pedInfo.phenotypeActual[c]
+			selectedIDs.append(','.join([ pedInfo.indID[c] for c in comb ]))
 
-	num_parents_mating = 50
-	parent_selection_type = "sss"
-	keep_parents = 50
-	keep_elitism = 50
-	crossover_type = "scattered"
+		varString = np.apply_along_axis(genotypeString, 0, genotypes)
+		genotypes = np.transpose(genotypes.astype(int))
 
-	mutation_type = "random"
-	mutation_num_genes = np.min([2, nSelected])
-
-	parallel_processing = [ "process", nCores ]
-	stop_criteria = ["saturate_10"]
+		data = [ (genotypes[i],varString[i]) for i in range(len(genotypes)) ]
 
 
-	# initiate the GA to find optimal samples
-	if nSelected > 0:
-		ga_instance = pygad.GA(num_generations=num_generations,
-		on_generation=on_gen,
-		parallel_processing=parallel_processing,
-		num_parents_mating=num_parents_mating,
-		fitness_func=fitness_func,
-		sol_per_pop=sol_per_pop,
-		num_genes=num_genes,
-		gene_type=gene_type,
-		allow_duplicate_genes=False,
-		gene_space = gene_space,
-		parent_selection_type=parent_selection_type,
-		keep_elitism=keep_elitism,
-		crossover_type=crossover_type,
-		mutation_type=mutation_type,
-		mutation_num_genes=mutation_num_genes,
-		stop_criteria=stop_criteria,
-		suppress_warnings=True)
 
-		ga_instance.run()
-		solution, solution_fitness, solution_idx = ga_instance.best_solution()
+		# calculate the Bayes Factor for all variants
+		if nCores > 1:
+			# partial function for parallelisation - all constant except the input genotypes
+			func = partial(calculateBF, pedInfo, allBF, [priorCaus, priorNeut])
+
+			# create multiprocessing pool with lock
+			l = multiprocessing.Lock()
+			pool = Pool(nCores, initializer=lock_init, initargs=(l,))
+			BFs = pool.map(func, data)
+			pool.close()
+
+		else:
+			l = multiprocessing.Lock()
+			lock_init(l)
+
+			BFs = []
+			for i in range(len(genotypes)):
+				BFs.append(calculateBF(pedInfo, allBF, [priorCaus, priorNeut], data[i]))
+		
+
+
 	else:
-		logging.info("Skipping genetic algorithm due to greedy selection")
-		solution = []
-		solution_fitness = fitness_func(None, solution, None)
+		logging.info("Running genetic algorithm")
 
-	optimalSolutionID = np.array([ pedInfo.indID[int(i)] for i in np.concatenate([solution, requiredIDX, selectedGreedy]) ])
+		# set the parameters of the GA
+		num_generations = 50
+		sol_per_pop = 500
+		num_genes = nSelected
+		gene_type=int
+		gene_space = availIDX
+
+		num_parents_mating = 50
+		parent_selection_type = "sss"
+		keep_parents = 50
+		keep_elitism = 50
+		crossover_type = "scattered"
+
+		mutation_type = "random"
+		mutation_num_genes = np.min([2, nSelected])
+
+		parallel_processing = [ "process", nCores ]
+		stop_criteria = ["saturate_10"]
+
+
+		# initiate the GA to find optimal samples
+		if nSelected > 0:
+			ga_instance = pygad.GA(num_generations=num_generations,
+			on_generation=on_gen,
+			parallel_processing=parallel_processing,
+			num_parents_mating=num_parents_mating,
+			fitness_func=fitness_func,
+			sol_per_pop=sol_per_pop,
+			num_genes=num_genes,
+			gene_type=gene_type,
+			allow_duplicate_genes=False,
+			gene_space = gene_space,
+			parent_selection_type=parent_selection_type,
+			keep_elitism=keep_elitism,
+			crossover_type=crossover_type,
+			mutation_type=mutation_type,
+			mutation_num_genes=mutation_num_genes,
+			stop_criteria=stop_criteria,
+			suppress_warnings=True)
+
+			ga_instance.run()
+			solution, solution_fitness, solution_idx = ga_instance.best_solution()
+		else:
+			logging.info("Skipping genetic algorithm due to greedy selection")
+			solution = []
+			solution_fitness = fitness_func(None, solution, None)
+
+		optimalSolutionID = np.array([ pedInfo.indID[int(i)] for i in np.concatenate([solution, requiredIDX, selectedGreedy]) ])
 		
 
 
@@ -348,13 +389,20 @@ def SS_main(args):
 	logging.info("Output")
 
 
-	print("Parameters of the best solution : {solution}".format(solution=solution))
-	print("Predicted output based on the best solution : {prediction}".format(prediction=np.log10(solution_fitness)))
+	if args.complete:
+		index_min = max(range(len(BFs)), key=BFs.__getitem__)
+		logging.info(f"Maximum BF is {np.log10(BFs[index_min])}")
+
+		with open(args.outputDir + outputPrefix + ".BF.txt", 'w') as f:
+			print("i\tBF\tlogBF\tSELECTED\tSTRING", file=f)
+			for i in range(len(BFs)):
+				print(i, "\t", BFs[i], "\t", np.log10(float(BFs[i])), "\t", selectedIDs[i], "\t", varString[i], file=f, sep="")
 
 
-	with open(args.outputDir + outputPrefix + ".SelectSamples.txt", 'w') as f:
-		print("BF\tlogBF\tN\tSAMPLES", file=f)
-		print(solution_fitness, "\t", np.log10(solution_fitness), "\t", len(optimalSolutionID),"\t", np.array2string(optimalSolutionID, separator=',')[1:-1].replace(" ", "").replace("'", "").replace("\n", ""), file=f)
+	else:
+		with open(args.outputDir + outputPrefix + ".SelectSamples.txt", 'w') as f:
+			print("BF\tlogBF\tN\tSAMPLES", file=f)
+			print(solution_fitness, "\t", np.log10(solution_fitness), "\t", len(optimalSolutionID),"\t", np.array2string(optimalSolutionID, separator=',')[1:-1].replace(" ", "").replace("'", "").replace("\n", ""), file=f)
 
 	
 
