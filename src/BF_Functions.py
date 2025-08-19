@@ -129,23 +129,53 @@ class Pedigree:
 			self.completed[founder] = 1
 
 
-		# populate descendant table
-		while np.count_nonzero(self.descendantTable == -1) > 0:
-			for i in range(self.nPeople):
-				self.descendantTable[i,i] = 1
-				if self.completed[i]:
-					for child in self.children[i]:
-						self.descendantTable[child, i] = 1
-						for j in range(self.nPeople):
-							if self.descendantTable[i,j] == 1:
-								self.descendantTable[child,j] = 1
+		# set parent-offspring in descendant table
+		for i in range(self.nPeople):
+			self.descendantTable[i,i] = 1
+			if self.isParent[i]:
+				for child in self.children[i]:
+					self.descendantTable[child, i] = 1
+				
 
-						# founders already done, so no dadIndex = mamIndex = -1
-						if self.completed[self.dadIndex[child]] and self.completed[self.mamIndex[child]]:
-							for j in range (self.nPeople):
-								if self.descendantTable[child,j] == -1:
-									self.descendantTable[child,j] = 0
-							self.completed[child] = 1
+#		# populate descendant table
+#		while np.count_nonzero(self.descendantTable == -1) > 0:
+#			#print(self.descendantTable)
+#			for i in range(self.nPeople):
+#				if self.completed[i]:
+#					for child in self.children[i]:
+#						for j in range(self.nPeople):
+#							if self.descendantTable[i,j] == 1:
+#								self.descendantTable[child,j] = 1
+#
+#						# founders already done, so no dadIndex = mamIndex = -1
+#						if self.completed[self.dadIndex[child]] and self.completed[self.mamIndex[child]]:
+#							for j in range(self.nPeople):
+#								if self.descendantTable[child,j] == -1:
+#									self.descendantTable[child,j] = 0
+#							self.completed[child] = 1
+
+
+		# populate descendant table
+		oldCount = 0
+		newCount = np.count_nonzero(self.descendantTable == -1)
+		counter = 0
+
+		while oldCount != newCount:
+			#print(self.descendantTable)
+			completedParents = [ i for i in range(self.nPeople) if self.completed[self.dadIndex[i]] == 1 and self.completed[self.mamIndex[i]] == 1  ]
+			for child in completedParents:
+				for j in range(self.nPeople):
+					if self.descendantTable[self.dadIndex[i],j] == 1 or self.descendantTable[self.mamIndex[i],j] == 1:
+						self.descendantTable[child,j] = 1
+				self.completed[child] = 1
+
+			oldCount = newCount
+			newCount = np.count_nonzero(self.descendantTable == -1)
+			counter = counter + 1
+
+		self.descendantTable[self.descendantTable == -1] = 0
+		print(self.descendantTable)
+		print(counter)
 
 
 		# make relationship matrix from pedigree data

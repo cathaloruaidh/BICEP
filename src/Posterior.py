@@ -261,7 +261,8 @@ def PO_main(args):
 	fig.update_xaxes(showline=True, linewidth=2, linecolor='black', mirror=True, ticks='outside', gridcolor='lightgrey')
 	fig.update_yaxes(showline=True, linewidth=2, linecolor='black', mirror=True, ticks='outside', range=[min_y, max_y])
 	
-	plotly.offline.plot(fig, filename=args.outputDir + args.prefix + ".BICEP.html")
+	#plotly.offline.plot(fig, filename=args.outputDir + args.prefix + ".BICEP.html")
+	fig.write_html(file=args.outputDir + args.prefix + ".BICEP.html")
 
 
 	
