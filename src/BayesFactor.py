@@ -158,6 +158,8 @@ def BF_main(args):
 	j = 0
 	CHROMS = set([ "chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7", "chr8", "chr9", "chr10", "chr11", "chr12", "chr13", "chr14", "chr15", "chr16", "chr17", "chr18", "chr19", "chr20", "chr21", "chr22" ])
 
+	GT_dict = { "0/0" : 0, "0/1" : 1, "1/0" : 1, "1/1" : 2, "./." : 3  }
+
 	for variant in vcf:
 		# remove variants not on autosomes
 		if len( set([variant.CHROM, "chr"+variant.CHROM]) & CHROMS ) == 0:
@@ -181,6 +183,14 @@ def BF_main(args):
 	
 		if args.key:
 			gt_list = variant.format(args.key)
+
+			for i in range(len(gt_list)):
+				if "/" in gt_list[i]:
+					gt_list[i] = GT_dict[gt_list[i]]
+
+				if gt_list[i] == ".":
+					gt_list[i] = 3
+
 		else:
 			gt_list = variant.gt_types
 
