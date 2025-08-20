@@ -99,11 +99,21 @@ def BF_main(args):
 	# save pedigree info and initialise
 	pedInfo = Pedigree(np.unique(famID), indID, dadID, mamID, sexID, pheID)
 
-	with open(args.tempDir + args.prefix + 'descendantTable.txt', 'w') as f:
+
+	# print descendant table to file
+	with open(args.tempDir + args.prefix + '.descendantTable.txt', 'w') as f:
 		print(','.join(map(str, np.concatenate([np.array(["#"]), pedInfo.indID]))), file = f)
 	
 	dt_df = pd.DataFrame(pedInfo.descendantTable, columns=pedInfo.indID, index=pedInfo.indID)
-	dt_df.to_csv(args.tempDir + args.prefix + 'descendantTable.txt', mode='a', header=False)
+	dt_df.to_csv(args.tempDir + args.prefix + '.descendantTable.txt', mode='a', header=False)
+
+	
+	# print relationship matrix to file
+	with open(args.tempDir + args.prefix + '.kinshipMatrix.txt', 'w') as f:
+		print(','.join(map(str, np.concatenate([np.array(["#"]), pedInfo.indID]))), file = f)
+	
+	km_df = pd.DataFrame(pedInfo.kinshipMatrix, columns=pedInfo.indID, index=pedInfo.indID)
+	km_df.to_csv(args.tempDir + args.prefix + '.kinshipMatrix.txt', mode='a', header=False)
 
 	
 
