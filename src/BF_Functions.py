@@ -161,12 +161,13 @@ class Pedigree:
 		counter = 0
 
 		while oldCount != newCount:
-			#print(self.descendantTable)
-			completedParents = [ i for i in range(self.nPeople) if self.completed[self.dadIndex[i]] == 1 and self.completed[self.mamIndex[i]] == 1  ]
+			completedParents = [ i for i in self.nonFounderIndex if self.completed[self.dadIndex[i]] == 1 and self.completed[self.mamIndex[i]] == 1 and self.completed[i] == 0 ]
 			for child in completedParents:
 				for j in range(self.nPeople):
-					if self.descendantTable[self.dadIndex[i],j] == 1 or self.descendantTable[self.mamIndex[i],j] == 1:
+					if self.descendantTable[self.dadIndex[child],j] == 1 or self.descendantTable[self.mamIndex[child],j] == 1:
 						self.descendantTable[child,j] = 1
+					elif self.descendantTable[child,j] == -1:
+						self.descendantTable[child,j] = 0
 				self.completed[child] = 1
 
 			oldCount = newCount
@@ -174,8 +175,8 @@ class Pedigree:
 			counter = counter + 1
 
 		self.descendantTable[self.descendantTable == -1] = 0
-		print(self.descendantTable)
-		print(counter)
+
+
 
 
 		# make relationship matrix from pedigree data
@@ -299,7 +300,6 @@ def getMRCA(genotype, pedInfo):
 
 
 	if len(MRCA) == 0:
-		print("No founders of everyone")
 		return "NA"
 	
 	else:
@@ -395,6 +395,7 @@ def findGenerations(inputVector, founderVector, pedInfo):
 	proIndex = [ x for x in range(pedInfo.nPeople) if pedInfo.phenotypeActual[x] == 1 and inputVector[x] == 1 ]
 
 	if len(proIndex) == 0:
+		logging.warning("No probands identified")
 		return 
 
 
@@ -422,6 +423,7 @@ def findGenerations(inputVector, founderVector, pedInfo):
 
 
 	if len(carrFounderIndex) == 0:
+		logging.warning("No founders identified")
 		return 
 
 
@@ -767,6 +769,7 @@ def calculateBF(pedInfo, allBF, priorParams, inputData):
 
 	# sanity check for number of genotypes
 	if len(genotypeStates) == 0:
+		logging.warning("No genotype states identifed. ")
 		with lock:
 			allBF[name] = [ 0.0, 0.0, 0.0, 0 ]
 		
