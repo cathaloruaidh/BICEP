@@ -160,14 +160,12 @@ class Pedigree:
 		newCount = np.count_nonzero(self.descendantTable == -1)
 		counter = 0
 
+		# this should iterate over the number of generations
 		while oldCount != newCount:
 			completedParents = [ i for i in self.nonFounderIndex if self.completed[self.dadIndex[i]] == 1 and self.completed[self.mamIndex[i]] == 1 and self.completed[i] == 0 ]
 			for child in completedParents:
 				for j in range(self.nPeople):
-					if self.descendantTable[self.dadIndex[child],j] == 1 or self.descendantTable[self.mamIndex[child],j] == 1:
-						self.descendantTable[child,j] = 1
-					elif self.descendantTable[child,j] == -1:
-						self.descendantTable[child,j] = 0
+					self.descendantTable[child,j] = max(self.descendantTable[self.dadIndex[child],j], self.descendantTable[self.mamIndex[child],j])
 				self.completed[child] = 1
 
 			oldCount = newCount
