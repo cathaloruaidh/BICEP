@@ -99,6 +99,12 @@ def BF_main(args):
 	# save pedigree info and initialise
 	pedInfo = Pedigree(np.unique(famID), indID, dadID, mamID, sexID, pheID)
 
+	with open(args.tempDir + args.prefix + 'descendantTable.txt', 'w') as f:
+		print(','.join(map(str, np.concatenate([np.array(["#"]), pedInfo.indID]))), file = f)
+	
+	dt_df = pd.DataFrame(pedInfo.descendantTable, columns=pedInfo.indID, index=pedInfo.indID)
+	dt_df.to_csv(args.tempDir + args.prefix + 'descendantTable.txt', mode='a', header=False)
+
 	
 
 
