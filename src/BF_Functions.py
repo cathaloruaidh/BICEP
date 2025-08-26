@@ -165,7 +165,8 @@ class Pedigree:
 			completedParents = [ i for i in self.nonFounderIndex if self.completed[self.dadIndex[i]] == 1 and self.completed[self.mamIndex[i]] == 1 and self.completed[i] == 0 ]
 			for child in completedParents:
 				for j in range(self.nPeople):
-					self.descendantTable[child,j] = max(self.descendantTable[self.dadIndex[child],j], self.descendantTable[self.mamIndex[child],j])
+					if self.descendantTable[child,j] == -1:
+						self.descendantTable[child,j] = max(self.descendantTable[self.dadIndex[child],j], self.descendantTable[self.mamIndex[child],j])
 				self.completed[child] = 1
 
 			oldCount = newCount
@@ -393,7 +394,7 @@ def findGenerations(inputVector, founderVector, pedInfo):
 	proIndex = [ x for x in range(pedInfo.nPeople) if pedInfo.phenotypeActual[x] == 1 and inputVector[x] == 1 ]
 
 	if len(proIndex) == 0:
-		logging.warning("No probands identified")
+		logging.debug("No probands identified")
 		return 
 
 
@@ -421,7 +422,7 @@ def findGenerations(inputVector, founderVector, pedInfo):
 
 
 	if len(carrFounderIndex) == 0:
-		logging.warning("No founders identified")
+		logging.debug("No founders identified")
 		return 
 
 
@@ -767,7 +768,7 @@ def calculateBF(pedInfo, allBF, priorParams, inputData):
 
 	# sanity check for number of genotypes
 	if len(genotypeStates) == 0:
-		logging.warning("No genotype states identifed. ")
+		logging.debug("No genotype states identifed. ")
 		with lock:
 			allBF[name] = [ 0.0, 0.0, 0.0, 0 ]
 		
