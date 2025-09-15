@@ -351,33 +351,13 @@ def BF_main(args):
 				print(varID[i], "\t", BFs[i], "\t", np.log10(float(BFs[i])), "\t", varString[i], "\t", aff_c, "\t", aff_nc, "\t", un_c, "\t", un_nc, "\t", miss, "\t", MRCA, file=f, sep="")
 		
 
+
 	# get the best co-segregation score
-	# note: set obligate carriers regardless of phenotype
-	perfectCoseg_vector = pedInfo.phenotypeActual
+	maxBF, founder = getMaxBF(pedInfo, allBF, priorParams)
 
-	for i in range(pedInfo.nPeople):
-		if pedInfo.indID[i] not in vcf.samples:
-			perfectCoseg_vector[i] = -1
-			continue
-
-		if perfectCoseg_vector[i] == 0:
-			if pedInfo.hasParents[i] and ( perfectCoseg_vector[pedInfo.dadIndex[i]] + perfectCoseg_vector[pedInfo.mamIndex[i]] > 0 ):
-				c = sum([ perfectCoseg_vector[child] for child in pedInfo.children[i] if perfectCoseg_vector[child] > 0 ])
-				if c > 0:
-					perfectCoseg_vector[i] = 1
-
-	perfectCoseg_string = genotypeString(perfectCoseg_vector)
-
-	if perfectCoseg_string in allBF.keys():
-		with open(args.tempDir + outputPrefix + ".max_logBF.txt", 'w') as f:
-			print(np.log10(float(allBF[perfectCoseg_string][0])), file=f)
-
-	else:
-		l = multiprocessing.Lock()
-		lock_init(l)
-		BF = calculateBF(pedInfo, allBF, [priorCaus, priorNeut], (perfectCoseg_vector, perfectCoseg_string))
-		with open(args.tempDir + outputPrefix + ".max_logBF.txt", 'w') as f:
-			print(np.log10(BF), file=f)
+	with open(args.tempDir + outputPrefix + ".max_logBF.txt", 'w') as f:
+		print(np.log10(float(maxBF)), file=f)
+		print(f"{founder}", file=f)
 
 	
 	logging.info(" ")
