@@ -868,3 +868,43 @@ def calculateBF(pedInfo, allBF, priorParams, inputData):
 
 
 
+# find maximum achievable logBF in pedigree
+def getMaxBF(pedInfo, allBF, priorParams):
+
+	# iterate over all founders, determine which gives the largest logBF
+
+	genotypes = np.full((pedInfo.nPeople, pedInfo.nFounder), 0)
+
+	
+	for f in range(pedInfo.nFounder):
+		for i in range(pedInfo.nPeople):
+			if pedInfo.descendantTable[i, pedInfo.founderIndex[f]] == 1:
+				genotypes[i][f] = pedInfo.phenotypeActual[i]
+
+			# set obligate carriers regardless of their phenotype
+				if genotypes[i][f] == 0:
+					c = sum([ pedInfo.phenotypeActual[child] for child in pedInfo.children[i] if pedInfo.phenotypeActual[child] > 0 ])
+					if c > 0:
+						genotypes[i][f] = 1
+
+	varString = np.apply_along_axis(genotypeString, 0, genotypes)
+	genotypes = np.transpose(genotypes.astype(int))
+	data = [ (genotypes[i],varString[i]) for i in range(len(genotypes)) ]
+	BFs = []
+
+
+	l = multiprocessing.Lock()
+	lock_init(l)
+
+	for i in range(len(genotypes)):
+		BFs.append(calculateBF(pedInfo, allBF, priorParams, data[i]))
+
+	
+	founder = max(range(len(BFs)), key=BFs.__getitem__)
+
+	return BFs[founder], pedInfo.indID[pedInfo.founderIndex[founder]]
+
+
+
+
+
