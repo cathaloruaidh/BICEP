@@ -4,6 +4,7 @@ import itertools
 import logging
 import multiprocessing
 import pygad
+import random
 import re
 import sys
 
@@ -35,7 +36,7 @@ def BFDA_main(args):
 	nCores = 1
 	inputFamFile = None
 	outputPrefix = None
-	nSelected = 5
+	nSim = 10000
 	global priorCaus
 	priorCaus = "linear"
 	global priorNeut
@@ -55,8 +56,8 @@ def BFDA_main(args):
 	if args.prefix is not None:
 		outputPrefix = args.prefix
 
-	if args.select is not None:
-		nSelected = args.select
+	if args.simulations is not None:
+		nSim = args.simulations
 
 	if args.priorCaus is not None:
 		priorCaus = args.priorCaus
@@ -146,6 +147,85 @@ def BFDA_main(args):
 	# set BF to zero for any variant with a HOM_ALT carrier
 	allBF["HOM_ALT"] = [ 0.0, 0.0, 0.0, 0 ]
 
+
+	# generate causal distribution
+	if priorCaus == "uniform":
+		x_beta = 1
+		y_phi = 1
+	
+	elif priorCaus == "linear": 
+		x_beta = 2
+		y_phi = 2
+	
+	else
+		logging.error("Prior distribution for parameters under causal model not known. ")
+		
+	
+	causalGenotypes = []
+	for i in range(nSim):
+		beta = ( random.uniform(0,1) ) ** (1/x_beta)
+		phi = 1 - ( 1 - random.uniform(0,1)*( 1 - (1-beta)**y_phi ) )**(1/y_phi)
+
+		p_carr_case = beta / (beta + phi)
+		p_carr_con = (1 - beta) / (2 - beta - phi)
+
+		genotype = np.full(pedInfo.nPeople, -1)
+		completed = np.full(pedInfo.nPeople, 0)
+
+		founder = random.randrage(pedInfo.nPeople):
+		genotype[founder] = 1
+		completed[founder] = 1
+
+
+		# non-descendants of the founder are non-carriers
+		for i in range(pedInfo.nPeople):
+			if pedInfo.descendantTable[i, founder] == 0:
+				genotype[i] = 0
+				completed[i] = 1
+
+		oldCount = 0
+		newCount = np.count_nonzero(genotype == -1)
+		counter = 0
+
+
+		while oldCount != newCount:
+			completedParents = [ j for i in pedInfo.nonFounderIndex if completed[pedInfo.dadIndex[j]] and completed[pedInfo.mamIndex[j]] and completed[j] = 0 ]
+
+			for child in completedParents:
+				
+				# if both parents are non-carriers, child is a non-carrier
+				if genotype[pedInfo.dadIndex[child]] == 0 and genotype[pedInfo.mamIndex[child]] == 0:
+					genotype[child] = 0
+					completed[child] = 1
+
+				# otherwise, inherit according to phenotype
+				else:
+
+					# carrier probabilities for cases
+					if pedInfo.actualPhenotypes[child] == 1:
+						if random.uniform(0,1) < p_carr_case:
+							genotype[child] = 1
+						else:
+							genotype[child] = 0
+
+					# carrier probabilities for controls
+					else:
+						if random.uniform(0,1) < p_carr_con:
+							genotype[child] = 1
+						else:
+							genotype[child] = 0
+
+					completed[child] = 1
+
+			oldCount = newCount
+			newCount = np.count_nonzero(genotype == -1)
+			counter = counter + 1
+				
+
+		causalGenotypes.append(genotype)
+
+	
+	print(causalGenotypes)
 
 
 
