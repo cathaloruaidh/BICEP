@@ -353,7 +353,7 @@ def BF_main(args):
 
 
 	# get the best co-segregation score
-	maxBF, founder = getMaxBF(pedInfo, allBF, priorParams)
+	maxBF, founder = getMaxBF(pedInfo, allBF, [priorCaus, priorNeut])
 
 	with open(args.tempDir + outputPrefix + ".max_logBF.txt", 'w') as f:
 		print(np.log10(float(maxBF)), file=f)
