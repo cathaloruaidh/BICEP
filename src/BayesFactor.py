@@ -5,6 +5,9 @@ import multiprocessing
 import re
 import sys
 
+import os
+import psutil
+
 import numpy as np
 
 from BF_Functions import *
@@ -19,6 +22,8 @@ def BF_main(args):
 
 	logging.info("BAYES FACTOR")
 	logging.info(" ")
+	mem = psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2
+	print(f"Memory = {mem}")
 
 
 	# command line arguments
@@ -30,6 +35,7 @@ def BF_main(args):
 	minAffecteds = 0
 	priorCaus = "linear"
 	priorNeut = "uniform"
+	branch = None
 
 
 
@@ -57,6 +63,9 @@ def BF_main(args):
 	if args.priorNeut is not None:
 		priorNeut = args.priorNeut
 
+	if args.branch is not None:
+		branch = args.branch
+
 
 
 
@@ -67,6 +76,9 @@ def BF_main(args):
 
 	# read contents of file into np array
 	logging.info("Reading input FAM file")
+	mem = psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2
+	print(f"Memory = {mem}")
+
 
 	try:
 		f = open(inputFamFile, newline='')
@@ -115,6 +127,9 @@ def BF_main(args):
 	km_df = pd.DataFrame(pedInfo.kinshipMatrix, columns=pedInfo.indID, index=pedInfo.indID)
 	km_df.to_csv(args.tempDir + args.prefix + '.kinshipMatrix.txt', mode='a', header=False)
 
+
+	# identify the main branch of the family
+
 	
 
 
@@ -123,6 +138,9 @@ def BF_main(args):
 	################################################################################
 
 	logging.info("Reading VCF file")
+	mem = psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2
+	print(f"Memory = {mem}")
+
 
 
 
@@ -152,6 +170,9 @@ def BF_main(args):
 
 
 	logging.info("Store as np array")
+	mem = psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2
+	print(f"Memory = {mem}")
+
 
 	# set all genotypes to missing as input
 	genotypes = np.full((pedInfo.nPeople, nVariants), -1)
@@ -306,6 +327,9 @@ def BF_main(args):
 
 
 	logging.info("Calculating Bayes Factors")
+	mem = psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2
+	print(f"Memory = {mem}")
+
 
 	# calculate the Bayes Factor for all variants
 	if nCores > 1:
@@ -337,6 +361,8 @@ def BF_main(args):
 	################################################################################
 
 	logging.info("Output")
+	mem = psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2
+	print(f"Memory = {mem}")
 
 	
 	if outputPrefix is None:
@@ -353,7 +379,7 @@ def BF_main(args):
 
 
 	# get the best co-segregation score
-	maxBF, founder = getMaxBF(pedInfo, allBF, [priorCaus, priorNeut])
+	maxBF, founder = getMaxBF(pedInfo, allBF, [priorCaus, priorNeut], vcfSampleIndex)
 
 	with open(args.tempDir + outputPrefix + ".max_logBF.txt", 'w') as f:
 		print(np.log10(float(maxBF)), file=f)

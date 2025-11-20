@@ -20,6 +20,7 @@ import Prior_Apply
 import BayesFactor
 import Posterior 
 import SelectSamples 
+import BFDA 
 
 
 
@@ -98,8 +99,9 @@ def main(argv):
 	parser_ALL.add_argument("-m", "--model", nargs='?', help="Prefix for the regression model files", metavar='STRING')
 	parser_ALL.add_argument("-v", "--vcf", nargs='?', help="VCF file for variants", metavar='FILE', required = True)
 	parser_ALL.add_argument("-f", "--fam", nargs='?', help="FAM file describing the pedigree structure and phenotypes", metavar='FILE', required = True)
-	parser_ALL.add_argument("--priorCaus", nargs='?', default="linear", choices=["uniform", "linear"], help="Prior parameter distribution for causal model", metavar='STRING')
-	parser_ALL.add_argument("--priorNeut", nargs='?', default="uniform", choices=["uniform", "linear"], help="Prior parameter distribution for neutral model", metavar='STRING')
+	parser_ALL.add_argument("--priorCaus", nargs='?', default="linear", help="Prior parameter distribution for causal model", metavar='STRING')
+	parser_ALL.add_argument("--priorNeut", nargs='?', default="uniform", help="Prior parameter distribution for neutral model", metavar='STRING')
+	parser_ALL.add_argument("--branch", nargs='?', help="ID of the branch ancestor", metavar='STRING')
 	parser_ALL.add_argument("--top", nargs='?', default=50, type=int, help="Number of top ranking variants to plot", metavar='N')
 	parser_ALL.add_argument("--highlight", nargs='?', help="ID of variant to highlight in plot", metavar='STRING')
 	
@@ -147,8 +149,9 @@ def main(argv):
 	Calculate Bayes factors for co-segregation'''))
 	parser_BF.add_argument("-f", "--fam", nargs='?', help="FAM file describing the pedigree structure and phenotypes", metavar='FILE', required = True)
 	parser_BF.add_argument("-v", "--vcf", nargs='?', help="VCF file for variants", metavar='FILE', required = True)
-	parser_BF.add_argument("--priorCaus", nargs='?', default="linear", choices=["uniform", "linear"], help="Prior parameter distribution for causal model", metavar='STRING')
-	parser_BF.add_argument("--priorNeut", nargs='?', default="uniform", choices=["uniform", "linear"], help="Prior parameter distribution for neutral model", metavar='STRING')
+	parser_BF.add_argument("--priorCaus", nargs='?', default="linear", help="Prior parameter distribution for causal model", metavar='STRING')
+	parser_BF.add_argument("--priorNeut", nargs='?', default="uniform", help="Prior parameter distribution for neutral model", metavar='STRING')
+	parser_BF.add_argument("--branch", nargs='?', help="ID of the branch ancestor", metavar='STRING')
 
 
 
@@ -173,10 +176,23 @@ def main(argv):
 	Heuristics for selecting samples for pedigree analysis'''))
 	parser_SS.add_argument("-f", "--fam", nargs='?', help="FAM file describing the pedigree structure and phenotypes", metavar='FILE', required = True)
 	parser_SS.add_argument("-s", "--select", nargs='?', default=5, type=int, help="Number of individuals to be included in the analysis", metavar='N')
-	parser_SS.add_argument("--priorCaus", nargs='?', default="linear", choices=["uniform", "linear"], help="Prior parameter distribution for causal model", metavar='STRING')
-	parser_SS.add_argument("--priorNeut", nargs='?', default="uniform", choices=["uniform", "linear"], help="Prior parameter distribution for neutral model", metavar='STRING')
+	parser_SS.add_argument("--priorCaus", nargs='?', default="linear", help="Prior parameter distribution for causal model", metavar='STRING')
+	parser_SS.add_argument("--priorNeut", nargs='?', default="uniform", help="Prior parameter distribution for neutral model", metavar='STRING')
 	parser_SS.add_argument("--greedy", action='store_true', help="Pre-select individuals using a greedy algorithm. ")
 	parser_SS.add_argument("--complete", action='store_true', help="Evaluate complete list of combinations for selection. ")
+
+
+	# BFDA sub-command
+	parser_BFDA = sub_parsers.add_parser("BFDA", help = "Bayes factor design analysis", 
+	parents = [parser_parent], add_help=False, formatter_class=UltimateHelpFormatter, usage=SUPPRESS, 
+	description= BICEP_textwrap + textwrap.dedent('''\
+
+	Heuristics for selecting samples for pedigree analysis'''))
+	parser_BFDA.add_argument("-f", "--fam", nargs='?', help="FAM file describing the pedigree structure and phenotypes", metavar='FILE', required = True)
+	parser_BFDA.add_argument("--priorCaus", nargs='?', default="linear", help="Prior parameter distribution for causal model", metavar='STRING')
+	parser_BFDA.add_argument("--priorNeut", nargs='?', default="uniform", help="Prior parameter distribution for neutral model", metavar='STRING')
+	parser_BFDA.add_argument("-s", "--simulations", nargs='?', default=1000, type=int, help="Number of simulations for the BF distributions", metavar='N')
+	parser_BFDA.add_argument("-b", "--breaks", nargs='?', default=1000, type=int, help="How many breaks between 0 and max logBF to evaluate", metavar='N')
 
 
 
@@ -262,6 +278,9 @@ def main(argv):
 
 		if args.command == "SelectSamples":
 			SelectSamples.SS_main(args)
+
+		if args.command == "BFDA":
+			BFDA.BFDA_main(args)
 
 
 if __name__ == "__main__":

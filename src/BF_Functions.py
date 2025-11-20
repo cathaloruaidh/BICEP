@@ -71,8 +71,12 @@ class Pedigree:
 		self.pheID = pheID
 
 
-		# code phenotypes as 0,1 for convenience
-		self.phenotypeActual = pheID.astype(int)-1
+		# Initially, all founders are allowed and there is no branch selected
+		self.branch = None
+
+		# code phenotypes as control=0 and case=1 for convenience
+		# NOTE: unknown are coded as controls
+		self.phenotypeActual = [ int(pheID[i])-1 if int(pheID[i]) > 0 else 0 for i in range(len(pheID)) ]
 
 
 		# indices for the parents
@@ -257,7 +261,9 @@ def getMRCA(genotype, pedInfo):
 	if len(carrierIndex) == 0:
 		return "NA"
 
+
 	for x in range(pedInfo.nPeople):
+
 		
 		add = True
 		if genotype[x] == 0:
@@ -265,9 +271,18 @@ def getMRCA(genotype, pedInfo):
 			continue
 
 		for carrier in carrierIndex:
+
+			# check if carrier is not a descendant of x
 			if pedInfo.descendantTable[carrier,x] == 0:
 				add = False
 				break
+
+			# check if any intervening relatives are non-carriers
+			for y in range(pedInfo.nPeople):
+				if pedInfo.descendantTable[y,x] == 1 and pedInfo.descendantTable[carrier,y] == 1 and genotype[y] == 0:
+					add = False
+					break
+
 		if add:
 			carrFounderIndex.append(x)
 
@@ -585,8 +600,13 @@ def I_del_linear_numeric(k1, k2, l1, l2):
 
 
 
-def I_del_beta_numeric(k1, k2, l1, l2, x):
-	I = dblquad(lambda p, b: x*x*(b**(k1+x-1))*((1-b)**k2)*(p**l1)*((1-p)**(l2+x-1))/(1 - (1-b)**(x)), 0, 1, lambda b: 0, lambda b: b)
+#def I_del_beta_numeric(k1, k2, l1, l2, x):
+#	I = dblquad(lambda p, b: x*x*(b**(k1+x-1))*((1-b)**k2)*(p**l1)*((1-p)**(l2+x-1))/(1 - (1-b)**(x)), 0, 1, lambda b: 0, lambda b: b)
+#
+#	return I[0]
+
+def I_del_beta_numeric(k1, k2, l1, l2, x, y):
+	I = dblquad(lambda p, b: x*y*(b**(k1+x-1))*((1-b)**k2)*(p**l1)*((1-p)**(l2+y-1))/(1 - (1-b)**(y)), 0, 1, lambda b: 0, lambda b: b)
 
 	return I[0]
 
@@ -829,6 +849,14 @@ def calculateBF(pedInfo, allBF, priorParams, inputData):
 			#print(genotypeString(genotypeStates[i]), "I_lin = ", I_del_linear_numeric(k1, k2, l1, l2), "\t - \tP(G_F) = ", genotypeProbabilities[i])
 			numerator = numerator + I_del_linear_numeric(k1, k2, l1, l2)*genotypeProbabilities[i]
 		
+		elif "," in priorCaus:
+			if len(priorCaus.split(",")) != 2:
+				msg = "Incorrect number of parameters for Beta distribution: " + priorCaus
+				logging.error(msg)
+
+			x,y = [ int(c) for c in priorCaus.split(",") ]
+			numerator = numerator + I_del_beta_numeric(k1, k2, l1, l2, x, y)*genotypeProbabilities[i]
+		
 		else:
 			logging.error("Prior distribution for parameters under causal model not known. ")
 
@@ -869,23 +897,26 @@ def calculateBF(pedInfo, allBF, priorParams, inputData):
 
 
 # find maximum achievable logBF in pedigree
-def getMaxBF(pedInfo, allBF, priorParams):
+def getMaxBF(pedInfo, allBF, priorParams, sampleIndex):
 
 	# iterate over all founders, determine which gives the largest logBF
 
-	genotypes = np.full((pedInfo.nPeople, pedInfo.nFounder), 0)
+	genotypes = np.full((pedInfo.nPeople, pedInfo.nFounder), -1)
 
 	
 	for f in range(pedInfo.nFounder):
-		for i in range(pedInfo.nPeople):
-			if pedInfo.descendantTable[i, pedInfo.founderIndex[f]] == 1:
+		f_ind = pedInfo.founderIndex[f]
+
+		for i in sampleIndex:
+			if pedInfo.descendantTable[i, f_ind] == 1:
 				genotypes[i][f] = pedInfo.phenotypeActual[i]
 
-			# set obligate carriers regardless of their phenotype
+				# set obligate carriers regardless of their phenotype
 				if genotypes[i][f] == 0:
 					c = sum([ pedInfo.phenotypeActual[child] for child in pedInfo.children[i] if pedInfo.phenotypeActual[child] > 0 ])
 					if c > 0:
 						genotypes[i][f] = 1
+
 
 	varString = np.apply_along_axis(genotypeString, 0, genotypes)
 	genotypes = np.transpose(genotypes.astype(int))
