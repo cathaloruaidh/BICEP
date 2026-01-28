@@ -125,6 +125,7 @@ class Pedigree:
 			self.children[i] = [ x for x in range(self.nPeople) if self.indID[i] == self.mamID[x] or self.indID[i] == self.dadID[x] ]
 
 			self.isParent[i] = True if len(self.children[i]) > 0 else False
+
 	
 
 		# set founders in desentant table
@@ -300,7 +301,8 @@ def getMRCA(genotype, pedInfo):
 		descSub[i,i] = 0
 
 	if np.max(descSub) == 0:
-		MRCA.extend(pedInfo.indID[carrFounderIndex])
+		for i in carrFounderIndex:
+			MRCA.append(pedInfo.indID[i])
 
 	else:
 		for i in carrFounderIndex:
@@ -409,7 +411,6 @@ def findGenerations(inputVector, founderVector, pedInfo):
 	proIndex = [ x for x in range(pedInfo.nPeople) if pedInfo.phenotypeActual[x] == 1 and inputVector[x] == 1 ]
 
 	if len(proIndex) == 0:
-		logging.debug("No probands identified")
 		return 
 
 
@@ -758,7 +759,7 @@ def calculateBF(pedInfo, allBF, priorParams, inputData):
 	
 	totalGenoStates = 0
 	for founder, vector in founderVector.items():
-		foundIdx = np.where(pedInfo.indID == founder)[0][0]
+		foundIdx = np.where(np.array(pedInfo.indID) == founder)[0][0]
 		totalGenoStates += numGenotypeStates(vector, pedInfo, foundIdx)
 		
 
@@ -784,6 +785,7 @@ def calculateBF(pedInfo, allBF, priorParams, inputData):
 
 	genotypeStates = []
 	for vector in founderVector.values():
+		#print(vector)
 		setGenerations(vector)
 
 	# sanity check for number of genotypes
@@ -900,8 +902,8 @@ def calculateBF(pedInfo, allBF, priorParams, inputData):
 def getMaxBF(pedInfo, allBF, priorParams, sampleIndex):
 
 	# iterate over all founders, determine which gives the largest logBF
-
 	genotypes = np.full((pedInfo.nPeople, pedInfo.nFounder), -1)
+
 
 	
 	for f in range(pedInfo.nFounder):
@@ -929,6 +931,7 @@ def getMaxBF(pedInfo, allBF, priorParams, sampleIndex):
 
 	for i in range(len(genotypes)):
 		BFs.append(calculateBF(pedInfo, allBF, priorParams, data[i]))
+	
 
 	
 	founder = max(range(len(BFs)), key=BFs.__getitem__)
