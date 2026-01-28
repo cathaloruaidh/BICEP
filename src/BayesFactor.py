@@ -251,12 +251,22 @@ def BF_main(args):
 		if args.key:
 			gt_list = variant.format(args.key)
 
-			for i in range(len(gt_list)):
-				if "/" in gt_list[i]:
-					gt_list[i] = GT_dict[gt_list[i]]
 
-				if gt_list[i] == ".":
-					gt_list[i] = 3
+			if args.key == "ST":
+				for i in range(len(gt_list)):
+					if gt_list[i] == "C" or gt_list[i] == "R":
+						gt_list[i] = 1
+					elif gt_list[i] == "N":
+						gt_list[i] = 0
+					else:
+						 gt_list[i] = 3
+			else:
+				for i in range(len(gt_list)):
+					if "/" in gt_list[i]:
+						gt_list[i] = GT_dict[gt_list[i]]
+
+					if gt_list[i] == ".":
+						gt_list[i] = 3
 
 		else:
 			gt_list = variant.gt_types
