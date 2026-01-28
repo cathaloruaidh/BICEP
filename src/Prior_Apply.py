@@ -72,8 +72,9 @@ def PA_main(args):
 
 	# check if model files exist
 	if modelPrefix is None:
-		logging.error("No model files specified")
-		sys.exit(1)
+		#logging.error("No model files specified")
+		modelPrefix = "BICEP_temp/" + outputPrefix
+		#sys.exit(1)
 
 
 	if not glob.glob(modelPrefix + "*.pkl"):
@@ -347,10 +348,15 @@ def PA_main(args):
 
 
 			# get the variant type, ignore if not SNV or indel
-			if len(variant.REF) == 1 and len(variant.ALT[0]) == 1:
+			REF_len = len(variant.REF)
+			ALT_len = len(variant.ALT[0])
+
+			if REF_len == 1 and ALT_len == 1:
 				typeVEP = "SNV"
-			elif ( (len(variant.REF) == 1 and len(variant.ALT[0]) > 1) or ((len(variant.REF) > 1 and len(variant.ALT[0]) == 1)) ) and max(len(variant.REF), len(variant.ALT[0])) < 50:
+			elif ( REF_len * ALT_len > 1 ) and max(REF_len, ALT_len) < 50:
 				typeVEP = "indel"
+			else:
+				continue
 
 
 

@@ -104,6 +104,7 @@ def main(argv):
 	parser_ALL.add_argument("--branch", nargs='?', help="ID of the branch ancestor", metavar='STRING')
 	parser_ALL.add_argument("--top", nargs='?', default=50, type=int, help="Number of top ranking variants to plot", metavar='N')
 	parser_ALL.add_argument("--highlight", nargs='?', help="ID of variant to highlight in plot", metavar='STRING')
+	parser_ALL.add_argument("--minAff", nargs='?', default=0, type=int, help="Minimum number of affected carriers", metavar='N')
 	
 	
 
@@ -152,6 +153,7 @@ def main(argv):
 	parser_BF.add_argument("--priorCaus", nargs='?', default="linear", help="Prior parameter distribution for causal model", metavar='STRING')
 	parser_BF.add_argument("--priorNeut", nargs='?', default="uniform", help="Prior parameter distribution for neutral model", metavar='STRING')
 	parser_BF.add_argument("--branch", nargs='?', help="ID of the branch ancestor", metavar='STRING')
+	parser_BF.add_argument("--minAff", nargs='?', default=0, type=int, help="Minimum number of affected carriers", metavar='N')
 
 
 
