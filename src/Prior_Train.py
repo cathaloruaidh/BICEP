@@ -554,7 +554,7 @@ def PT_main(args):
 			if (sigCV == "Benign"):
 				sigCV_short = "B"
 
-			elif sigCV == "Benign%2FLikely_benign":
+			elif sigCV == "Benign%2FLikely%20benign":
 				sigCV_short = "B/LB"
 
 			elif sigCV == "Likely%20benign":
@@ -571,6 +571,12 @@ def PT_main(args):
 
 			else:
 				sigCV_short = "UNKNOWN"
+
+
+
+			# remove CNVs with unknown significance
+			if sigCV_short == "UNKNOWN":
+				continue
 
 
 			# get the variant type
