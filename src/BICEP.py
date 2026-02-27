@@ -178,6 +178,7 @@ def main(argv):
 	Heuristics for selecting samples for pedigree analysis'''))
 	parser_SS.add_argument("-f", "--fam", nargs='?', help="FAM file describing the pedigree structure and phenotypes", metavar='FILE', required = True)
 	parser_SS.add_argument("-s", "--select", nargs='?', default=5, type=int, help="Number of individuals to be included in the analysis", metavar='N')
+	parser_SS.add_argument("--branch", nargs='?', help="ID of the branch ancestor", metavar='STRING')
 	parser_SS.add_argument("--priorCaus", nargs='?', default="linear", help="Prior parameter distribution for causal model", metavar='STRING')
 	parser_SS.add_argument("--priorNeut", nargs='?', default="uniform", help="Prior parameter distribution for neutral model", metavar='STRING')
 	parser_SS.add_argument("--greedy", action='store_true', help="Pre-select individuals using a greedy algorithm. ")
