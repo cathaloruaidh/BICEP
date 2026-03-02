@@ -545,10 +545,15 @@ def PT_main(args):
 
 
 			# get the short significance
-			if (sigCV == "Benign") or (sigCV == "Benign%2FLikely_benign") or (sigCV == "Likely%20benign"):
+			setCV = "UNKNOWN"
+			if (sigCV == "Benign") or (sigCV == "Benign%2FLikely%20benign") or (sigCV == "Likely%20benign"):
 				setCV = "BENIGN"
 			elif (sigCV == "Likely%20pathogenic") or (sigCV == "Pathogenic%2FLikely%20pathogenic") or (sigCV == "Pathogenic"):
 				setCV = "PATHOGENIC"
+
+			# remove CNV with unknown significance
+			if setCV == "UNKNOWN":
+				continue
 
 			# abbreviate the long significances
 			if (sigCV == "Benign"):
