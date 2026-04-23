@@ -22,8 +22,8 @@ def BF_main(args):
 
 	logging.info("BAYES FACTOR")
 	logging.info(" ")
-	mem = psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2
-	print(f"Memory = {mem}")
+	#mem = psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2
+	#print(f"Memory = {mem}")
 
 
 	# command line arguments
@@ -76,8 +76,8 @@ def BF_main(args):
 
 	# read contents of file into np array
 	logging.info("Reading input FAM file")
-	mem = psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2
-	print(f"Memory = {mem}")
+	#mem = psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2
+	#print(f"Memory = {mem}")
 
 
 	try:
@@ -168,8 +168,8 @@ def BF_main(args):
 	################################################################################
 
 	logging.info("Reading VCF file")
-	mem = psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2
-	print(f"Memory = {mem}")
+	#mem = psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2
+	#print(f"Memory = {mem}")
 
 
 
@@ -200,8 +200,8 @@ def BF_main(args):
 
 
 	logging.info("Store as np array")
-	mem = psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2
-	print(f"Memory = {mem}")
+	#mem = psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2
+	#print(f"Memory = {mem}")
 
 
 	# set all genotypes to missing as input
@@ -441,8 +441,8 @@ def BF_main(args):
 
 
 	logging.info("Calculating Bayes Factors")
-	mem = psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2
-	print(f"Memory = {mem}")
+	#mem = psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2
+	#print(f"Memory = {mem}")
 
 
 	# calculate the Bayes Factor for all variants
@@ -473,8 +473,8 @@ def BF_main(args):
 	################################################################################
 
 	logging.info("Output")
-	mem = psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2
-	print(f"Memory = {mem}")
+	#mem = psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2
+	#print(f"Memory = {mem}")
 
 	
 	if outputPrefix is None:

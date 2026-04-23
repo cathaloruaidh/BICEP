@@ -212,7 +212,8 @@ def PO_main(args):
 
 
 		else:
-			keysPredictors = [ "fathmm-XF_coding_score", "MPC_score", "PolyPhen", "REVEL", "SIFT" ] + [ args.frequency ] 
+			#keysPredictors = [ "fathmm-XF_coding_score", "MPC_score", "PolyPhen", "REVEL", "SIFT" ] + [ args.frequency ] 
+			keysPredictors = sorted([ "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score" ] + [ args.frequency ] )
 
 
 	# plotly
@@ -227,11 +228,11 @@ def PO_main(args):
 	else:
 		template_1 = """<b>Rank:</b> %{x}<br><b>logPostOC:</b> %{y}<br><b>ID:</b> %{customdata[0]}<br><b>Gene:</b> <i>%{customdata[1]}</i><br>"""
 
-	custom_2 = merged_sub.filter(['logBF', 'AFF_CARR', 'AFF_NON-CARR', 'UNAFF_CARR', 'UNAFF_NON-CARR', 'MISS'])
+	custom_2 = merged_sub.filter(['logBF', 'AFF_CARR', 'AFF_NON-CARR', 'UNAFF_CARR', 'UNAFF_NON-CARR', 'MISS', 'MRCA'])
 	custom_2['AFF'] =  custom_2['AFF_CARR'] + custom_2['AFF_NON-CARR']
 	custom_2['UNAFF'] =  custom_2['UNAFF_CARR'] + custom_2['UNAFF_NON-CARR']
-	custom_2 = custom_2.filter(['logBF', 'AFF_CARR', 'AFF', 'UNAFF_CARR', 'UNAFF', 'MISS'])
-	template_2 = """<b>logBF:</b> %{y}<br><b>AFF:</b> %{customdata[1]} / %{customdata[2]}<br><b>UNAFF:</b> %{customdata[3]} / %{customdata[4]}<br><b>MISS:</b> %{customdata[5]}<br>"""
+	custom_2 = custom_2.filter(['logBF', 'AFF_CARR', 'AFF', 'UNAFF_CARR', 'UNAFF', 'MISS', 'MRCA'])
+	template_2 = """<b>logBF:</b> %{y}<br><b>AFF:</b> %{customdata[1]} / %{customdata[2]}<br><b>UNAFF:</b> %{customdata[3]} / %{customdata[4]}<br><b>MISS:</b> %{customdata[5]}<br><b>MRCA:</b> %{customdata[6]}"""
 
 	custom_3 = merged_sub.filter(["csq", "impact"] + keysPredictors).fillna('N/A')
 	custom_3[args.frequency] = custom_3[args.frequency].round(6)

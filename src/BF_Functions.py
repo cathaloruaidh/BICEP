@@ -757,10 +757,15 @@ def calculateBF(pedInfo, allBF, priorParams, inputData):
 	findGenerations(inputGenotype, founderVector, pedInfo)
 
 	
+	founderIdxList = []
 	totalGenoStates = 0
 	for founder, vector in founderVector.items():
 		foundIdx = np.where(np.array(pedInfo.indID) == founder)[0][0]
-		totalGenoStates += numGenotypeStates(vector, pedInfo, foundIdx)
+
+		count = numGenotypeStates(vector, pedInfo, foundIdx)
+		totalGenoStates += count
+		founderIdxList.extend([foundIdx]*count)
+
 		
 
 	# check if the genotype states array is likely to be greater than half the total space in RAM
@@ -824,7 +829,21 @@ def calculateBF(pedInfo, allBF, priorParams, inputData):
 		
 
 		k1 = k2 = l1 = l2 = 0
-		for x in range(pedInfo.nPeople):
+		# only consider individuals descended from founder
+		#descendantIDX = [ _ for _ in range(pedInfo.nPeople) if pedInfo.descendantTable[_, founderIdxList[i]]]
+
+		##marryinMamIDX = [ pedInfo.mamIndex[_] for _ in descendantIDX if pedInfo.descendantTable[_, founderIdxList[i]] and pedInfo.descendantTable[pedInfo.dadIndex[_],founderIdxList[i]] and pedInfo.mamIndex[_] >=0 ]
+
+		##marryinDadIDX = [ pedInfo.dadIndex[_] for _ in descendantIDX if pedInfo.descendantTable[_, founderIdxList[i]] and pedInfo.descendantTable[pedInfo.mamIndex[_],founderIdxList[i]] and pedInfo.dadIndex[_] >=0 ]
+
+		##allIDX = descendantIDX + marryinMamIDX + marryinDadIDX
+
+
+		#allIDX = descendantIDX
+
+		allIDX = range(pedInfo.nPeople)
+
+		for x in allIDX:
 			if pedInfo.phenotypeActual[x] == 1:
 				if genotypeStates[i][x] == 1:
 					k1 += 1
