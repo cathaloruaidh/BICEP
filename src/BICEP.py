@@ -196,6 +196,7 @@ def main(argv):
 	parser_BFDA.add_argument("--priorNeut", nargs='?', default="uniform", help="Prior parameter distribution for neutral model", metavar='STRING')
 	parser_BFDA.add_argument("-s", "--simulations", nargs='?', default=1000, type=int, help="Number of simulations for the BF distributions", metavar='N')
 	parser_BFDA.add_argument("-b", "--breaks", nargs='?', default=1000, type=int, help="How many breaks between 0 and max logBF to evaluate", metavar='N')
+	parser_BFDA.add_argument("--branch", nargs='?', help="ID of the branch ancestor", metavar='STRING')
 
 
 

@@ -44,6 +44,7 @@ def BFDA_main(args):
 	priorCaus = "linear"
 	global priorNeut
 	priorNeut = "uniform"
+	branch = None
 
 
 
@@ -71,6 +72,9 @@ def BFDA_main(args):
 	if args.priorNeut is not None:
 		priorNeut = args.priorNeut
 
+	if args.branch is not None:
+		branch = args.branch
+
 
 
 
@@ -82,7 +86,8 @@ def BFDA_main(args):
 
 
 	# read contents of file into np array
-	logging.info("Reading input FAM file")
+	msg = "Reading input FAM file: " + inputFamFile
+	logging.info(msg)
 
 	try:
 		f = open(inputFamFile, newline='')
@@ -207,12 +212,16 @@ def BFDA_main(args):
 		p_found_case = beta*m / ( beta*m + phi*(1-m) )
 		p_found_con = (1-beta)*m / ( 1 - beta*m - phi*(1-m) )
 
-		prob_founder = [ p_found_case if pedInfo.phenotypeActual[j] ==  1 else p_found_con for j in range(pedInfo.nPeople) ]
-		# if the phenocopy rate can never get low enough, exclude that individual
-		prob_founder = np.where(min_phenocopy > phi, 0, prob_founder)
-		prob_founder = prob_founder/np.sum(prob_founder)
 
-		founder = np.random.choice(pedInfo.nPeople, 1, p=prob_founder)[0]
+		if branch is None:
+			prob_founder = [ p_found_case if pedInfo.phenotypeActual[j] ==  1 else p_found_con for j in range(pedInfo.nPeople) ]
+			# if the phenocopy rate can never get low enough, exclude that individual
+			prob_founder = np.where(min_phenocopy > phi, 0, prob_founder)
+			prob_founder = prob_founder/np.sum(prob_founder)
+
+			founder = np.random.choice(pedInfo.nPeople, 1, p=prob_founder)[0]
+		else:
+			founder = np.where(np.array(pedInfo.indID) == branch)[0][0]
 
 		genotype = np.full(pedInfo.nPeople, -1)
 		completed = np.full(pedInfo.nPeople, 0)
@@ -302,7 +311,9 @@ def BFDA_main(args):
 		genotype = np.full(pedInfo.nPeople, -1)
 		completed = np.full(pedInfo.nPeople, 0)
 
-		founder = random.randrange(pedInfo.nPeople)
+		if branch is None:
+			founder = random.randrange(pedInfo.nPeople)
+
 		genotype[founder] = 1
 		completed[founder] = 1
 
