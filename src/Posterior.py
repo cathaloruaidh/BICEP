@@ -95,8 +95,15 @@ def PO_main(args):
 
 
 	with open(args.tempDir + args.prefix + '.max_logBF.txt', 'r') as f:
-		tmp = f.readlines()
-		max_logBF = float(tmp[0])
+	#	tmp = f.readlines()
+	#	max_logBF = float(tmp[0])
+		max_logBF_all = pd.read_csv(f, sep="\t", na_values=['.'], names = ["founder", "value"])
+
+	if args.branch is not None:
+		max_logBF = float(max_logBF_all[ max_logBF_all["founder"] == args.branch ]["value"].values[0])
+	
+	else:
+		max_logBF = float(max_logBF_all.loc[max_logBF_all["value"].idxmax()]["value"])
 
 	merged_sub = merged.sort_values(by=['logPostOC'], ascending=False).head(n=args.top)
 
@@ -212,8 +219,8 @@ def PO_main(args):
 
 
 		else:
-			keysPredictors = [ "fathmm-XF_coding_score", "MPC_score", "PolyPhen", "REVEL", "SIFT" ] + [ args.frequency ] 
-			#keysPredictors = sorted([ "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score" ] + [ args.frequency ] )
+			#keysPredictors = [ "fathmm-XF_coding_score", "MPC_score", "PolyPhen", "REVEL", "SIFT" ] + [ args.frequency ] 
+			keysPredictors = sorted([ "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score" ] + [ args.frequency ] )
 
 
 	# plotly

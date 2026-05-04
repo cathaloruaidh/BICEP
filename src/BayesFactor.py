@@ -500,11 +500,11 @@ def BF_main(args):
 		
 
 	# get the best co-segregation score
-	maxBF, founder = getMaxBF(pedInfo, allBF, [priorCaus, priorNeut], vcfSampleIndex)
+	maxBFs, founders = getMaxBF(pedInfo, allBF, [priorCaus, priorNeut], vcfSampleIndex)
 
 	with open(args.tempDir + outputPrefix + ".max_logBF.txt", 'w') as f:
-		print(np.log10(float(maxBF)), file=f)
-		print(f"{founder}", file=f)
+		for i in range(len(maxBFs)):
+			print(f"{founders[i]}\t{np.log10(float(maxBFs[i]))}", file=f)
 
 	
 	logging.info(" ")
