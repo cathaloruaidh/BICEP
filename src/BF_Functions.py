@@ -958,7 +958,8 @@ def getMaxBF(pedInfo, allBF, priorParams, sampleIndex):
 	founder = max(range(len(BFs)), key=BFs.__getitem__)
 
 	#return BFs[founder], pedInfo.indID[pedInfo.founderIndex[founder]]
-	return BFs[founder], pedInfo.indID[founder]
+	#return BFs[founder], pedInfo.indID[founder]
+	return BFs, pedInfo.indID
 
 
 
