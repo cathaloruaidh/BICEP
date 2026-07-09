@@ -79,6 +79,7 @@ def main(argv):
 	parser_parent.add_argument("--frequency", nargs='?', default="gnomADe_AF", help="Allele frequency predictor", metavar='STRING')
 	parser_parent.add_argument("--cnv", action='store_true', help="Use the CNV prior models")
 	parser_parent.add_argument("-k", "--key", nargs='?', help="VCF FORMAT tag for genotype or carrier status", metavar='STRING')
+	parser_parent.add_argument("--seed", nargs='?', default=123, type=int, help="Random integer seed for train/test split", metavar='N')
 
 
 	# All sub-command

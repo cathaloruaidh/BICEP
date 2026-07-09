@@ -49,7 +49,12 @@ def generate_prior(x, y, label, args, LABELS_dict):
 
 	# evaluate the prior
 	if args.eval:
-		x_train, x_test, y_train, y_test = train_test_split(x, y, test_size = 0.2, random_state = 123)
+		if args.seed:
+			seed = args.seed
+		else
+			seed = 123
+
+		x_train, x_test, y_train, y_test = train_test_split(x, y, test_size = 0.2, random_state = seed)
 
 		x_train_ID = x_train["ID"].to_list()
 		x_train = x_train.drop(["ID"], axis=1, errors='ignore')
