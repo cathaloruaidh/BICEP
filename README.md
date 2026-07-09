@@ -107,6 +107,49 @@ The following parameters are available to the "All" sub-module and
 
 ```
 
+
+## Output files
+
+### Prior
+The `PriorApply` module generates a tab-separated text file (`BICEP_results/PREFIX.priors.txt`) with the following columns: 
+
+1. **ID**: a unique ID for the variant, typically this is described by its genomic position
+2. **Gene**: the gene overlapping the variant. Where a variant overlaps multiple genes, each instance is detailed on a new line
+3. **csq**: the prediction functional consequence from vep, e.g. missense_variant, stop_lost, 3_prime_UTR_variant, etc.
+4. **impact**: the general grouping of the **csq** value from vep: HIGH, MODERATE, LOW or MODIFIER
+5. **prior**: the prior probability for causality
+6. **priorOC**: the prior odds for causality
+7. **logPriorOC**: the log10 of the prior odds for causality
+
+The subsequent columns describe the predictors to the regression model, starting with allele frequency (a required field). 
+For interpretability, the raw values are given rather than the imputed and scaled values that are inputs to the model. 
+Note that only variants for which a **csq** value could be annotated are given a prior. 
+
+
+### Bayes factor
+The `BayesFactor` module generates a tab-separated text file (`BICEP_results/PREFIX.BF.txt`) with the following columns: 
+
+1. **ID**: a unique ID for the variant, typically this is described by its genomic position
+2. **BF**: the Bayes factor for the variant
+3. **logBF**: the log10 of the Bayes factor
+4. **STRING**: a string detailing the carriers (1), non-carriers (0) or those missing the variant (.), where the position in the string represents the second column in the supplied FAM file (i.e. the sample ID)
+5. **AFF_CARR**: the number of affected carriers observed for the variant in the VCF file
+6. **AFF_NON-CARR**: the number of affected non-carriers observed for the variant in the VCF file
+7. **UNAFF_CARR**: the number of unaffected carriers observed for the variant in the VCF file
+8. **UNAFF_NON-CARR**: the number of unaffected non-carriers observed for the variant in the VCF file
+9. **MISS**: the number of individuals who have missing genotypes for the variant in the VCF file
+10. **MRCA**: an estimate of the most recent common ancestor of all variant carriers in the pedigree. Sometimes multiple individuals may be specified here. 
+
+
+### Posterior
+The `All` and `Posterior` module generates a tab-separated text file (`BICEP_results/PREFIX.posteriors.txt`) that merges the prior file and BF file based on the unique variant ID. 
+Column 1 is the rank according to the logPostOC (the log10 of the posterior odds for causality), which is given in column 6. 
+All other columns are taken from the prior and BF file as described above. 
+
+
+
+
+
 ## Test data
 To test the installation, simulated genomic, phenotypic, and pedigree data are supplied in the `test/` directory. 
 The F1 pedigree (figure below) has a simulated phenotype spanning three generations that is "caused" by a rare, deleterious, missense variant (chr1:1355461:A:C, *MXRA8*:p.Leu122Arg) inherited from a single common ancestor. 
