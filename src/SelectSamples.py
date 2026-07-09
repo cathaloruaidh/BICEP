@@ -33,12 +33,22 @@ def fitness_func( ga_instance, solution, solution_idx ):
 	global priorNeut
 	global requiredIDX
 	global selectedGreedy
+	global marryIn
+	global founderPick
 
 	genotypes = np.full(pedInfo.nPeople, -1)
 
+	genotypes[founderPick] = 1
 
+
+	# in-pedigree members are carriers depending on their genotype
 	for i in [ int(_) for _ in np.concatenate([solution, requiredIDX, selectedGreedy]) ]:
 		genotypes[i] = pedInfo.phenotypeActual[i] 
+
+
+	# marry-ins are non-carriers
+	for i in [ int(_) for _ in marryIn ]:
+		genotypes[i] = 0
 
 
 	# set control obligate carriers to carriers
@@ -81,6 +91,7 @@ def SS_main(args):
 	priorCaus = "linear"
 	global priorNeut
 	priorNeut = "uniform"
+	branch = None
 
 
 
@@ -105,7 +116,8 @@ def SS_main(args):
 	if args.priorNeut is not None:
 		priorNeut = args.priorNeut
 
-
+	if args.branch is not None:
+		branch = args.branch
 
 
 
@@ -182,21 +194,35 @@ def SS_main(args):
 	global selectedGreedy
 	selectedGreedy = []
 
+	global founderPick
+
 	if args.greedy and not args.complete:
 		logging.info("Greedy initial selection of cases. ")
 
-		cases = [ i for i in availIDX if pedInfo.phenotypeActual[i] == 1 ]
-		nonParentCases = [ i for i in cases if pedInfo.isParent[i] == False  ]
+		# specify founder
+		if branch is not None:
+			founderPick = np.where(pedInfo.indID == branch)[0][0]
 
-		carriers = np.full(pedInfo.nPeople, -1)
-		for i in nonParentCases:
-			carriers[i] = 1
+			cases = [ i for i in availIDX if pedInfo.phenotypeActual[i] == 1 and pedInfo.descendantTable[i, founderPick] == 1 ]
+			nonParentCases = [ i for i in cases if pedInfo.isParent[i] == False  ]
+
+			carriers = np.full(pedInfo.nPeople, -1)
+			for i in nonParentCases:
+				carriers[i] = 1
 
 
-		foundersID = getMRCA(carriers, pedInfo).split("|")
-		foundersIDX = [ np.where(pedInfo.indID == founder) for founder in foundersID ]
+		else:
+			cases = [ i for i in availIDX if pedInfo.phenotypeActual[i] == 1 ]
+			nonParentCases = [ i for i in cases if pedInfo.isParent[i] == False  ]
 
-		founderPick = foundersIDX[0]
+			carriers = np.full(pedInfo.nPeople, -1)
+			for i in nonParentCases:
+				carriers[i] = 1
+
+			foundersID = getMRCA(carriers, pedInfo).split("|")
+			foundersIDX = [ np.where(pedInfo.indID == founder) for founder in foundersID ]
+
+			founderPick = foundersIDX[0]
 
 
 		# for all nonParentCases, make a dictionary of their ancestors to the founder
@@ -247,9 +273,31 @@ def SS_main(args):
 
 		print([ pedInfo.indID[i] for i in selectedGreedy])
 
+	else:
+		# specify founder
+		if branch is not None:
+			founderPick = np.where(pedInfo.indID == branch)[0][0]
+
+			cases = [ i for i in availIDX if pedInfo.phenotypeActual[i] == 1 and pedInfo.descendantTable[i, founderPick] == 1 ]
+			nonParentCases = [ i for i in cases if pedInfo.isParent[i] == False  ]
+
+			carriers = np.full(pedInfo.nPeople, -1)
+			for i in nonParentCases:
+				carriers[i] = 1
+
+
 	# remove greedy selection from available, and adjust the nSelected accordingly
 	availIDX = [i for i in availIDX if i not in selectedGreedy]
 	nSelected = nSelected - len(selectedGreedy)
+
+
+	# remove marry-in samples relative to the founder
+	global marryIn
+	marryIn = []
+	if founderPick is not None:
+		for i in range(pedInfo.nPeople):
+			if pedInfo.descendantTable[i, founderPick] == 0:
+				marryIn.append(i)
 
 
 	
@@ -377,9 +425,37 @@ def SS_main(args):
 			solution = []
 			solution_fitness = fitness_func(None, solution, None)
 
-		optimalSolutionID = np.array([ pedInfo.indID[int(i)] for i in np.concatenate([solution, requiredIDX, selectedGreedy]) ])
+		optimalSolutionIDX = np.sort(np.concatenate([solution, requiredIDX, selectedGreedy]))
+		optimalSolutionID = np.array([ pedInfo.indID[i] for i in range(pedInfo.nPeople) if i in optimalSolutionIDX ])
 		
 
+		genotypes = np.full(pedInfo.nPeople, -1)
+		genotypes[founderPick] = 1
+
+
+		# in-pedigree members are carriers depending on their genotype
+		for i in [ int(_) for _ in np.concatenate([solution, requiredIDX, selectedGreedy]) ]:
+			genotypes[i] = pedInfo.phenotypeActual[i] 
+
+
+		# marry-ins are non-carriers
+		for i in [ int(_) for _ in marryIn ]:
+			genotypes[i] = 0
+
+
+		# set control obligate carriers to carriers
+		genotypes_tmp = np.full(pedInfo.nPeople, -1)
+
+		while not( (genotypes == genotypes_tmp).all() ):
+			genotypes_tmp = genotypes
+			for i in range(len(genotypes)):
+				if genotypes[i] != 1:
+					if pedInfo.hasParents[i] and ( genotypes[pedInfo.dadIndex[i]] + genotypes[pedInfo.mamIndex[i]] > 0):
+						c = sum([ genotypes[child] for child in pedInfo.children[i] if genotypes[child] > 0 ])
+						if c > 0:
+							genotypes[i] = 1
+
+		optimalString = re.sub('-1', '.', re.sub(' ', '', "".join(map(str, genotypes))))
 
 
 	################################################################################
@@ -401,8 +477,9 @@ def SS_main(args):
 
 	else:
 		with open(args.outputDir + outputPrefix + ".SelectSamples.txt", 'w') as f:
-			print("BF\tlogBF\tN\tSAMPLES", file=f)
-			print(solution_fitness, "\t", np.log10(solution_fitness), "\t", len(optimalSolutionID),"\t", np.array2string(optimalSolutionID, separator=',')[1:-1].replace(" ", "").replace("'", "").replace("\n", ""), file=f)
+			print("BF\tlogBF\tN\tSTRING\tSAMPLES", file=f)
+			optimalSolutionID_collapse = np.array2string(optimalSolutionID, separator=',')[1:-1].replace(" ", "").replace("'", "").replace("\n", "")
+			print(f"{solution_fitness}\t{np.log10(solution_fitness)}\t{len(optimalSolutionID)}\t{optimalString}\t{optimalSolutionID_collapse}", file=f)
 
 	
 

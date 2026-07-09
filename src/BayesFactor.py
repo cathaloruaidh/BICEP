@@ -5,6 +5,9 @@ import multiprocessing
 import re
 import sys
 
+import os
+import psutil
+
 import numpy as np
 
 from BF_Functions import *
@@ -19,6 +22,8 @@ def BF_main(args):
 
 	logging.info("BAYES FACTOR")
 	logging.info(" ")
+	#mem = psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2
+	#print(f"Memory = {mem}")
 
 
 	# command line arguments
@@ -30,6 +35,7 @@ def BF_main(args):
 	minAffecteds = 0
 	priorCaus = "linear"
 	priorNeut = "uniform"
+	branch = None
 
 
 
@@ -42,8 +48,8 @@ def BF_main(args):
 	if args.fam is not None:
 		inputFamFile = args.fam
 
-	#if args.minAff is not None:
-	#	minAffecteds = int(args.minAff)
+	if args.minAff is not None:
+		minAffecteds = int(args.minAff)
 
 	if args.prefix is not None:
 		outputPrefix = args.prefix
@@ -57,6 +63,9 @@ def BF_main(args):
 	if args.priorNeut is not None:
 		priorNeut = args.priorNeut
 
+	if args.branch is not None:
+		branch = args.branch
+
 
 
 
@@ -67,6 +76,9 @@ def BF_main(args):
 
 	# read contents of file into np array
 	logging.info("Reading input FAM file")
+	#mem = psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2
+	#print(f"Memory = {mem}")
+
 
 	try:
 		f = open(inputFamFile, newline='')
@@ -96,8 +108,39 @@ def BF_main(args):
 	pheID = np.array(pedigreeFile[:,5])
 
 
+
+
 	# save pedigree info and initialise
 	pedInfo = Pedigree(np.unique(famID), indID, dadID, mamID, sexID, pheID)
+
+
+	# identify descendants of the branch
+	if branch is not None:
+		branchFounderIDX = np.where(pedInfo.indID == branch)[0][0]
+
+		# get descendants
+		branchIDX = [ i for i in range(pedInfo.nPeople) if pedInfo.descendantTable[i,branchFounderIDX] ]
+
+
+		# add marry-in fathers
+		branchIDX = branchIDX + [ pedInfo.dadIndex[i] for i in range(pedInfo.nPeople) if pedInfo.descendantTable[i,branchFounderIDX] and pedInfo.descendantTable[pedInfo.mamIndex[i],branchFounderIDX] and pedInfo.dadIndex[i] >=0 ]
+
+
+		# add marry-in mothers
+		branchIDX = branchIDX + [ pedInfo.mamIndex[i] for i in range(pedInfo.nPeople) if pedInfo.descendantTable[i,branchFounderIDX] and pedInfo.descendantTable[pedInfo.dadIndex[i],branchFounderIDX] and pedInfo.mamIndex[i] >=0 ]
+
+
+		# get unique values
+		branchIDX = list(set(branchIDX))
+		branchIDX.sort()
+
+		nonBranchIDX = [ i for i in range(pedInfo.nPeople) if i not in branchIDX ]
+		nonBranchIDX.sort()
+
+		branchRemove = []
+
+
+
 
 
 	# print descendant table to file
@@ -115,6 +158,8 @@ def BF_main(args):
 	km_df = pd.DataFrame(pedInfo.kinshipMatrix, columns=pedInfo.indID, index=pedInfo.indID)
 	km_df.to_csv(args.tempDir + args.prefix + '.kinshipMatrix.txt', mode='a', header=False)
 
+
+
 	
 
 
@@ -123,6 +168,9 @@ def BF_main(args):
 	################################################################################
 
 	logging.info("Reading VCF file")
+	#mem = psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2
+	#print(f"Memory = {mem}")
+
 
 
 
@@ -152,6 +200,9 @@ def BF_main(args):
 
 
 	logging.info("Store as np array")
+	#mem = psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2
+	#print(f"Memory = {mem}")
+
 
 	# set all genotypes to missing as input
 	genotypes = np.full((pedInfo.nPeople, nVariants), -1)
@@ -200,12 +251,22 @@ def BF_main(args):
 		if args.key:
 			gt_list = variant.format(args.key)
 
-			for i in range(len(gt_list)):
-				if "/" in gt_list[i]:
-					gt_list[i] = GT_dict[gt_list[i]]
 
-				if gt_list[i] == ".":
-					gt_list[i] = 3
+			if args.key == "ST":
+				for i in range(len(gt_list)):
+					if gt_list[i] == "C" or gt_list[i] == "R":
+						gt_list[i] = 1
+					elif gt_list[i] == "N":
+						gt_list[i] = 0
+					else:
+						 gt_list[i] = 3
+			else:
+				for i in range(len(gt_list)):
+					if "/" in gt_list[i]:
+						gt_list[i] = GT_dict[gt_list[i]]
+
+					if gt_list[i] == ".":
+						gt_list[i] = 3
 
 		else:
 			gt_list = variant.gt_types
@@ -229,6 +290,13 @@ def BF_main(args):
 
 			# set known genotype
 			genotypes[vcfSampleIndex[i]][j] = gt
+
+
+		# if branch is specified, check if variant is in non-branch samples
+		if branch is not None:
+			if not all(x in [-1,0] for x in [genotypes[i][j] for i in nonBranchIDX]):
+				branchRemove.append(j)
+
 		j += 1
 
 	# ignore variants which haven't recieved a prior
@@ -237,6 +305,73 @@ def BF_main(args):
 	#	ind = np.in1d(varID, prior_IDs)
 	#	varID = varID[ind]
 	#	genotypes = genotypes[:][ind]
+
+
+
+	# if a branch is specified, remove variants present in non-branch samples
+	if branch is not None:
+
+		# remove non-branch samples from genotype matrix
+		genotypes = np.delete(genotypes,nonBranchIDX,0)
+	
+		# remove non-private variants from genotype matrix
+		genotypes = np.delete(genotypes,branchRemove, 1)
+		homozygous = np.delete(homozygous,branchRemove, 0)
+
+
+		# for the retained marry-ins, remove their parents 
+		for i in branchIDX:
+			if pedInfo.descendantTable[i,branchFounderIDX] == 0:
+				dadID[i] = "0"
+				mamID[i] = "0"
+
+		# subset to branch and re-generate the Pedigree object
+		indID = np.array([ str(indID[i]) for i in branchIDX])
+		dadID = np.array([ str(dadID[i]) for i in branchIDX])
+		mamID = np.array([ str(mamID[i]) for i in branchIDX])
+		sexID = np.array([ sexID[i] for i in branchIDX])
+		pheID = np.array([ pheID[i] for i in branchIDX])
+
+		pedInfo = Pedigree(np.unique(famID), indID, dadID, mamID, sexID, pheID)		
+
+		branchFounderIDX = np.where(pedInfo.indID == branch)[0][0]
+
+		vcfSampleIndex = []
+
+		for i in range(len(vcf.samples)):
+			try:
+				ind = np.where(pedInfo.indID == vcf.samples[i])[0][0]
+			except:
+				msg = "Sample " + vcf.samples[i] + " is in VCF but not FAM."
+				logging.debug(msg)
+			else:
+				vcfSampleIndex.append(ind)
+
+		varID = list(np.delete(np.array(varID),branchRemove, 0))
+
+
+
+
+		# print descendant table to file
+		with open(args.tempDir + args.prefix + '.descendantTable.txt', 'w') as f:
+			print(','.join(map(str, np.concatenate([np.array(["#"]), pedInfo.indID]))), file = f)
+	
+		dt_df = pd.DataFrame(pedInfo.descendantTable, columns=pedInfo.indID, index=pedInfo.indID)
+		dt_df.to_csv(args.tempDir + args.prefix + '.descendantTable.txt', mode='a', header=False)
+
+	
+		# print relationship matrix to file
+		with open(args.tempDir + args.prefix + '.kinshipMatrix.txt', 'w') as f:
+			print(','.join(map(str, np.concatenate([np.array(["#"]), pedInfo.indID]))), file = f)
+	
+		km_df = pd.DataFrame(pedInfo.kinshipMatrix, columns=pedInfo.indID, index=pedInfo.indID)
+		km_df.to_csv(args.tempDir + args.prefix + '.kinshipMatrix.txt', mode='a', header=False)
+
+
+
+
+
+		
 
 
 	varString = np.apply_along_axis(genotypeString, 0, genotypes)
@@ -284,28 +419,31 @@ def BF_main(args):
 	allBF["HOM_ALT"] = [ 0.0, 0.0, 0.0, 0 ]
 
 
-#	if minAffecteds > 0:
-#		msg = "Removing variants with minAff < " + str(minAffecteds)
-#		logging.info(msg)
-#
-#		for i in range(len(genotypes)):
-#
-#			count = 0
-#			affs = [ x for x in range(pedInfo.nPeople) if pedInfo.phenotypeActual[x] == 1 ]
-#
-#			for aff in affs:
-#				if genotypes[i][aff] == 1:
-#					count += 1
-#
-#			if count < minAffecteds:
-#				allBF[varString[i]] = [ 0.0, 0.0, 0.0, 0 ]
-#
-#				msg = "Removed variant: " + varString[i]
-#				logging.debug(msg)
+	if minAffecteds > 0:
+		msg = "Removing variants with minAff < " + str(minAffecteds)
+		logging.info(msg)
+
+		for i in range(len(genotypes)):
+
+			count = 0
+			affs = [ x for x in range(pedInfo.nPeople) if pedInfo.phenotypeActual[x] == 1 ]
+
+			for aff in affs:
+				if genotypes[i][aff] == 1:
+					count += 1
+
+			if count < minAffecteds:
+				allBF[varString[i]] = [ 0.0, 0.0, 0.0, 0 ]
+
+				msg = "Removed variant: " + varString[i]
+				logging.debug(msg)
 
 
 
 	logging.info("Calculating Bayes Factors")
+	#mem = psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2
+	#print(f"Memory = {mem}")
+
 
 	# calculate the Bayes Factor for all variants
 	if nCores > 1:
@@ -327,9 +465,7 @@ def BF_main(args):
 			BFs.append(calculateBF(pedInfo, allBF, [priorCaus, priorNeut], data[i]))
 	
 
-	#results = [ '%.6f' % float(elem) for elem in BFs ]
 
-	#print(float(results[1:10]))
 
 
 	################################################################################
@@ -337,6 +473,8 @@ def BF_main(args):
 	################################################################################
 
 	logging.info("Output")
+	#mem = psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2
+	#print(f"Memory = {mem}")
 
 	
 	if outputPrefix is None:
@@ -348,36 +486,25 @@ def BF_main(args):
 			for i in range(len(varID)):
 				aff_c, aff_nc, un_c, un_nc, miss = phenoCarriers(genotypes[i], pedInfo, vcf.samples)
 				MRCA = getMRCA(genotypes[i], pedInfo)
+
+				try:
+					MRCA_idx = np.where(pedInfo.indID == MRCA)[0][0]
+				except IndexError:
+					MRCA_idx = -1
+
+				# if a branch is specified, and the MRCA is part of that branch
+				if branch is not None and ( MRCA_idx == -1 or (MRCA_idx >= 0 and pedInfo.descendantTable[MRCA_idx][branchFounderIDX] != 1) ):
+					continue
+
 				print(varID[i], "\t", BFs[i], "\t", np.log10(float(BFs[i])), "\t", varString[i], "\t", aff_c, "\t", aff_nc, "\t", un_c, "\t", un_nc, "\t", miss, "\t", MRCA, file=f, sep="")
 		
 
 	# get the best co-segregation score
-	# note: set obligate carriers regardless of phenotype
-	perfectCoseg_vector = pedInfo.phenotypeActual
+	maxBFs, founders = getMaxBF(pedInfo, allBF, [priorCaus, priorNeut], vcfSampleIndex)
 
-	for i in range(pedInfo.nPeople):
-		if pedInfo.indID[i] not in vcf.samples:
-			perfectCoseg_vector[i] = -1
-			continue
-
-		if perfectCoseg_vector[i] == 0:
-			if pedInfo.hasParents[i] and ( perfectCoseg_vector[pedInfo.dadIndex[i]] + perfectCoseg_vector[pedInfo.mamIndex[i]] > 0 ):
-				c = sum([ perfectCoseg_vector[child] for child in pedInfo.children[i] if perfectCoseg_vector[child] > 0 ])
-				if c > 0:
-					perfectCoseg_vector[i] = 1
-
-	perfectCoseg_string = genotypeString(perfectCoseg_vector)
-
-	if perfectCoseg_string in allBF.keys():
-		with open(args.tempDir + outputPrefix + ".max_logBF.txt", 'w') as f:
-			print(np.log10(float(allBF[perfectCoseg_string][0])), file=f)
-
-	else:
-		l = multiprocessing.Lock()
-		lock_init(l)
-		BF = calculateBF(pedInfo, allBF, [priorCaus, priorNeut], (perfectCoseg_vector, perfectCoseg_string))
-		with open(args.tempDir + outputPrefix + ".max_logBF.txt", 'w') as f:
-			print(np.log10(BF), file=f)
+	with open(args.tempDir + outputPrefix + ".max_logBF.txt", 'w') as f:
+		for i in range(len(maxBFs)):
+			print(f"{founders[i]}\t{np.log10(float(maxBFs[i]))}", file=f)
 
 	
 	logging.info(" ")

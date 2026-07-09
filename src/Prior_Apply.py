@@ -72,8 +72,9 @@ def PA_main(args):
 
 	# check if model files exist
 	if modelPrefix is None:
-		logging.error("No model files specified")
-		sys.exit(1)
+		#logging.error("No model files specified")
+		modelPrefix = "BICEP_temp/" + outputPrefix
+		#sys.exit(1)
 
 
 	if not glob.glob(modelPrefix + "*.pkl"):
@@ -273,12 +274,19 @@ def PA_main(args):
 			keysPredictors_DUP = keysPredictors
 
 		else:
-			keysPredictors = sorted([ "fathmm-XF_coding_score", "MPC_score", "PolyPhen", "REVEL", "SIFT" ] + [args.frequency])
-			keysDescPred = sorted([ "SIFT", "fathmm-XF_coding_score" ] + [args.frequency])
+			keysPredictors = sorted([ "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score" ] + [ args.frequency ] )
+			keysDescPred = sorted([ "FATHMM_score", "SIFT_score" ] + [ args.frequency ])
+
+
+			#keysPredictors = sorted([ "fathmm-XF_coding_score", "MPC_score", "PolyPhen", "REVEL", "SIFT" ] + [args.frequency])
+			#keysDescPred = sorted([ "SIFT", "fathmm-XF_coding_score" ] + [args.frequency])
+
+
 			keysAscPred  = sorted([ x for x in keysPredictors if x not in keysDescPred ])
 
 			keysPredictors_IND = sorted([args.frequency])
-			keysPredictors_MIS = sorted(["fathmm-XF_coding_score", "MPC_score", "PolyPhen", "REVEL", "SIFT"] + [args.frequency])
+			keysPredictors_MIS = sorted([ "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score" ] + [ args.frequency ] )
+			#keysPredictors_MIS = sorted(["fathmm-XF_coding_score", "MPC_score", "PolyPhen", "REVEL", "SIFT"] + [args.frequency])
 			keysPredictors_OTH = [args.frequency]
 	
 
@@ -347,10 +355,15 @@ def PA_main(args):
 
 
 			# get the variant type, ignore if not SNV or indel
-			if len(variant.REF) == 1 and len(variant.ALT[0]) == 1:
+			REF_len = len(variant.REF)
+			ALT_len = len(variant.ALT[0])
+
+			if REF_len == 1 and ALT_len == 1:
 				typeVEP = "SNV"
-			elif ( (len(variant.REF) == 1 and len(variant.ALT[0]) > 1) or ((len(variant.REF) > 1 and len(variant.ALT[0]) == 1)) ) and max(len(variant.REF), len(variant.ALT[0])) < 50:
+			elif ( REF_len * ALT_len > 1 ) and max(REF_len, ALT_len) < 50:
 				typeVEP = "indel"
+			else:
+				continue
 
 
 

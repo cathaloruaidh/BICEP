@@ -49,7 +49,12 @@ def generate_prior(x, y, label, args, LABELS_dict):
 
 	# evaluate the prior
 	if args.eval:
-		x_train, x_test, y_train, y_test = train_test_split(x, y, test_size = 0.2, random_state = 123)
+		if args.seed:
+			seed = args.seed
+		else
+			seed = 123
+
+		x_train, x_test, y_train, y_test = train_test_split(x, y, test_size = 0.2, random_state = seed)
 
 		x_train_ID = x_train["ID"].to_list()
 		x_train = x_train.drop(["ID"], axis=1, errors='ignore')
@@ -498,15 +503,16 @@ def PT_main(args):
 
 
 		else:
-			#keysPredictors = sorted([ "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score" ] + [ args.frequency ] )
-			#keysDescPred = sorted([ "FATHMM_score", "SIFT_score" ] + [ args.frequency ])
-			keysPredictors = sorted([ "fathmm-XF_coding_score", "MPC_score", "PolyPhen", "REVEL", "SIFT" ] + [ args.frequency ] )
-			keysDescPred = sorted([ "fathmm-XF_coding_score", "SIFT" ] + [ args.frequency ])
+			keysPredictors = sorted([ "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score" ] + [ args.frequency ] )
+			keysDescPred = sorted([ "FATHMM_score", "SIFT_score" ] + [ args.frequency ])
+			#keysPredictors = sorted([ "fathmm-XF_coding_score", "MPC_score", "PolyPhen", "REVEL", "SIFT" ] + [ args.frequency ] )
+			#keysDescPred = sorted([ "fathmm-XF_coding_score", "SIFT" ] + [ args.frequency ])
 			keysAscPred  = sorted([ x for x in keysPredictors if x not in keysDescPred ])
 
 
 			keysPredictors_IND = [ args.frequency ]
-			keysPredictors_MIS = sorted([ "fathmm-XF_coding_score", "MPC_score", "PolyPhen", "REVEL", "SIFT" ] + [ args.frequency ])
+			keysPredictors_MIS = sorted([ "FATHMM_score", "MPC_score", "Polyphen2_HDIV_score", "REVEL_score", "SIFT_score" ] + [ args.frequency ] )
+			#keysPredictors_MIS = sorted([ "fathmm-XF_coding_score", "MPC_score", "PolyPhen", "REVEL", "SIFT" ] + [ args.frequency ])
 			keysPredictors_OTH = [ args.frequency ]
 
 
@@ -545,16 +551,21 @@ def PT_main(args):
 
 
 			# get the short significance
-			if (sigCV == "Benign") or (sigCV == "Benign%2FLikely_benign") or (sigCV == "Likely%20benign"):
+			setCV = "UNKNOWN"
+			if (sigCV == "Benign") or (sigCV == "Benign%2FLikely%20benign") or (sigCV == "Likely%20benign"):
 				setCV = "BENIGN"
 			elif (sigCV == "Likely%20pathogenic") or (sigCV == "Pathogenic%2FLikely%20pathogenic") or (sigCV == "Pathogenic"):
 				setCV = "PATHOGENIC"
+
+			# remove CNV with unknown significance
+			if setCV == "UNKNOWN":
+				continue
 
 			# abbreviate the long significances
 			if (sigCV == "Benign"):
 				sigCV_short = "B"
 
-			elif sigCV == "Benign%2FLikely_benign":
+			elif sigCV == "Benign%2FLikely%20benign":
 				sigCV_short = "B/LB"
 
 			elif sigCV == "Likely%20benign":
@@ -571,6 +582,12 @@ def PT_main(args):
 
 			else:
 				sigCV_short = "UNKNOWN"
+
+
+
+			# remove CNVs with unknown significance
+			if sigCV_short == "UNKNOWN":
+				continue
 
 
 			# get the variant type
