@@ -249,21 +249,24 @@ def BF_main(args):
 
 	
 		if args.key:
-			gt_list = variant.format(args.key)
+			gt_list_tmp = np.concatenate(variant.format(args.key)).tolist()
+			gt_list = np.zeros(len(gt_list_tmp))
 
 
 			if args.key == "ST":
-				for i in range(len(gt_list)):
-					if gt_list[i] == "C" or gt_list[i] == "R":
+				for i in range(len(gt_list_tmp)):
+					if gt_list_tmp[i] == "C" or gt_list_tmp[i] == "R":
 						gt_list[i] = 1
-					elif gt_list[i] == "N":
+					elif gt_list_tmp[i] == "N":
 						gt_list[i] = 0
 					else:
 						 gt_list[i] = 3
+			elif args.key == "CR":
+				gt_list = gt_list_tmp
 			else:
-				for i in range(len(gt_list)):
-					if "/" in gt_list[i]:
-						gt_list[i] = GT_dict[gt_list[i]]
+				for i in range(len(gt_list_tmp)):
+					if "/" in gt_list_tmp[i]:
+						gt_list[i] = GT_dict[gt_list_tmp[i]]
 
 					if gt_list[i] == ".":
 						gt_list[i] = 3
@@ -400,6 +403,7 @@ def BF_main(args):
 	for i in range(pedInfo.nPeople + 20):
 		for j in range(i+1):
 			BF_Functions.binomCoeff[i][j] = float(sp.binom(i,j))
+	
 
 
 

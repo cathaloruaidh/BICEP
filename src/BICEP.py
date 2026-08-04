@@ -56,7 +56,7 @@ def main(argv):
 	----------------------------------------
 	         _   ___   __   __   _ 
 	        |_)   |   /    |_   |_)
-	        |_)  _|_  \__  |__  |  
+	        |_)  _|_  \\__  |__  |  
 
 	        Bayesian Inference for 
 	   Causality Evaluation in Pedigrees
@@ -106,6 +106,7 @@ def main(argv):
 	parser_ALL.add_argument("--top", nargs='?', default=50, type=int, help="Number of top ranking variants to plot", metavar='N')
 	parser_ALL.add_argument("--highlight", nargs='?', help="ID of variant to highlight in plot", metavar='STRING')
 	parser_ALL.add_argument("--minAff", nargs='?', default=0, type=int, help="Minimum number of affected carriers", metavar='N')
+	parser_ALL.add_argument("--cv", action='store_true', help="Evaluate the regression model using cross validation")
 	
 	
 
@@ -126,6 +127,7 @@ def main(argv):
 	parser_PT.add_argument("-p", "--pathogenic", nargs='?', help="File of pathogenic variant IDs for training", metavar='FILE')
 	parser_PT.add_argument("--eval", action='store_true', help="Evaluate the predictors and regression model for the prior")
 	parser_PT.add_argument("--boot", nargs='?', default=1000, type=int, help="Number of bootstraps for prior evaluation", metavar='N')
+	parser_PT.add_argument("--cv", action='store_true', help="Evaluate the regression model using cross validation")
 	
 
 
