@@ -526,7 +526,7 @@ def PA_main(args):
 			# run logistic regression
 			logging.info("Apply logistic regression")
 
-			with open(modelPrefix + '.DEL_logReg.pkl', 'rb') as f:
+			with open(modelPrefix + '.DEL_logReg_calib.pkl', 'rb') as f:
 				logReg_DEL = pickle.load(f)
 
 
@@ -587,7 +587,7 @@ def PA_main(args):
 			# run logistic regression
 			logging.info("Apply logistic regression")
 
-			with open(modelPrefix + '.DUP_logReg.pkl', 'rb') as f:
+			with open(modelPrefix + '.DUP_logReg_calib.pkl', 'rb') as f:
 				logReg_DUP = pickle.load(f)
 
 
@@ -666,7 +666,7 @@ def PA_main(args):
 			# run logistic regression
 			logging.info("Apply logistic regression")
 
-			with open(modelPrefix + '.IND_logReg.pkl', 'rb') as f:
+			with open(modelPrefix + '.IND_logReg_calib.pkl', 'rb') as f:
 				logReg_IND = pickle.load(f)
 
 
@@ -731,7 +731,7 @@ def PA_main(args):
 			# run logistic regression
 			logging.info("Apply logistic regression")
 
-			with open(modelPrefix + '.MIS_logReg.pkl', 'rb') as f:
+			with open(modelPrefix + '.MIS_logReg_calib.pkl', 'rb') as f:
 				logReg_MIS = pickle.load(f)
 
 			y_MIS_pred = logReg_MIS.predict_proba(x_MIS_imp_scal)[:,1]
@@ -794,7 +794,7 @@ def PA_main(args):
 			# run logistic regression
 			logging.info("Apply logistic regression")
 
-			with open(modelPrefix + '.OTH_logReg.pkl', 'rb') as f:
+			with open(modelPrefix + '.OTH_logReg_calib.pkl', 'rb') as f:
 				logReg_OTH = pickle.load(f)
 
 
@@ -823,7 +823,7 @@ def PA_main(args):
 	if args.cnv:
 		prior_prob = pd.DataFrame()
 		prior_prob["ID"] = np.concatenate((y_DEL["ID"], y_DUP["ID"]))
-		prior_prob["prior"] = np.concatenate((y_DEL_pred, y_DUP_pred))
+		prior_prob["prior"] = np.array(np.concatenate((y_DEL_pred, y_DUP_pred)), dtype=float)
 
 
 		x_DEL_data = pd.DataFrame()		
@@ -855,6 +855,8 @@ def PA_main(args):
 		combined = pd.concat([x_data, prior_prob], axis=1)
 		df_flat = pd.DataFrame(flat_DATA, columns = ['ID', 'prior'])
 		merged = pd.concat([combined, df_flat], sort = False)
+
+		merged["prior"] = merged["prior"].astype(float)
 		merged["PriorOC"] = merged["prior"] / (1 - merged["prior"])
 		merged["logPriorOC"] = np.log10(merged["PriorOC"])
 		

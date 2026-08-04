@@ -18,11 +18,13 @@ from joblib import dump, load
 from matplotlib.transforms import Affine2D
 from pathlib import Path
 from sklearn import metrics
+from sklearn.calibration import CalibratedClassifierCV
+from sklearn.frozen import FrozenEstimator
 from sklearn.linear_model import LogisticRegression
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer, SimpleImputer
-from sklearn.metrics import confusion_matrix, matthews_corrcoef, classification_report, r2_score
-from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix, matthews_corrcoef, classification_report, r2_score, make_scorer, balanced_accuracy_score, precision_score, recall_score, roc_auc_score
+from sklearn.model_selection import RepeatedKFold, cross_validate, train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 
@@ -47,17 +49,23 @@ def generate_prior(x, y, label, args, LABELS_dict):
 	x = x.dropna(axis=1, how='all')
 
 
+	# random seed
+	if args.seed:
+		seed = args.seed
+	else:
+		seed = 123
+
 	# evaluate the prior
 	if args.eval:
-		if args.seed:
-			seed = args.seed
-		else
-			seed = 123
 
-		x_train, x_test, y_train, y_test = train_test_split(x, y, test_size = 0.2, random_state = seed)
+		x_tmp, x_test, y_tmp, y_test = train_test_split(x, y, test_size = 0.2, random_state = seed)
+		x_train, x_calib, y_train, y_calib = train_test_split(x_tmp, y_tmp, test_size = 0.25, random_state = seed)
 
 		x_train_ID = x_train["ID"].to_list()
 		x_train = x_train.drop(["ID"], axis=1, errors='ignore')
+
+		x_calib_ID = x_calib["ID"].to_list()
+		x_calib = x_calib.drop(["ID"], axis=1, errors='ignore')
 
 		x_test_ID = x_test["ID"].to_list()
 		x_test = x_test.drop(["ID"], axis=1, errors='ignore')
@@ -67,9 +75,10 @@ def generate_prior(x, y, label, args, LABELS_dict):
 		msg = "Impute the training data (" + label + ")"
 		logging.debug(msg)
 
-		imp = SimpleImputer(strategy = 'median', verbose = 100)
+		imp = SimpleImputer(strategy = 'median')
 		imp.fit(x_train)
 		x_train_imp = imp.transform(x_train)
+		x_calib_imp = imp.transform(x_calib)
 		x_test_imp = imp.transform(x_test)
 		with open(args.tempDir + args.prefix + ".TRAIN." + label + '_imp.pkl', 'wb') as f:
 			pickle.dump(imp, f)
@@ -79,6 +88,7 @@ def generate_prior(x, y, label, args, LABELS_dict):
 		scal = MinMaxScaler(clip = True)
 		scal.fit(x_train_imp)
 		x_train_imp_scal = scal.transform(x_train_imp)
+		x_calib_imp_scal = scal.transform(x_calib_imp)
 		x_test_imp_scal = scal.transform(x_test_imp)
 		with open(args.tempDir + args.prefix + ".TRAIN." + label + '_scal.pkl', 'wb') as f:
 			pickle.dump(scal, f)
@@ -86,13 +96,15 @@ def generate_prior(x, y, label, args, LABELS_dict):
 
 		msg = "Regression and VIF (" + label + ")"
 		logging.debug(msg)
-		logReg = LogisticRegression(penalty = 'none')
+		logReg = LogisticRegression(penalty = None)
 		logReg.fit(x_train_imp_scal, y_train)
+		logReg.feature_names = list(x_train.columns.values)
+
 		with open(args.tempDir + args.prefix + ".TRAIN." + label + '_logReg.pkl', 'wb') as f:
 			pickle.dump(logReg, f)
 		
 		with open(args.tempDir + args.prefix + ".TRAIN." + label + '_predictors.npy', 'wb') as f:
-			np.save(f, x.columns)
+			np.save(f, x_train.columns)
 
 
 		vif_data = pd.DataFrame()
@@ -105,6 +117,14 @@ def generate_prior(x, y, label, args, LABELS_dict):
 			vif_data["VIF"] = [variance_inflation_factor(x_train_imp_scal, i) for i in range(len(x_train.columns))]
 		vif_data["Coefficient"] = logReg.coef_.flatten()
 		vif_data.loc[len(vif_data)] = [ label, "intercept", np.nan, round(logReg.intercept_[0], 4) ]
+
+
+
+		# recalibrate the data
+		logReg_calib = CalibratedClassifierCV(estimator=FrozenEstimator(logReg)).fit(x_calib_imp_scal, np.ravel(y_calib))
+
+		with open(args.tempDir + args.prefix + ".TRAIN." + label + '_logReg_calib.pkl', 'wb') as f:
+			pickle.dump(logReg_calib, f)
 
 
 
@@ -126,7 +146,7 @@ def generate_prior(x, y, label, args, LABELS_dict):
 			x_boot = x_train_imp_scal[ind]
 			y_boot = y_train[ind]
 
-			y_pred = logReg.predict(x_boot)
+			y_pred = logReg_calib.predict(x_boot)
 			tn, fp, fn, tp = confusion_matrix(y_boot, y_pred).ravel()
 			SENS_train_boot.append(tp / (tp + fn)) 
 			SPEC_train_boot.append(tn / (tn + fp)) 
@@ -139,7 +159,7 @@ def generate_prior(x, y, label, args, LABELS_dict):
 			x_boot = x_test_imp_scal[ind]
 			y_boot = y_test[ind]
 
-			y_pred = logReg.predict(x_boot)
+			y_pred = logReg_calib.predict(x_boot)
 			tn, fp, fn, tp = confusion_matrix(y_boot, y_pred).ravel()
 			SENS_test_boot.append(tp / (tp + fn)) 
 			SPEC_test_boot.append(tn / (tn + fp)) 
@@ -157,8 +177,8 @@ def generate_prior(x, y, label, args, LABELS_dict):
 			sigCV_short.append(s)
 
 
-		y_train_pred = logReg.predict(x_train_imp_scal)
-		prior_train = logReg.predict_proba(x_train_imp_scal)[:,1]
+		y_train_pred = logReg_calib.predict(x_train_imp_scal)
+		prior_train = logReg_calib.predict_proba(x_train_imp_scal)[:,1]
 		logPriorOC_train = np.log10(prior_train / (1-prior_train))
 		df = pd.DataFrame(data={'ID' : x_train_ID, 'origID' : origID, 'Label' : y_train.flatten(), 'origLabel': sigCV_short, 'Prior' : prior_train, 'logPriorOC' : logPriorOC_train})
 		df.to_csv(args.tempDir + args.prefix + ".TRAIN." + label + '_priors.txt', index=False, sep="\t")
@@ -167,14 +187,15 @@ def generate_prior(x, y, label, args, LABELS_dict):
 
 		performance = pd.DataFrame()
 
+
 		performance["Model"] = [label]*5
 		performance["Data"] = ["Train"]*5
 		performance["Metric"] = ["Sensitivity", "Specificity", "PPV", "NPV", "MCC"]
 		performance["Value"] = [ tp / (tp + fn), tn / (tn + fp), tp / (tp + fp), tn / (tn + fn), matthews_corrcoef(y_train, y_train_pred) ]
 		performance["Value"] = [ round(x, 6) for x in performance["Value"] ]
-		performance["L-CI-95"] = [ np.quantile(SENS_train_boot, 0.025), np.quantile(SPEC_train_boot, 0.025), np.quantile(PPV_train_boot, 0.025), np.quantile(NPV_train_boot, 0.025), np.quantile(MCC_train_boot, 0.025)  ]
+		performance["L-CI-95"] = [ np.nanquantile(SENS_train_boot, 0.025), np.nanquantile(SPEC_train_boot, 0.025), np.nanquantile(PPV_train_boot, 0.025), np.nanquantile(NPV_train_boot, 0.025), np.nanquantile(MCC_train_boot, 0.025)  ]
 		performance["L-CI-95"] = [ round(x, 6) for x in performance["L-CI-95"] ]
-		performance["U-CI-95"] = [ np.quantile(SENS_train_boot, 0.975), np.quantile(SPEC_train_boot, 0.975), np.quantile(PPV_train_boot, 0.975), np.quantile(NPV_train_boot, 0.975), np.quantile(MCC_train_boot, 0.975)  ]
+		performance["U-CI-95"] = [ np.nanquantile(SENS_train_boot, 0.975), np.nanquantile(SPEC_train_boot, 0.975), np.nanquantile(PPV_train_boot, 0.975), np.nanquantile(NPV_train_boot, 0.975), np.nanquantile(MCC_train_boot, 0.975)  ]
 		performance["U-CI-95"] = [ round(x, 6) for x in performance["U-CI-95"] ]
 
 
@@ -187,8 +208,8 @@ def generate_prior(x, y, label, args, LABELS_dict):
 			sigCV_short.append(s)
 
 
-		y_test_pred = logReg.predict(x_test_imp_scal)
-		prior_test = logReg.predict_proba(x_test_imp_scal)[:,1]
+		y_test_pred = logReg_calib.predict(x_test_imp_scal)
+		prior_test = logReg_calib.predict_proba(x_test_imp_scal)[:,1]
 		logPriorOC_test = np.log10(prior_test / (1-prior_test))
 		df = pd.DataFrame(data={'ID' : x_test_ID, 'origID' : origID, 'Label' : y_test.flatten(), 'origLabel': sigCV_short, 'Prior' : prior_test, 'logPriorOC' : logPriorOC_test})
 		df.to_csv(args.tempDir + args.prefix + ".TEST." + label + '_priors.txt', index=False, sep="\t")
@@ -210,17 +231,22 @@ def generate_prior(x, y, label, args, LABELS_dict):
 		print(performance)
 
 
+	# retrain without needed the test dataset
+	x_train, x_calib, y_train, y_calib = train_test_split(x, y, test_size = 0.2, random_state = seed)
+
 	# remove ID column from previous step
-	x = x.drop(["ID"], axis=1, errors='ignore')
+	x_train = x_train.drop(["ID"], axis=1, errors='ignore')
+	x_calib = x_calib.drop(["ID"], axis=1, errors='ignore')
 
 
 	# impute the missing data
 	logging.info("Impute the data")
 	imp = SimpleImputer(strategy = 'median')
-	imp.fit(x)
+	imp.fit(x_train)
 
-	imp.feature_names = list(x.columns.values)
-	x_imp = imp.transform(x)
+	imp.feature_names = list(x_train.columns.values)
+	x_train_imp = imp.transform(x_train)
+	x_calib_imp = imp.transform(x_calib)
 
 	with open(args.tempDir + args.prefix + "." + label + '_imp.pkl', 'wb') as f:
 		pickle.dump(imp, f)
@@ -229,10 +255,11 @@ def generate_prior(x, y, label, args, LABELS_dict):
 	# scale the data
 	logging.info("Scaling to [0,1]")
 	scal = MinMaxScaler(clip = True)
-	scal.fit(x_imp)
+	scal.fit(x_train_imp)
 
-	scal.feature_names = list(x.columns.values)
-	x_imp_scal = scal.transform(x_imp)
+	scal.feature_names = list(x_train.columns.values)
+	x_train_imp_scal = scal.transform(x_train_imp)
+	x_calib_imp_scal = scal.transform(x_calib_imp)
 
 	with open(args.tempDir + args.prefix + "." + label + '_scal.pkl', 'wb') as f:
 		pickle.dump(scal, f)
@@ -241,21 +268,46 @@ def generate_prior(x, y, label, args, LABELS_dict):
 
 	# run logistic regression
 	logging.info("Run logistic regression")
-	logReg = LogisticRegression(penalty = 'none')
-	logReg.fit(x_imp_scal, y)
+	logReg = LogisticRegression(penalty = None)
+	logReg.fit(x_train_imp_scal, y_train)
 
-	logReg.feature_names = list(x.columns.values)
+	logReg.feature_names = list(x_train.columns.values)
 
 	with open(args.tempDir + args.prefix + "." + label + '_logReg.pkl', 'wb') as f:
 		pickle.dump(logReg, f)
 
 	with open(args.tempDir + args.prefix + "." + label + '_predictors.npy', 'wb') as f:
-		np.save(f, x.columns)
+		np.save(f, x_train.columns)
 
 	
-	with open(args.tempDir + args.prefix + "." + label + "_coef.txt", 'a') as f:
+	with open(args.tempDir + args.prefix + "." + label + "_coef.txt", 'w') as f:
 		pprint.pprint(list(zip(logReg.feature_names, np.round(logReg.coef_.flatten(), 6))), f)
 		print("Intercept: ", np.round(logReg.intercept_, 6), file=f)
+
+
+	# recalibrate the data
+	logReg_calib = CalibratedClassifierCV(estimator=FrozenEstimator(logReg)).fit(x_calib_imp_scal, np.ravel(y_calib))
+	
+
+	with open(args.tempDir + args.prefix + "." + label + '_logReg_calib.pkl', 'wb') as f:
+		pickle.dump(logReg_calib, f)
+		
+	calib_a = -1.0*logReg_calib.calibrated_classifiers_[0].calibrators[0].a_ 
+	calib_b = -1.0*logReg_calib.calibrated_classifiers_[0].calibrators[0].b_
+
+
+	with open(args.tempDir + args.prefix + "." + label + "_coef.calibrated.txt", 'w') as f:
+		pprint.pprint(list(zip(logReg.feature_names, np.round(logReg.coef_.flatten() * calib_a, 6))), f)
+		print("Intercept: ", np.round(logReg.intercept_ + calib_b, 6), file=f)
+
+	
+	with open(args.tempDir + args.prefix + "." + label + "_coef.calibration_curve.txt", 'w') as f:
+		print("a: ", np.round(calib_a, 6), file=f)
+		print("b: ", np.round(calib_b, 6), file=f)
+
+
+
+
 
 
 	if args.eval:
@@ -686,7 +738,7 @@ def PT_main(args):
 			tmp = variant.INFO.get('MC')	
 			if (tmp is None) or ("," in tmp):
 				continue
-			csqCV = re.sub('^.*?\|', '', tmp)
+			csqCV = re.sub('^.*?\\|', '', tmp)
 
 
 			# change 'nonsense' to 'stop_gained'
@@ -852,7 +904,7 @@ def PT_main(args):
 	else:
 		df = pd.DataFrame(DATA, columns = [ 'ID', 'setCV', 'geneCV', 'csqCV', 'impactCV', 'typeCV', 'alleleID' ] + keysAscPred + keysDescPred )
 	
-	df['alleleID'] = df.alleleID.astype(str).replace('\.0', '', regex=True)
+	df['alleleID'] = df.alleleID.astype(str).replace('.0', '', regex=True)
 
 
 	# if there is overlap between the ClinVar and pedigree data,

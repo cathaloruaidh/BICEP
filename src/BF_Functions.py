@@ -735,6 +735,12 @@ def calculateBF(pedInfo, allBF, priorParams, inputData):
 
 
 
+	global binomCoeff
+	binomCoeff = [ [0]*(pedInfo.nPeople + 20) for _ in range(pedInfo.nPeople + 20) ]
+	for i in range(pedInfo.nPeople + 20):
+		for j in range(i+1):
+			binomCoeff[i][j] = float(sp.binom(i,j))
+
 	# get ID string
 	inputGenotype, name = inputData
 
@@ -765,6 +771,7 @@ def calculateBF(pedInfo, allBF, priorParams, inputData):
 		count = numGenotypeStates(vector, pedInfo, foundIdx)
 		totalGenoStates += count
 		founderIdxList.extend([foundIdx]*count)
+	
 
 		
 
