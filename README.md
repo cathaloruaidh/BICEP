@@ -55,7 +55,6 @@ conda env create -n bicep --file BICEP/environment.yml
 conda activate bicep
 ```
 
-<<<<<<< HEAD
 ## Software parameters
 
 BICEP consists of five sub-modules: 
@@ -65,7 +64,6 @@ BICEP consists of five sub-modules:
 - Posterior - calculate the posterior odds of causality and generate the output plots
 - All - all of the above
 
-=======
 **NOTE:** the ClinVar data used to produce a regression model have now been moved to [Zenodo](https://zenodo.org/records/21805749). 
 Please download all the files from this repository and store them in the `data` directory before running BICEP. 
 
@@ -79,7 +77,6 @@ BICEP consists of five sub-modules:
 - Posterior - calculate the posterior odds of causality and generate the output plots
 - All - all of the above
 
->>>>>>> 90a245d45ddd96a40fd6e1ab3d7496e1fc0b6e93
 The following parameters are available to the "All" sub-module and 
 
 
