@@ -55,8 +55,11 @@ conda env create -n bicep --file BICEP/environment.yml
 conda activate bicep
 ```
 
-## Software parameters
+**NOTE:** the ClinVar data used to produce a regression model have now been moved to [Zenodo](https://zenodo.org/records/21805749). 
+Please download all the files from this repository and store them in the `data` directory before running BICEP. 
 
+
+## Software parameters
 BICEP consists of five sub-modules: 
 - PriorTrain - generate the logistic regression coefficients from the prior regression data
 - PriorApply - apply these coefficients to the pedigree variants to generate a prior odds of causality
@@ -64,12 +67,8 @@ BICEP consists of five sub-modules:
 - Posterior - calculate the posterior odds of causality and generate the output plots
 - All - all of the above
 
-**NOTE:** the ClinVar data used to produce a regression model have now been moved to [Zenodo](https://zenodo.org/records/21805749). 
-Please download all the files from this repository and store them in the `data` directory before running BICEP. 
-
 
 ## Software parameters
-
 BICEP consists of five sub-modules: 
 - PriorTrain - generate the logistic regression coefficients from the prior regression data
 - PriorApply - apply these coefficients to the pedigree variants to generate a prior odds of causality
