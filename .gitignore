@@ -1,3 +1,7 @@
 __pycache__/
 .bak
+<<<<<<< HEAD
 .checkpoint.ipynb
+=======
+*-checkpoint.ipynb
+>>>>>>> 90a245d45ddd96a40fd6e1ab3d7496e1fc0b6e93
