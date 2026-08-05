@@ -55,6 +55,10 @@ conda env create -n bicep --file BICEP/environment.yml
 conda activate bicep
 ```
 
+**NOTE:** the ClinVar data used to produce a regression model have now been moved to [Zenodo](https://zenodo.org/records/21805749). 
+Please download all the files from this repository and store them in the `data` directory before running BICEP. 
+
+
 ## Software parameters
 
 BICEP consists of five sub-modules: 
